@@ -21,7 +21,6 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // REQUIRED: OpenAI API Configuration
     // ========================================
-    //OPENAI_API_KEY: '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',
     OPENAI_API_KEY:'',
     OPENAI_MODEL: 'gpt-3.5-turbo',  // Can be changed to 'gpt-4', 'gpt-4-turbo', etc.
     OPENAI_MAX_TOKENS: 500,         // Maximum tokens for responses
