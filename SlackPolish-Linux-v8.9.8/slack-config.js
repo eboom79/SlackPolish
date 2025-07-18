@@ -130,47 +130,6 @@ window.SLACKPOLISH_CONFIG = {
             HINDI: 'Respond in Hindi',
             BULGARIAN: 'Respond in Bulgarian'
         }
-    },
-
-    // ========================================
-    // CHANNEL SUMMARY SETTINGS
-    // ========================================
-    CHANNEL_SUMMARY: {
-        HOTKEY: 'F10',                    // Default hotkey for channel summary
-        DEFAULT_DEPTH: 'last24hours',     // Default time range: last24hours, last7days, last30days, entirechannel
-        DEFAULT_LEVEL: 'short',           // Default summary level: short, medium, comprehensive
-        WINDOW_SIZE: { width: 800, height: 600 },
-        REMEMBER_PREFERENCES: true,       // Remember user's last selections
-        INCLUDE_PARTICIPANTS: true,       // Include participant analysis
-        INCLUDE_MESSAGE_COUNT: true,      // Show message count in summary
-        INCLUDE_FILES_LINKS: false,       // Include file/link references
-
-        // Summary depth options
-        DEPTH_OPTIONS: {
-            'last24hours': { label: 'Last 24 hours', hours: 24 },
-            'last7days': { label: 'Last 7 days', hours: 24 * 7 },
-            'last30days': { label: 'Last 30 days', hours: 24 * 30 },
-            'entirechannel': { label: 'Entire channel', hours: null }
-        },
-
-        // Summary level options
-        LEVEL_OPTIONS: {
-            'short': {
-                label: 'Short',
-                description: 'Key points and decisions (1-2 paragraphs)',
-                maxTokens: 500
-            },
-            'medium': {
-                label: 'Medium',
-                description: 'Main topics, decisions, and action items (3-5 paragraphs)',
-                maxTokens: 1000
-            },
-            'comprehensive': {
-                label: 'Comprehensive',
-                description: 'Detailed breakdown with participants and timeline (1-2 pages)',
-                maxTokens: 2000
-            }
-        }
     }
 };
 } catch (error) {
