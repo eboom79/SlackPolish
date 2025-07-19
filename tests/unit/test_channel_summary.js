@@ -67,16 +67,16 @@ runTest('ChannelSummarizer Class Definition', () => {
 runTest('Channel Summary Core Methods', () => {
     assert(channelSummaryContent.includes('generateChannelSummary'), 'generateChannelSummary method not found');
     assert(channelSummaryContent.includes('calculateDateRange'), 'calculateDateRange method not found');
-    assert(channelSummaryContent.includes('formatMessagesForDisplay'), 'formatMessagesForDisplay method not found');
-    assert(channelSummaryContent.includes('parseMessageTimestamp'), 'parseMessageTimestamp method not found');
+    assert(channelSummaryContent.includes('formatMessagesForAI'), 'formatMessagesForAI method not found');
+    assert(channelSummaryContent.includes('processAndDisplaySummary'), 'processAndDisplaySummary method not found');
 });
 
 // Test 4: Global DOM Module Integration
 runTest('Global DOM Module Integration', () => {
     assert(channelSummaryContent.includes('window.SlackPolishChannelMessages'), 'SlackPolishChannelMessages integration not found');
-    assert(channelSummaryContent.includes('fetchChannelMessages'), 'fetchChannelMessages call not found');
     assert(channelSummaryContent.includes('getMessagesInRange'), 'getMessagesInRange call not found');
-    assert(channelSummaryContent.includes('getAllMessages: true'), 'getAllMessages option not found');
+    assert(channelSummaryContent.includes('getAllChannelMessages'), 'getAllChannelMessages call not found');
+    assert(channelSummaryContent.includes('true // include threads'), 'Thread inclusion option not found');
 });
 
 // Test 5: Time Range Processing
@@ -84,7 +84,7 @@ runTest('Time Range Processing', () => {
     assert(channelSummaryContent.includes('24 * 60 * 60 * 1000'), '24 hour calculation not found');
     assert(channelSummaryContent.includes('7 * 24 * 60 * 60 * 1000'), '7 day calculation not found');
     assert(channelSummaryContent.includes('30 * 24 * 60 * 60 * 1000'), '30 day calculation not found');
-    assert(channelSummaryContent.includes('new Date(0)'), 'Entire channel date handling not found');
+    assert(channelSummaryContent.includes('startDate = null'), 'Entire channel date handling not found');
 });
 
 // Test 6: Error Handling and Loading States
@@ -105,10 +105,10 @@ runTest('Time Range Options in UI', () => {
 
 // Test 8: Message Formatting
 runTest('Message Formatting Functions', () => {
-    assert(channelSummaryContent.includes('getTimeRangeText'), 'getTimeRangeText method not found');
-    assert(channelSummaryContent.includes('No messages found'), 'No messages handling not found');
-    assert(channelSummaryContent.includes('Total Messages:'), 'Message count display not found');
-    assert(channelSummaryContent.includes('Generated:'), 'Generation timestamp not found');
+    assert(channelSummaryContent.includes('formatNoMessagesFound'), 'formatNoMessagesFound method not found');
+    assert(channelSummaryContent.includes('NO MESSAGES FOUND'), 'No messages handling not found');
+    assert(channelSummaryContent.includes('MESSAGES FOUND:'), 'Message count display not found');
+    assert(channelSummaryContent.includes('GENERATED:'), 'Generation timestamp not found');
 });
 
 // Test 9: HTML Template Generation
@@ -123,7 +123,7 @@ runTest('HTML Template Generation', () => {
 runTest('Error Handling Implementation', () => {
     assert(channelSummaryContent.includes('try {'), 'Error handling try blocks not found');
     assert(channelSummaryContent.includes('catch (error)'), 'Error handling catch blocks not found');
-    assert(channelSummaryContent.includes('Error fetching messages'), 'Error message handling not implemented');
+    assert(channelSummaryContent.includes('Error in generateChannelSummary'), 'Error message handling not implemented');
     assert(channelSummaryContent.includes('utils.debug'), 'Debug logging not implemented');
 });
 
@@ -159,7 +159,7 @@ runTest('UI Styling and Layout', () => {
 
 // Test 15: Timestamp Processing
 runTest('Timestamp Processing', () => {
-    assert(channelSummaryContent.includes('parseMessageTimestamp'), 'Timestamp parsing method not found');
+    assert(channelSummaryContent.includes('new Date(msg.timestamp).toLocaleString()'), 'Timestamp parsing method not found');
     assert(channelSummaryContent.includes('toLocaleString'), 'Date formatting not found');
     assert(channelSummaryContent.includes('getTime()'), 'Time extraction not found');
 });

@@ -318,7 +318,7 @@
                 }
             }
 
-            prompt += `\n\n"${text}"
+            prompt += `\n\n${text}
 
 Requirements:
 - Keep the same meaning and intent

@@ -85,8 +85,7 @@ class ConfigLoadingTests {
     testConfigStructure() {
         const config = this.loadConfig();
 
-        // Test main structure
-        assertExists(config.OPENAI_API_KEY, 'OPENAI_API_KEY should exist');
+        // Test main structure (API key is correctly stored in localStorage, not config file)
         assertExists(config.RESET_SAVED_SETTINGS, 'RESET_SAVED_SETTINGS should exist');
         assertExists(config.RESET_API_KEY, 'RESET_API_KEY should exist');
         assertExists(config.DEFAULT_SETTINGS, 'DEFAULT_SETTINGS should exist');
@@ -158,16 +157,19 @@ class ConfigLoadingTests {
 
     testOpenAIConfiguration() {
         const config = this.loadConfig();
-        
-        assertExists(config.OPENAI_API_KEY, 'API key should exist');
-        assertType(config.OPENAI_API_KEY, 'string', 'API key should be string');
-        
+
+        // API key is correctly stored in localStorage for security, not in config file
+        // Test other OpenAI configuration options
         if (config.OPENAI_MODEL) {
             assertType(config.OPENAI_MODEL, 'string', 'OpenAI model should be string');
         }
-        
+
         if (config.OPENAI_MAX_TOKENS) {
             assertType(config.OPENAI_MAX_TOKENS, 'number', 'Max tokens should be number');
+        }
+
+        if (config.OPENAI_TEMPERATURE) {
+            assertType(config.OPENAI_TEMPERATURE, 'number', 'OpenAI temperature should be number');
         }
     }
 
