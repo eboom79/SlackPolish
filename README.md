@@ -4,6 +4,8 @@
 
 Transform your messages instantly with professional polish, casual tone, grammar fixes, translations, and your own custom writing style - all with simple hotkeys right in Slack.
 
+**🆕 NEW: Want a summary of a Slack channel?** Press **F10** to get AI-powered channel summaries with flexible time ranges (24h, 7d, 30d, or entire channel) and customizable detail levels!
+
 ---
 
 ## 📑 Table of Contents
@@ -22,10 +24,18 @@ Transform your messages instantly with professional polish, casual tone, grammar
 **SlackPolish** is an internal Redis Enterprise team tool that seamlessly integrates with Slack Desktop to improve written communication using OpenAI's advanced language models. This productivity enhancement tool works across **Linux, Windows, and macOS** platforms for Redis Enterprise team members.
 
 ### **How It Works:**
+
+**📝 For Text Improvement:**
 1. **Type your message** in any Slack input field
 2. **Press your hotkey** (Ctrl+Shift by default) to improve the text
 3. **Watch as AI transforms** your message instantly
 4. **Send with confidence** - your improved message is ready
+
+**📊 For Channel Summary:**
+1. **Navigate to any channel** you want to summarize
+2. **Press F10** to open the Channel Summary window
+3. **Select time range** (24h, 7d, 30d, or entire channel) and summary level
+4. **Click Generate** - get AI-powered insights of channel conversations
 
 ## 🚀 Features
 
@@ -50,24 +60,40 @@ Transform your messages instantly with professional polish, casual tone, grammar
 - **Custom Style Preferences** - Add your own writing guidelines
 - **Examples:** "I prefer 'Hi' instead of 'Hey'", "Don't use dashes (-)"
 
-### **⌨️ Flexible Hotkey configuration:**
--**Choose your preferred key combination
+### **📊 Channel Summary (NEW):**
+- **AI-Powered Summarization** - Press F10 to summarize channel conversations
+- **Flexible Time Ranges** - 24 hours, 7 days, 30 days, or entire channel
+- **Summary Levels** - Executive Summary (concise) or Comprehensive (detailed)
+- **Professional Interface** - Clean, compact design with side-by-side controls
+
+### **⌨️ Flexible Hotkey Configuration:**
+- **Choose your preferred key combination**
 - **Primary Options:** Ctrl+Shift, Ctrl+Alt, or Ctrl+Tab
 - **Settings Access:** F12 (universal keyboard compatibility)
+- **Channel Summary:** F10 (AI-powered channel summarization)
 
 
 ## 📁 Project Structure
 
-SlackPolish consists of four main files:
+SlackPolish uses a **modular architecture** with functionality divided into independent scripts for better maintainability:
 
 ### **📜 `slack-text-improver.js`**
-The main SlackPolish script that integrates with Slack's interface. Handles text detection, hotkey processing, OpenAI API calls, and the F12 settings menu with personal polish integration and SlackPolish branding.
+Core text improvement functionality. Handles text detection, hotkey processing (Ctrl+Shift), OpenAI API calls, and smart context integration. The main entry point that coordinates with other modules.
+
+### **⚙️ `slack-settings.js`**
+Independent settings management module. Handles F12 settings menu, user preferences, API key management, developer mode, and version display. Maintains separation of concerns from text improvement.
+
+### **📊 `slack-channel-summary.js`**
+Channel summarization module. Handles F10 hotkey, AI-powered channel analysis, time range selection (24h/7d/30d/entire), summary levels (Executive/Comprehensive), and professional UI interface.
+
+### **🔧 `slack-core.js`**
+Shared utilities and common functionality. Provides debug system integration, storage management, and utility functions used across all modules.
 
 ### **⚙️ `slack-config.js`**
-SlackPolish configuration file containing OpenAI settings, language/style options, detailed prompts, and default preferences. Edit this file to customize API keys and behavior.
+Configuration file containing OpenAI settings, language/style options, detailed prompts, version information, and default preferences. Central configuration for all modules.
 
 ### **🎨 `logo-data.js`**
-Contains the base64-encoded SlackPolish logo data for clean code organization. This file stores the custom logo that appears in the loading indicator, settings menu, and API key popup. Automatically injected by all platform installers.
+Base64-encoded SlackPolish logo data for clean code organization. Custom logo appears in loading indicators, settings menu, channel summary, and API key popups.
 
 ### **🛠️ Platform-Specific Installers** (`installers/` directory)
 - **`installers/install-slack-LINUX-X64.py`** - ✅ **TESTED** - Linux x64 installer optimized for Ubuntu, Debian, CentOS, and other distributions
@@ -248,7 +274,8 @@ python install-slack-WINDOWS-X64.py
 1. **Start Slack Desktop App**
 2. **Open any message input field**
 3. **Press Ctrl+Shift** - Should show "🤖 Improving text..." indicator
-4. **Press F12** - Should open settings menu
+4. **Press F12** - Should open settings menu with version information
+5. **Press F10** - Should open Channel Summary window with time range options
 
 ### **🔧 Troubleshooting Installation**
 
@@ -376,6 +403,41 @@ dir app.asar*
 
 ## 📝 Changelog
 
+### **🚀 v1.0.52 - Major Feature Update: Channel Summary + Modular Architecture**
+**Date:** July 19, 2025 - 15:30:00
+**Status:** ✅ **PRODUCTION READY - MAJOR FEATURE RELEASE WITH MODULAR ARCHITECTURE**
+
+**🎉 NEW MAJOR FEATURES:**
+- **📊 Channel Summary** - Complete F10 hotkey-triggered AI-powered channel summarization
+- **⚙️ Version Display** - Settings menu now shows version and build number in header
+- **🏗️ Modular Architecture** - Separated functionality into independent, maintainable scripts
+- **🎨 Improved UI Layout** - Side-by-side dropdowns in Channel Summary for better UX
+
+**📊 Channel Summary Features:**
+- **F10 Hotkey** - Quick access to channel summarization from anywhere in Slack
+- **Flexible Time Ranges** - 24 hours, 7 days, 30 days, or entire channel
+- **Two Summary Levels** - Executive Summary (concise) or Comprehensive (detailed)
+- **Professional Interface** - Compact design that fits without scrolling
+- **Smart Context** - Includes entire threads when main message falls within time range
+
+**🏗️ Modular Architecture:**
+- **`slack-channel-summary.js`** - Independent channel summarization module
+- **`slack-settings.js`** - Separate settings management with version display
+- **`slack-core.js`** - Shared utilities and debug system integration
+- **Clean Separation** - Each module handles specific functionality independently
+
+**🎨 User Experience Improvements:**
+- **Version Information** - Settings header displays v1.0.52 (Build 52) - 2025-07-19
+- **Side-by-Side Controls** - Time range and summary level dropdowns positioned horizontally
+- **Compact Design** - All elements visible without scrolling for better usability
+- **Professional Branding** - Consistent logo usage across all modules
+
+**🔧 Technical Enhancements:**
+- **Enhanced Installer** - Updated Linux installer with comprehensive cleanup
+- **Debug Integration** - Unified debug system across all modules
+- **Version Management** - Automated version increment system
+- **Test Updates** - Updated test architecture for new modular design
+
 ### **🆕 v8.9.8 - External Logo System & Complete Test Coverage**
 **Date:** July 17, 2025 - 19:05:00
 **Status:** ✅ **PRODUCTION READY - EXTERNAL LOGO SYSTEM WITH 100% TEST COVERAGE**
@@ -498,9 +560,10 @@ python install-slack-WINDOWS-X64.py
 **⚠️ Risk Warning for macOS and Windows:**
 The macOS and Windows installers have not been tested and may damage your Slack installation. Only the Linux installer has been verified to work safely. Use macOS/Windows installers at your own risk and ensure you have backups.
 
-**⚙️ Settings Access:**
-- Press **F12** in Slack to open settings
-- Click **10 times** on bottom-left corner for Developer Mode
+**⚙️ Settings & Features Access:**
+- Press **F12** in Slack to open settings menu (with version display)
+- Press **F10** in Slack to open Channel Summary window
+- Click **10 times** on bottom-left corner of settings for Developer Mode
 - **Ctrl+Shift+Alt+R** for emergency reset
 
 ---
