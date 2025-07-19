@@ -1,11 +1,682 @@
+// === SLACKPOLISH INJECTION START ===
+// SlackPolish - Text Improvement for Slack
+// Simple, focused text polishing with Ctrl+Shift hotkey
 
-// SlackPolish - AI-Powered Text Enhancement for Slack
 (function() {
     'use strict';
 
-    console.log('🚀 SlackPolish loaded! ✨ AI-powered text enhancement for Slack');
+    // Configuration - will be overridden by slack-config.js and localStorage
+    let CONFIG = {
+        OPENAI_API_KEY: '',
+        MODEL: 'gpt-4-turbo',
+        STYLE: 'professional',
+        LANGUAGE: 'English',
+        CUSTOM_INSTRUCTIONS: '',
+        HOTKEY: 'Ctrl+Shift',
+        DEBUG_MODE: false,
+        SMART_CONTEXT: {
+            enabled: true,
+            privacyMode: false
+        }
+    };
 
-    // Function to create SlackPolish logo using embedded SVG
+    // Update config if SLACKPOLISH_CONFIG is available
+    if (typeof window.SLACKPOLISH_CONFIG !== 'undefined') {
+        CONFIG = { ...CONFIG, ...window.SLACKPOLISH_CONFIG };
+        // Use the model from config
+        CONFIG.MODEL = window.SLACKPOLISH_CONFIG.OPENAI_MODEL || CONFIG.MODEL;
+    }
+
+    // Load API key and settings from localStorage
+    function loadSettings() {
+        try {
+            const savedApiKey = localStorage.getItem('slackpolish_openai_api_key');
+            if (savedApiKey) {
+                CONFIG.OPENAI_API_KEY = savedApiKey;
+                utils.log('API key loaded from localStorage');
+            }
+
+            const savedSettings = localStorage.getItem('slackpolish_settings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+
+                // Handle new settings structure from rich interface
+                if (settings.language) {
+                    // Map language codes to display names
+                    const languageMap = {
+                        'ENGLISH': 'English',
+                        'SPANISH': 'Spanish',
+                        'FRENCH': 'French',
+                        'GERMAN': 'German',
+                        'ITALIAN': 'Italian',
+                        'PORTUGUESE': 'Portuguese',
+                        'DUTCH': 'Dutch',
+                        'JAPANESE': 'Japanese',
+                        'CHINESE': 'Chinese'
+                    };
+                    CONFIG.LANGUAGE = languageMap[settings.language] || settings.language;
+                }
+
+                if (settings.style) {
+                    // Map style codes to lowercase for API
+                    CONFIG.STYLE = settings.style.toLowerCase();
+                }
+
+                // Handle personal polish as custom instructions
+                if (settings.personalPolish) {
+                    CONFIG.CUSTOM_INSTRUCTIONS = settings.personalPolish;
+                }
+
+                // Handle hotkey setting
+                if (settings.improveHotkey) {
+                    CONFIG.HOTKEY = settings.improveHotkey;
+                }
+
+                // Handle debug mode setting
+                if (typeof settings.debugMode === 'boolean') {
+                    CONFIG.DEBUG_MODE = settings.debugMode;
+                }
+
+                // Handle smart context setting
+                if (settings.smartContext) {
+                    CONFIG.SMART_CONTEXT = {
+                        enabled: typeof settings.smartContext.enabled === 'boolean' ? settings.smartContext.enabled : CONFIG.SMART_CONTEXT.enabled,
+                        privacyMode: typeof settings.smartContext.privacyMode === 'boolean' ? settings.smartContext.privacyMode : CONFIG.SMART_CONTEXT.privacyMode
+                    };
+                }
+
+                // Handle legacy settings structure
+                CONFIG.MODEL = settings.model || CONFIG.MODEL;
+                CONFIG.STYLE = settings.style || CONFIG.STYLE;
+                CONFIG.LANGUAGE = settings.language || CONFIG.LANGUAGE;
+                CONFIG.CUSTOM_INSTRUCTIONS = settings.customInstructions || settings.personalPolish || CONFIG.CUSTOM_INSTRUCTIONS;
+                CONFIG.HOTKEY = settings.improveHotkey || CONFIG.HOTKEY;
+                CONFIG.DEBUG_MODE = typeof settings.debugMode === 'boolean' ? settings.debugMode : CONFIG.DEBUG_MODE;
+
+                utils.log('Settings loaded from localStorage');
+
+                // Enable/disable global debug system
+                if (window.SlackPolishDebug) {
+                    window.SlackPolishDebug.setEnabled(CONFIG.DEBUG_MODE);
+                }
+
+                utils.debug('Settings loaded', {
+                    language: CONFIG.LANGUAGE,
+                    style: CONFIG.STYLE,
+                    hotkey: CONFIG.HOTKEY,
+                    debugMode: CONFIG.DEBUG_MODE,
+                    hasCustomInstructions: !!CONFIG.CUSTOM_INSTRUCTIONS,
+                    hasApiKey: !!CONFIG.OPENAI_API_KEY
+                });
+            }
+        } catch (error) {
+            utils.log(`Error loading settings: ${error.message}`);
+        }
+    }
+
+    // Utility functions
+    const utils = {
+        log: function(message) {
+            console.log(`🔧 SLACKPOLISH: ${message}`);
+        },
+
+        debug: function(message, data = null) {
+            if (CONFIG.DEBUG_MODE) {
+                console.log(`🐛 SLACKPOLISH DEBUG: ${message}`, data || '');
+                // Use global debug system
+                if (window.SlackPolishDebug) {
+                    window.SlackPolishDebug.addLog('text-improver', message, data);
+                }
+            }
+        },
+
+
+        showNotification: function(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: ${type === 'error' ? '#ff4444' : '#4CAF50'};
+                color: white;
+                padding: 12px 20px;
+                border-radius: 4px;
+                z-index: 10000;
+                font-family: Arial, sans-serif;
+                font-size: 14px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            `;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 3000);
+        },
+
+        findMessageInput: function() {
+            // Try multiple selectors for Slack message input
+            const selectors = [
+                '[data-qa="message_input"]',
+                '.ql-editor[data-qa="message_input"]',
+                '[contenteditable="true"][data-qa="message_input"]',
+                '.c-texty_input__container .ql-editor',
+                '[role="textbox"][contenteditable="true"]'
+            ];
+
+            for (const selector of selectors) {
+                const element = document.querySelector(selector);
+                if (element && element.isContentEditable) {
+                    return element;
+                }
+            }
+            return null;
+        },
+
+        getTextFromElement: function(element) {
+            if (!element) return '';
+            return element.innerText || element.textContent || '';
+        },
+
+        setTextInElement: function(element, text) {
+            if (!element) return;
+            
+            // Clear existing content
+            element.innerHTML = '';
+            
+            // Set new text
+            element.innerText = text;
+            
+            // Trigger input events to notify Slack
+            const events = ['input', 'change', 'keyup'];
+            events.forEach(eventType => {
+                const event = new Event(eventType, { bubbles: true });
+                element.dispatchEvent(event);
+            });
+        }
+    };
+
+    // Text improvement functionality
+    const textImprover = {
+        isProcessing: false,
+
+        async improveText(originalText) {
+            utils.debug('improveText() called', {
+                originalText,
+                debugMode: CONFIG.DEBUG_MODE,
+                hasApiKey: !!CONFIG.OPENAI_API_KEY
+            });
+
+            if (!CONFIG.OPENAI_API_KEY) {
+                utils.debug('API key missing', { hasApiKey: false });
+                showApiKeyUpdatePopup('OpenAI API key not configured. Please enter your API key to use text improvement.');
+                return null;
+            }
+
+            if (!originalText.trim()) {
+                utils.debug('Empty text provided', { originalText });
+                utils.showNotification('No text to improve', 'error');
+                return null;
+            }
+
+            this.isProcessing = true;
+            utils.log('Starting text improvement...');
+            utils.debug('Text improvement started', {
+                originalLength: originalText.length,
+                style: CONFIG.STYLE,
+                language: CONFIG.LANGUAGE,
+                model: CONFIG.MODEL,
+                hasCustomInstructions: !!CONFIG.CUSTOM_INSTRUCTIONS,
+                hotkey: CONFIG.HOTKEY
+            });
+
+            // Show loading indicator
+            showLoadingIndicator();
+
+            try {
+                const prompt = await this.buildPrompt(originalText);
+
+                // Use shared OpenAI module if available, fallback to local implementation
+                let response;
+                if (window.SlackPolishOpenAI) {
+                    response = await window.SlackPolishOpenAI.improveText(
+                        CONFIG.OPENAI_API_KEY,
+                        CONFIG.MODEL,
+                        prompt
+                    );
+                } else {
+                    response = await this.callOpenAI(prompt);
+                }
+
+                if (response && response.trim()) {
+                    utils.log('Text improvement completed successfully');
+                    utils.debug('Text improvement successful', {
+                        originalLength: originalText.length,
+                        improvedLength: response.trim().length,
+                        originalText: originalText,
+                        improvedText: response.trim(),
+                        usedSharedModule: !!window.SlackPolishOpenAI
+                    });
+                    return response.trim();
+                } else {
+                    utils.debug('Empty response from API', { response });
+                    showSimpleError('Received empty response from OpenAI');
+                    return null;
+                }
+            } catch (error) {
+                utils.log(`Error improving text: ${error.message}`);
+                utils.debug('Text improvement error', {
+                    error: error.message,
+                    stack: error.stack,
+                    originalText
+                });
+                handleApiError(error);
+                return null;
+            } finally {
+                this.isProcessing = false;
+                // Hide loading indicator
+                hideLoadingIndicator();
+                utils.debug('Text improvement process completed', { isProcessing: this.isProcessing });
+            }
+        },
+
+        async buildPrompt(text) {
+            utils.debug('Building prompt', {
+                textLength: text.length,
+                style: CONFIG.STYLE,
+                language: CONFIG.LANGUAGE,
+                hasCustomInstructions: !!CONFIG.CUSTOM_INSTRUCTIONS,
+                smartContextEnabled: CONFIG.SMART_CONTEXT?.enabled
+            });
+
+            let prompt = `Please improve the following text to be more ${CONFIG.STYLE} in ${CONFIG.LANGUAGE}:`;
+
+            // Add Smart Context if enabled
+            if (CONFIG.SMART_CONTEXT && CONFIG.SMART_CONTEXT.enabled) {
+                try {
+                    const contextMessages = await this.getSmartContext();
+                    if (contextMessages && contextMessages.length > 0) {
+                        prompt += `\n\nRecent conversation context (last ${contextMessages.length} messages):\n`;
+                        contextMessages.forEach((msg, index) => {
+                            const user = CONFIG.SMART_CONTEXT.privacyMode ? `User${index + 1}` : (msg.user || 'Unknown');
+                            const text = CONFIG.SMART_CONTEXT.privacyMode ? this.anonymizeText(msg.text) : msg.text;
+                            prompt += `${user}: ${text}\n`;
+                        });
+                        prompt += `\nConsider this conversation context when improving the message.`;
+
+                        utils.debug('Added smart context to prompt', {
+                            contextMessages: contextMessages.length,
+                            privacyMode: CONFIG.SMART_CONTEXT.privacyMode
+                        });
+                    }
+                } catch (error) {
+                    utils.debug('Error getting smart context, continuing without it', {
+                        error: error.message
+                    });
+                }
+            }
+
+            prompt += `\n\n"${text}"
+
+Requirements:
+- Keep the same meaning and intent
+- Make it sound more ${CONFIG.STYLE}
+- Use ${CONFIG.LANGUAGE} language
+- Return only the improved text, no explanations`;
+
+            if (CONFIG.CUSTOM_INSTRUCTIONS) {
+                prompt += `\n- Additional instructions: ${CONFIG.CUSTOM_INSTRUCTIONS}`;
+                utils.debug('Added custom instructions', { customInstructions: CONFIG.CUSTOM_INSTRUCTIONS });
+            }
+
+            utils.debug('Prompt built', { promptLength: prompt.length });
+            return prompt;
+        },
+
+        async getSmartContext() {
+            try {
+                if (!window.SlackPolishChannelMessages) {
+                    utils.debug('Channel Messages module not available for smart context');
+                    return [];
+                }
+
+                utils.debug('Fetching smart context messages');
+
+                // Try API-based approach first, fallback to DOM if it fails
+                let result = null;
+                try {
+                    result = await window.SlackPolishChannelMessages.getRecentMessages(5);
+                } catch (apiError) {
+                    utils.debug('API-based message fetching failed, trying DOM fallback', {
+                        error: apiError.message
+                    });
+
+                    // Fallback to DOM-based extraction
+                    try {
+                        result = await window.SlackPolishChannelMessages.getRecentMessagesFromDOM(5);
+                    } catch (domError) {
+                        utils.debug('DOM fallback also failed', {
+                            error: domError.message
+                        });
+                        return [];
+                    }
+                }
+
+                if (!result || !result.messages || result.messages.length === 0) {
+                    utils.debug('No messages found for smart context');
+                    return [];
+                }
+
+                // Filter out empty messages and format for context
+                const contextMessages = result.messages
+                    .filter(msg => msg.text && msg.text.trim().length > 0)
+                    .map(msg => ({
+                        user: msg.user || 'Unknown',
+                        text: msg.text.trim(),
+                        timestamp: msg.timestamp
+                    }))
+                    .slice(-5); // Ensure we only get last 5
+
+                utils.debug('Smart context messages prepared', {
+                    totalMessages: result.messages.length,
+                    contextMessages: contextMessages.length,
+                    channelId: result.channelId,
+                    channelName: result.channelName,
+                    method: result.method || 'unknown'
+                });
+
+                return contextMessages;
+            } catch (error) {
+                utils.debug('Error getting smart context', {
+                    error: error.message,
+                    stack: error.stack
+                });
+                return [];
+            }
+        },
+
+        anonymizeText(text) {
+            if (!text) return text;
+
+            try {
+                // Simple anonymization - replace names and sensitive info
+                let anonymized = text
+                    // Replace @mentions with @User
+                    .replace(/@\w+/g, '@User')
+                    // Replace email addresses
+                    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, 'email@domain.com')
+                    // Replace phone numbers (basic pattern)
+                    .replace(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, 'XXX-XXX-XXXX')
+                    // Replace URLs
+                    .replace(/https?:\/\/[^\s]+/g, 'https://example.com')
+                    // Replace common names (this is basic - could be enhanced)
+                    .replace(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/g, 'Person Name');
+
+                utils.debug('Text anonymized', {
+                    originalLength: text.length,
+                    anonymizedLength: anonymized.length
+                });
+
+                return anonymized;
+            } catch (error) {
+                utils.debug('Error anonymizing text', { error: error.message });
+                return text; // Return original if anonymization fails
+            }
+        },
+
+        async callOpenAI(prompt) {
+            utils.debug('Calling OpenAI API', {
+                model: CONFIG.MODEL,
+                promptLength: prompt.length,
+                apiKeyLength: CONFIG.OPENAI_API_KEY ? CONFIG.OPENAI_API_KEY.length : 0
+            });
+
+            const requestBody = {
+                model: CONFIG.MODEL,
+                messages: [
+                    {
+                        role: 'user',
+                        content: prompt
+                    }
+                ],
+                max_tokens: 500,
+                temperature: 0.7
+            };
+
+            utils.debug('API request body', requestBody);
+
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${CONFIG.OPENAI_API_KEY}`
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            utils.debug('API response received', {
+                status: response.status,
+                statusText: response.statusText,
+                ok: response.ok
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                utils.debug('API error', { status: response.status, errorData });
+                throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            const result = data.choices?.[0]?.message?.content || '';
+
+            utils.debug('API response processed', {
+                hasChoices: !!data.choices?.length,
+                resultLength: result.length,
+                usage: data.usage
+            });
+
+            return result;
+        }
+    };
+
+    // Parse hotkey combination into individual keys
+    function parseHotkey(hotkeyString) {
+        const parts = hotkeyString.split('+');
+        return {
+            ctrl: parts.includes('Ctrl'),
+            shift: parts.includes('Shift'),
+            alt: parts.includes('Alt'),
+            tab: parts.includes('Tab'),
+            displayName: hotkeyString
+        };
+    }
+
+    // Current event listeners (for cleanup)
+    let currentKeydownListener = null;
+    let currentKeyupListener = null;
+
+    // Event handlers
+    function setupEventListeners() {
+        utils.log(`Setting up ${CONFIG.HOTKEY} event listener`);
+
+        // Clean up existing listeners if any
+        if (currentKeydownListener) {
+            document.removeEventListener('keydown', currentKeydownListener);
+        }
+        if (currentKeyupListener) {
+            document.removeEventListener('keyup', currentKeyupListener);
+        }
+
+        const hotkey = parseHotkey(CONFIG.HOTKEY);
+
+        let ctrlPressed = false;
+        let shiftPressed = false;
+        let altPressed = false;
+        let tabPressed = false;
+        let triggerTimeout = null;
+
+        // Dynamic keydown handler
+        currentKeydownListener = function(event) {
+            // Track key states
+            if (event.key === 'Control') {
+                ctrlPressed = true;
+                utils.log('Ctrl pressed');
+            }
+            if (event.key === 'Shift') {
+                shiftPressed = true;
+                utils.log('Shift pressed');
+            }
+            if (event.key === 'Alt') {
+                altPressed = true;
+                utils.log('Alt pressed');
+            }
+            if (event.key === 'Tab') {
+                tabPressed = true;
+                utils.log('Tab pressed');
+            }
+
+            // Check if the configured hotkey combination is pressed
+            const hotkeyMatch =
+                (hotkey.ctrl === ctrlPressed) &&
+                (hotkey.shift === shiftPressed) &&
+                (hotkey.alt === altPressed) &&
+                (hotkey.tab === tabPressed);
+
+            if (hotkeyMatch) {
+                // Prevent Tab from changing focus if it's part of the hotkey
+                if (hotkey.tab) {
+                    event.preventDefault();
+                }
+
+                utils.log(`${CONFIG.HOTKEY} combination pressed - triggering text improvement immediately`);
+
+                // Clear any existing timeout
+                if (triggerTimeout) {
+                    clearTimeout(triggerTimeout);
+                    triggerTimeout = null;
+                }
+
+                // Trigger immediately - no need to wait for keys to be held
+                triggerTimeout = setTimeout(async () => {
+                    utils.log(`${CONFIG.HOTKEY} triggered - starting text improvement`);
+                    await triggerTextImprovement();
+                    triggerTimeout = null;
+                }, 50); // Very short delay just to debounce multiple rapid key presses
+            }
+        };
+
+        document.addEventListener('keydown', currentKeydownListener);
+
+        // Dynamic keyup handler
+        currentKeyupListener = function(event) {
+            if (event.key === 'Control') {
+                ctrlPressed = false;
+                utils.log('Ctrl released');
+            }
+            if (event.key === 'Shift') {
+                shiftPressed = false;
+                utils.log('Shift released');
+            }
+            if (event.key === 'Alt') {
+                altPressed = false;
+                utils.log('Alt released');
+            }
+            if (event.key === 'Tab') {
+                tabPressed = false;
+                utils.log('Tab released');
+            }
+
+            // Clear timeout if any required key is released
+            const anyRequiredKeyReleased =
+                (hotkey.ctrl && !ctrlPressed) ||
+                (hotkey.shift && !shiftPressed) ||
+                (hotkey.alt && !altPressed) ||
+                (hotkey.tab && !tabPressed);
+
+            if (triggerTimeout && anyRequiredKeyReleased) {
+                clearTimeout(triggerTimeout);
+                triggerTimeout = null;
+                utils.log('Trigger timeout cleared');
+            }
+        };
+
+        document.addEventListener('keyup', currentKeyupListener);
+
+        async function triggerTextImprovement() {
+            utils.debug('triggerTextImprovement() called', {
+                isProcessing: textImprover.isProcessing,
+                debugMode: CONFIG.DEBUG_MODE
+            });
+
+            if (textImprover.isProcessing) {
+                utils.debug('Already processing, aborting', { isProcessing: true });
+                utils.showNotification('Already processing text...', 'error');
+                return;
+            }
+
+            const messageInput = utils.findMessageInput();
+            if (!messageInput) {
+                utils.debug('Message input not found', { messageInput: null });
+                utils.showNotification('No message input found', 'error');
+                utils.log('Message input not found');
+                return;
+            }
+
+            utils.log(`Found message input: ${messageInput.tagName}`);
+            utils.debug('Message input found', {
+                tagName: messageInput.tagName,
+                className: messageInput.className,
+                id: messageInput.id
+            });
+
+            const originalText = utils.getTextFromElement(messageInput);
+            utils.log(`Original text: "${originalText}"`);
+
+            if (!originalText.trim()) {
+                utils.debug('No text to improve', { originalText });
+                utils.showNotification('No text to improve', 'error');
+                return;
+            }
+
+            const improvedText = await textImprover.improveText(originalText);
+
+            if (improvedText) {
+                utils.debug('Setting improved text', {
+                    originalText,
+                    improvedText,
+                    lengthChange: improvedText.length - originalText.length
+                });
+                utils.setTextInElement(messageInput, improvedText);
+            } else {
+                utils.debug('No improved text received', { improvedText });
+            }
+        }
+    }
+
+    // Show simple error notification
+    function showSimpleError(message) {
+        const errorDiv = document.createElement('div');
+        errorDiv.innerHTML = `❌ ${message}`;
+        errorDiv.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #d93025;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 10000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            max-width: 300px;
+        `;
+        document.body.appendChild(errorDiv);
+        setTimeout(() => errorDiv.remove(), 5000);
+    }
+
+    // Create SlackPolish logo
     function createSlackPolishLogo(size = 24) {
         const logoImg = document.createElement('img');
         logoImg.title = 'SlackPolish';
@@ -35,256 +706,7 @@
         return logoImg;
     }
 
-    // Get configuration from config file with fallbacks
-    function getConfig() {
-        const config = window.SLACKPOLISH_CONFIG || {};
-
-        // Initialize API key variable
-        let apiKey = config.OPENAI_API_KEY;
-
-        // Check for emergency reset flags FIRST (installer-managed version system)
-        try {
-            // Check for full settings reset (only if flag is true AND version is different)
-            if (config.RESET_SAVED_SETTINGS === true) {
-                const resetVersion = config.RESET_SAVED_SETTINGS_VERSION || 'v1';
-                const lastResetVersion = localStorage.getItem('slackpolish-last-settings-reset-version');
-
-                if (resetVersion !== lastResetVersion) {
-                    console.log(`🚨 RESET_SAVED_SETTINGS flag detected (version: ${resetVersion}) - clearing all saved settings including API key`);
-                    localStorage.removeItem('slackpolish-settings');
-
-                    // Mark this reset version as completed
-                    localStorage.setItem('slackpolish-last-settings-reset-version', resetVersion);
-
-                    console.log('✅ All settings reset to defaults due to RESET_SAVED_SETTINGS flag');
-                    console.log('💡 This reset happened once for this installation - managed by installer');
-                    // Use config file API key (empty) instead of saved one
-                } else {
-                    console.log(`⏭️ RESET_SAVED_SETTINGS already performed for version ${resetVersion} - skipping`);
-                }
-            } else {
-                console.log('⏭️ RESET_SAVED_SETTINGS flag is false - no reset needed');
-            }
-
-            // Check for API key reset flag (independent of settings reset)
-            if (config.RESET_API_KEY === true) {
-                    const resetVersion = config.RESET_API_KEY_VERSION || 'v1';
-                    const lastResetVersion = localStorage.getItem('slackpolish-last-apikey-reset-version');
-
-                    if (resetVersion !== lastResetVersion) {
-                        console.log(`🔑 RESET_API_KEY flag detected (version: ${resetVersion}) - clearing saved API key only`);
-                        try {
-                            const saved = localStorage.getItem('slackpolish-settings');
-                            if (saved) {
-                                const savedSettings = JSON.parse(saved);
-                                delete savedSettings.apiKey; // Remove only the API key
-                                localStorage.setItem('slackpolish-settings', JSON.stringify(savedSettings));
-                                console.log('✅ API key reset to config file value, other settings preserved');
-                            }
-
-                            // Mark this reset version as completed
-                            localStorage.setItem('slackpolish-last-apikey-reset-version', resetVersion);
-
-                            console.log('💡 This reset happened once for this installation - managed by installer');
-                        } catch (error) {
-                            console.error('❌ Error resetting API key:', error);
-                        }
-                    } else {
-                        console.log(`⏭️ RESET_API_KEY already performed for version ${resetVersion} - skipping`);
-                    }
-                } else {
-                    console.log('⏭️ RESET_API_KEY flag is false - no reset needed');
-                }
-
-                // Check for saved API key in localStorage (after potential reset)
-                try {
-                    const saved = localStorage.getItem('slackpolish-settings');
-                    if (saved) {
-                        const savedSettings = JSON.parse(saved);
-                        if (savedSettings.apiKey) {
-                            apiKey = savedSettings.apiKey;
-                            // Update the global config with the saved API key
-                            config.OPENAI_API_KEY = apiKey;
-                            console.log('🔑 Using saved API key from localStorage');
-                        }
-                    }
-                } catch (error) {
-                    console.error('❌ Error loading saved API key:', error);
-                }
-        } catch (error) {
-            console.error('❌ Error in reset logic:', error);
-        }
-
-        return {
-            DEFAULT_SETTINGS: config.DEFAULT_SETTINGS || {
-                language: 'ENGLISH',
-                style: 'CASUAL',
-                improveHotkey: 'Ctrl+Shift',
-                personalPolish: ''
-            },
-            AVAILABLE_HOTKEYS: config.AVAILABLE_HOTKEYS || [
-                'Ctrl+Shift',
-                'Ctrl+Alt',
-                'Ctrl+Tab'
-            ],
-            SUPPORTED_LANGUAGES: config.SUPPORTED_LANGUAGES || {},
-            AVAILABLE_STYLES: config.AVAILABLE_STYLES || {},
-
-            TEXT_INPUT_SELECTORS: config.TEXT_INPUT_SELECTORS || [
-                '[data-qa="message_input"] .ql-editor',
-                '.ql-editor[contenteditable="true"]',
-                '[contenteditable="true"].ql-editor',
-                '.c-texty_input .ql-editor'
-            ],
-            OPENAI_MODEL: config.OPENAI_MODEL || 'gpt-3.5-turbo',
-            OPENAI_MAX_TOKENS: config.OPENAI_MAX_TOKENS || 500,
-            OPENAI_TEMPERATURE: config.OPENAI_TEMPERATURE || 0.7,
-            OPENAI_API_KEY: apiKey
-        };
-    }
-
-    const appConfig = getConfig();
-    const DEFAULT_SETTINGS = appConfig.DEFAULT_SETTINGS;
-
-    let currentSettings = { ...DEFAULT_SETTINGS };
-
-    // Get current settings
-    function getCurrentSettings() {
-        return currentSettings;
-    }
-
-    // Get current API key (from settings or config)
-    function getCurrentApiKey() {
-        const settings = getCurrentSettings();
-        return settings.apiKey || appConfig.OPENAI_API_KEY || '';
-    }
-
-    // Save settings to localStorage with forced disk flush
-    function saveSettings(settings) {
-        try {
-            const settingsJson = JSON.stringify(settings);
-
-            // Save and force multiple flushes to disk
-            localStorage.setItem('slackpolish-settings', settingsJson);
-
-            // Force immediate flush by triggering multiple localStorage operations
-            // This helps ensure the data is written to disk before process termination
-            for (let i = 0; i < 3; i++) {
-                localStorage.setItem('slackpolish-settings', settingsJson);
-                const verification = localStorage.getItem('slackpolish-settings');
-                if (verification !== settingsJson) {
-                    console.warn(`⚠️ Settings verification failed on attempt ${i + 1}, retrying...`);
-                }
-            }
-
-            // Additional flush attempt with a temporary key to force disk I/O
-            localStorage.setItem('slackpolish-flush-temp', Date.now().toString());
-            localStorage.removeItem('slackpolish-flush-temp');
-
-            currentSettings = { ...settings };
-            console.log('⚙️ Settings saved to localStorage with forced flush');
-
-            // Add periodic auto-save to handle process kills (reduced interval)
-            if (!window.slackPolishAutoSaveInterval) {
-                window.slackPolishAutoSaveInterval = setInterval(() => {
-                    try {
-                        localStorage.setItem('slackpolish-settings', JSON.stringify(currentSettings));
-                    } catch (error) {
-                        console.error('❌ Auto-save error:', error);
-                    }
-                }, 2000); // Auto-save every 2 seconds for better protection
-            }
-
-            // Add window close handler to ensure settings are saved
-            if (!window.slackPolishCloseHandlerAdded) {
-                window.addEventListener('beforeunload', function() {
-                    console.log('🔄 Window closing - ensuring settings are saved');
-                    try {
-                        localStorage.setItem('slackpolish-settings', JSON.stringify(currentSettings));
-                        console.log('✅ Settings saved during window close');
-                    } catch (error) {
-                        console.error('❌ Error saving settings during close:', error);
-                    }
-                });
-                window.slackPolishCloseHandlerAdded = true;
-            }
-        } catch (error) {
-            console.error('❌ Error saving settings:', error);
-        }
-    }
-
-    // Load settings from localStorage
-    function loadSettings() {
-        const config = window.SLACKPOLISH_CONFIG || {};
-
-
-
-        // Check if full reset was performed (installer-managed version system)
-        if (config.RESET_SAVED_SETTINGS === true) {
-            const resetVersion = config.RESET_SAVED_SETTINGS_VERSION || 'v1';
-            const lastResetVersion = localStorage.getItem('slackpolish-last-settings-reset-version');
-
-            console.log('🔍 DEBUG: resetVersion =', resetVersion);
-            console.log('🔍 DEBUG: lastResetVersion =', lastResetVersion);
-
-            if (resetVersion === lastResetVersion) {
-                // Reset was already performed for this version, load saved settings normally
-                console.log('⚙️ Reset already performed for this installation - loading saved settings');
-                // Continue to normal settings loading below
-            } else {
-                // Reset will happen during getConfig() - use defaults for now
-                currentSettings = { ...DEFAULT_SETTINGS };
-                console.log('⚙️ Using default settings (reset will happen during initialization)');
-                return;
-            }
-        }
-
-        try {
-            const saved = localStorage.getItem('slackpolish-settings');
-
-            if (saved) {
-                const parsedSettings = JSON.parse(saved);
-                currentSettings = { ...DEFAULT_SETTINGS, ...parsedSettings };
-                console.log('⚙️ Settings loaded from localStorage');
-            } else {
-                console.log('⚙️ No saved settings found, using defaults');
-                currentSettings = { ...DEFAULT_SETTINGS };
-            }
-        } catch (error) {
-            console.error('❌ Error loading settings:', error);
-            console.log('🔄 Resetting to default settings due to corruption');
-            currentSettings = { ...DEFAULT_SETTINGS };
-            // Clear corrupted settings
-            localStorage.removeItem('slackpolish-settings');
-        }
-    }
-
-
-
-    // Simple hotkey matching function
-    function hotkeyMatches(event, hotkeyString) {
-        if (!hotkeyString) return false;
-
-        console.log(`🔍 Checking hotkey match: "${hotkeyString}" vs event keys`);
-
-        // Handle specific hotkey combinations
-        switch (hotkeyString) {
-            case 'Ctrl+Shift':
-                return event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey;
-
-            case 'Ctrl+Alt':
-                return event.ctrlKey && !event.shiftKey && event.altKey && !event.metaKey;
-
-            case 'Ctrl+Tab':
-                return event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && event.key === 'Tab';
-
-            default:
-                console.log(`⚠️ Unknown hotkey: ${hotkeyString}`);
-                return false;
-        }
-    }
-
-    // Show loading indicator
+    // Show loading indicator (original design)
     function showLoadingIndicator() {
         const existing = document.getElementById('slack-text-improver-loading');
         if (existing) existing.remove();
@@ -329,212 +751,59 @@
         if (indicator) indicator.remove();
     }
 
-    // Find Slack text input
-    function findTextInput() {
-        debugLog(`🔍 SEARCHING FOR TEXT INPUT`);
-        debugLog(`🔍 Current URL:`, window.location.href);
-        debugLog(`🔍 Is in thread:`, isInThread());
-        debugLog(`🔍 Active element:`, document.activeElement);
-
-        // First, let's try to find the focused input (most reliable)
-        const activeElement = document.activeElement;
-        if (activeElement && (
-            activeElement.contentEditable === 'true' ||
-            activeElement.matches('.ql-editor') ||
-            activeElement.matches('[contenteditable="true"]')
-        )) {
-            debugLog(`🎯 FOUND FOCUSED INPUT: ${activeElement.tagName}.${activeElement.className}`);
-
-            // Check if this focused element is in a thread
-            const threadContainer = activeElement.closest('.p-thread_view, .p-threads_view, [data-qa*="thread"]');
-            if (threadContainer) {
-                debugLog(`🧵 FOCUSED INPUT IS IN THREAD CONTAINER`);
-                showDebugInfo(`✅ FOUND FOCUSED THREAD INPUT:
-Tag: ${activeElement.tagName}
-Class: ${activeElement.className}
-Data-qa: ${activeElement.getAttribute('data-qa')}
-In thread container: YES`);
-                return activeElement;
-            } else if (!isInThread()) {
-                console.log(`📝 FOCUSED INPUT IS IN MAIN CHANNEL`);
-                showDebugInfo(`✅ FOUND FOCUSED CHANNEL INPUT:
-Tag: ${activeElement.tagName}
-Class: ${activeElement.className}
-Data-qa: ${activeElement.getAttribute('data-qa')}
-In thread container: NO`);
-                return activeElement;
-            }
-        }
-
-        // If we're in a thread, look for thread-specific inputs
-        if (isInThread()) {
-
-            const threadSelectors = [
-                // More comprehensive thread selectors
-                '[data-qa*="thread"] .ql-editor',
-                '[data-qa*="thread"] [contenteditable="true"]',
-                '.p-thread_view .ql-editor',
-                '.p-threads_view .ql-editor',
-                '.c-message_kit__thread .ql-editor',
-                '[data-qa="thread_view"] .ql-editor',
-                '[data-qa="threads_view"] .ql-editor',
-                '[data-qa="thread_message_input"] .ql-editor',
-                '[data-qa="thread-message-input"] .ql-editor',
-
-                // Broader thread container searches
-                '.p-thread_view [contenteditable="true"]',
-                '.p-threads_view [contenteditable="true"]',
-                '[data-qa*="thread"] [contenteditable="true"]',
-
-                // Look for any contenteditable in thread containers
-                '.p-thread_view div[contenteditable="true"]',
-                '.p-threads_view div[contenteditable="true"]'
-            ];
-
-            for (let i = 0; i < threadSelectors.length; i++) {
-                const selector = threadSelectors[i];
-                const elements = document.querySelectorAll(selector);
-
-                for (let j = 0; j < elements.length; j++) {
-                    const element = elements[j];
-                    const isVisible = element.offsetParent !== null;
-                    const isFocused = element === document.activeElement;
-
-                    if (element && element.isConnected && isVisible) {
-                        const details = {
-                            tagName: element.tagName,
-                            className: element.className,
-                            id: element.id,
-                            'data-qa': element.getAttribute('data-qa'),
-                            contentEditable: element.contentEditable,
-                            isFocused: isFocused
-                        };
-
-                        // Show visual debug info
-                        showDebugInfo(`✅ FOUND THREAD INPUT:
-Selector: ${selector}
-Tag: ${details.tagName}
-Class: ${details.className}
-Data-qa: ${details['data-qa']}
-Focused: ${isFocused}`);
-
-                        return element;
-                    }
-                }
-            }
-
-            console.log(`🧵 No thread-specific input found, falling back to active element check`);
-
-            // If no thread-specific input found, check if active element is in a thread container
-            const activeElement = document.activeElement;
-            if (activeElement && (activeElement.contentEditable === 'true' || activeElement.matches('.ql-editor'))) {
-                const threadContainer = activeElement.closest('.p-thread_view, .p-threads_view, [data-qa="thread_view"], [data-qa="threads_view"]');
-                if (threadContainer) {
-                    console.log(`✅ FOUND THREAD INPUT via active element in thread container`);
-                    return activeElement;
-                }
-            }
-        }
-
-        // Regular channel input search (or fallback for threads)
-        console.log(`📝 SEARCHING FOR CHANNEL INPUT (or thread fallback)`);
-        const selectors = appConfig.TEXT_INPUT_SELECTORS;
-
-        for (let i = 0; i < selectors.length; i++) {
-            const selector = selectors[i];
-            console.log(`📝 Trying selector ${i + 1}/${selectors.length}: "${selector}"`);
-
-            const elements = document.querySelectorAll(selector);
-            console.log(`📝 Found ${elements.length} elements with selector: "${selector}"`);
-
-            for (let j = 0; j < elements.length; j++) {
-                const element = elements[j];
-                const isVisible = element.offsetParent !== null;
-                const isFocused = element === document.activeElement;
-
-                console.log(`📝 Element ${j + 1}: connected=${element.isConnected}, visible=${isVisible}, focused=${isFocused}`);
-
-                if (element && element.isConnected && isVisible) {
-                    console.log(`✅ FOUND TEXT INPUT with selector: "${selector}"`);
-                    const details = {
-                        tagName: element.tagName,
-                        className: element.className,
-                        id: element.id,
-                        'data-qa': element.getAttribute('data-qa'),
-                        contentEditable: element.contentEditable,
-                        isFocused: isFocused
-                    };
-                    console.log(`✅ Element details:`, details);
-
-                    // Show visual debug info
-                    const inputType = isInThread() ? 'FALLBACK CHANNEL INPUT (in thread!)' : 'CHANNEL INPUT';
-                    showDebugInfo(`✅ FOUND ${inputType}:
-Selector: ${selector}
-Tag: ${details.tagName}
-Class: ${details.className}
-Data-qa: ${details['data-qa']}
-Focused: ${isFocused}`);
-
-                    return element;
-                }
-            }
-        }
-
-        console.log('❌ COULD NOT FIND ANY TEXT INPUT');
-
-        // Enhanced debug info
-        console.log('❌ Debug info:');
-        console.log('❌ Active element:', document.activeElement);
-        console.log('❌ Active element parent:', document.activeElement?.parentElement);
-        console.log('❌ Thread containers:', document.querySelectorAll('.p-thread_view, .p-threads_view, [data-qa="thread_view"], [data-qa="threads_view"]').length);
-        console.log('❌ All .ql-editor elements:', document.querySelectorAll('.ql-editor').length);
-        console.log('❌ All contenteditable elements:', document.querySelectorAll('[contenteditable="true"]').length);
-
-        return null;
+    // Show simple error notification (original design)
+    function showSimpleError(message) {
+        const errorDiv = document.createElement('div');
+        errorDiv.innerHTML = `❌ ${message}`;
+        errorDiv.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #d93025;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 10000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            max-width: 300px;
+        `;
+        document.body.appendChild(errorDiv);
+        setTimeout(() => errorDiv.remove(), 5000);
     }
 
-    // Extract text from input
-    function extractTextFromInput() {
-        const textInput = findTextInput();
-        if (!textInput) {
-            console.log('❌ Could not find text input to extract text');
-            return '';
-        }
+    // Create SlackPolish logo (original design)
+    function createSlackPolishLogo(size = 24) {
+        const logoImg = document.createElement('img');
+        logoImg.title = 'SlackPolish';
+        logoImg.alt = 'SlackPolish Logo';
+        logoImg.width = size;
+        logoImg.height = size;
+        logoImg.style.cssText = `display: block; border: none; width: ${size}px !important; height: ${size}px !important; max-width: ${size}px; max-height: ${size}px;`;
 
-        const text = textInput.textContent || textInput.innerText || '';
-        console.log(`✅ Found text: "${text}"`);
-        return text;
+        // Your custom SlackPolish logo as base64 encoded SVG
+        // Try to use external logo file, fallback to embedded if not available
+        logoImg.src = window.SLACKPOLISH_LOGO_BASE64 || "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIj48Y2lyY2xlIGN4PSIyNTYiIGN5PSIyNTYiIHI9IjIwMCIgZmlsbD0iIzEyNjRhMyIvPjx0ZXh0IHg9IjI1NiIgeT0iMjgwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTIwIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+U1A8L3RleHQ+PC9zdmc+";
+
+        // Fallback to text if even the embedded SVG fails (very unlikely)
+        logoImg.onerror = function() {
+            const textSpan = document.createElement('span');
+            textSpan.textContent = 'SP';
+            textSpan.title = 'SlackPolish';
+            textSpan.style.cssText = `
+                font-size: ${size}px;
+                font-weight: bold;
+                color: #1264a3;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            `;
+            this.parentNode.replaceChild(textSpan, this);
+        };
+
+        return logoImg;
     }
 
-    // Replace text in input - SIMPLE VERSION
-    function replaceTextInInput(newText) {
-        const textInput = findTextInput();
-        if (!textInput) {
-            console.log('❌ Could not find text input to replace text');
-            return false;
-        }
-
-        try {
-            // Simple replacement
-            textInput.textContent = newText;
-            textInput.focus();
-
-            // Trigger events
-            textInput.dispatchEvent(new Event('input', { bubbles: true }));
-            textInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-            console.log('✅ Text replaced successfully');
-            return true;
-        } catch (error) {
-            console.error('❌ Error replacing text:', error);
-            return false;
-        }
-    }
-
-    // Handle API errors with appropriate user feedback
+    // Handle API errors and show appropriate popups
     function handleApiError(error) {
-        console.error('🔍 Analyzing API error:', error);
-
         // Check if it's a fetch error (network/API issues)
         if (error.message && (
             error.message.includes('401') ||
@@ -556,27 +825,6 @@ Focused: ${isFocused}`);
             // Generic error - show simple error message
             showSimpleError(`Error: ${error.message || 'Unknown error occurred'}`);
         }
-    }
-
-    // Show simple error notification
-    function showSimpleError(message) {
-        const errorDiv = document.createElement('div');
-        errorDiv.innerHTML = `❌ ${message}`;
-        errorDiv.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #d93025;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 5px;
-            font-size: 14px;
-            z-index: 10000;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            max-width: 300px;
-        `;
-        document.body.appendChild(errorDiv);
-        setTimeout(() => errorDiv.remove(), 5000);
     }
 
     // Show API key update popup
@@ -679,1921 +927,1330 @@ Focused: ${isFocused}`);
         });
     }
 
-    // Update API key in configuration
+    // Update API key in configuration and localStorage
     function updateApiKey(newApiKey) {
         try {
-            // Update the global config for immediate use
-            if (window.SLACKPOLISH_CONFIG) {
-                window.SLACKPOLISH_CONFIG.OPENAI_API_KEY = newApiKey;
-                console.log('✅ API key updated in global configuration');
-            }
+            // Update the current config for immediate use
+            CONFIG.OPENAI_API_KEY = newApiKey;
 
-            // Update appConfig for immediate use
-            appConfig.OPENAI_API_KEY = newApiKey;
+            // Save to localStorage for persistence
+            localStorage.setItem('slackpolish_openai_api_key', newApiKey);
 
-            // Save to localStorage for persistence across restarts
-            const currentSettings = getCurrentSettings();
-            currentSettings.apiKey = newApiKey;
-            saveSettings(currentSettings);
-
-            console.log('🔑 API key updated and saved for future use');
+            utils.log('🔑 API key updated and saved for future use');
         } catch (error) {
-            console.error('❌ Error updating API key:', error);
+            utils.log(`❌ Error updating API key: ${error.message}`);
         }
     }
 
-    // Helper function to make OpenAI API calls with proper error handling
-    async function makeOpenAIRequest(messages, maxTokens = 500, temperature = 0.7) {
-        const config = window.SLACKPOLISH_CONFIG;
-        if (!config || !config.OPENAI_API_KEY) {
-            throw new Error('OpenAI API key not configured. Please set it in slack-config.js');
-        }
+    // Initialize global Channel Messages system
+    function initializeGlobalChannelMessagesSystem() {
+        if (window.SlackPolishChannelMessages) return; // Already initialized
 
-        // Get current API key (from settings or config)
-        const currentApiKey = getCurrentApiKey();
+        window.SlackPolishChannelMessages = {
+            getCurrentChannelId() {
+                try {
+                    // Try multiple methods to get current channel ID
 
-        if (!currentApiKey) {
-            throw new Error('No OpenAI API key configured. Please add your API key in settings (F12 → Developer Mode → API Key).');
-        }
+                    // Method 1: From URL
+                    const urlMatch = window.location.href.match(/\/client\/[^\/]+\/([^\/\?]+)/);
+                    if (urlMatch && urlMatch[1] && urlMatch[1] !== 'dms') {
+                        if (window.SlackPolishDebug) {
+                            window.SlackPolishDebug.addLog('channel-messages', 'Channel ID from URL', {
+                                channelId: urlMatch[1],
+                                url: window.location.href
+                            });
+                        }
+                        return urlMatch[1];
+                    }
 
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentApiKey}`
+                    // Method 2: From DOM elements
+                    const channelHeader = document.querySelector('[data-qa="channel_header"]');
+                    if (channelHeader) {
+                        const channelId = channelHeader.getAttribute('data-channel-id');
+                        if (channelId) {
+                            if (window.SlackPolishDebug) {
+                                window.SlackPolishDebug.addLog('channel-messages', 'Channel ID from header', {
+                                    channelId
+                                });
+                            }
+                            return channelId;
+                        }
+                    }
+
+                    // Method 3: From message container
+                    const messageContainer = document.querySelector('[data-qa="slack_kit_scrollbar"]');
+                    if (messageContainer) {
+                        const channelId = messageContainer.getAttribute('data-channel-id');
+                        if (channelId) {
+                            if (window.SlackPolishDebug) {
+                                window.SlackPolishDebug.addLog('channel-messages', 'Channel ID from container', {
+                                    channelId
+                                });
+                            }
+                            return channelId;
+                        }
+                    }
+
+                    // Special case: if we're in DMs view, try to get the actual DM channel ID
+                    if (window.location.href.includes('/dms') || window.location.href.includes('/D0')) {
+                        // Try multiple methods to find the DM channel ID
+                        const dmSelectors = [
+                            '[data-qa="channel_sidebar_name_button"][aria-current="page"]',
+                            '[data-qa="channel_sidebar_name_button"].c-button--active',
+                            '.p-channel_sidebar__name--selected',
+                            '.c-virtual_list__item--selected [data-qa-channel-sidebar-channel-id]',
+                            '[aria-selected="true"][data-qa-channel-sidebar-channel-id]'
+                        ];
+
+                        for (const selector of dmSelectors) {
+                            const activeChannel = document.querySelector(selector);
+                            if (activeChannel) {
+                                let channelId = activeChannel.getAttribute('data-qa-channel-sidebar-channel-id');
+                                if (!channelId) {
+                                    channelId = activeChannel.getAttribute('data-channel-id');
+                                }
+                                if (!channelId) {
+                                    // Try to extract from href or other attributes
+                                    const href = activeChannel.getAttribute('href');
+                                    if (href) {
+                                        const match = href.match(/\/([D][A-Z0-9]+)/);
+                                        if (match) {
+                                            channelId = match[1];
+                                        }
+                                    }
+                                }
+                                if (channelId && channelId !== 'dms') {
+                                    if (window.SlackPolishDebug) {
+                                        window.SlackPolishDebug.addLog('channel-messages', 'Channel ID from active DM', {
+                                            channelId,
+                                            selector
+                                        });
+                                    }
+                                    return channelId;
+                                }
+                            }
+                        }
+
+                        // Fallback: try to extract DM ID from URL more aggressively
+                        const dmUrlMatch = window.location.href.match(/\/([D][A-Z0-9]{8,})/);
+                        if (dmUrlMatch && dmUrlMatch[1]) {
+                            if (window.SlackPolishDebug) {
+                                window.SlackPolishDebug.addLog('channel-messages', 'Channel ID from DM URL pattern', {
+                                    channelId: dmUrlMatch[1],
+                                    url: window.location.href
+                                });
+                            }
+                            return dmUrlMatch[1];
+                        }
+                    }
+
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'Could not determine channel ID', {
+                            url: window.location.href,
+                            hasChannelHeader: !!channelHeader,
+                            hasMessageContainer: !!messageContainer,
+                            isDmsView: window.location.href.includes('/dms')
+                        });
+                    }
+
+                    return null;
+                } catch (error) {
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'Error getting channel ID', {
+                            error: error.message
+                        });
+                    }
+                    return null;
+                }
             },
-            body: JSON.stringify({
-                model: appConfig.OPENAI_MODEL,
-                messages: messages,
-                max_tokens: maxTokens,
-                temperature: temperature
-            })
-        });
 
-        // Check if response is ok
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            const errorMessage = errorData.error?.message || `HTTP ${response.status}: ${response.statusText}`;
+            getCurrentChannelName() {
+                try {
+                    // Try to get channel name from various DOM elements
+                    const channelNameSelectors = [
+                        '[data-qa="channel_header"] [data-qa="channel_name"]',
+                        '[data-qa="channel_header"] h1',
+                        '.p-channel_header__title',
+                        '.p-channel_header__name'
+                    ];
 
-            // Create a more specific error message based on status code
-            if (response.status === 401) {
-                throw new Error('Invalid API key - Please check your OpenAI API key');
-            } else if (response.status === 429) {
-                throw new Error('OpenAI API quota exceeded - Please check your billing and usage limits');
-            } else if (response.status === 403) {
-                throw new Error('OpenAI API access forbidden - Please check your API key permissions');
-            } else {
-                throw new Error(errorMessage);
-            }
-        }
-
-        const data = await response.json();
-
-        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-            throw new Error('Invalid response from OpenAI API');
-        }
-
-        return data.choices[0].message.content.trim();
-    }
-
-    // Smart Context System
-    let messageCache = {
-        timestamp: 0,
-        messages: [],
-        channelId: null
-    };
-
-    function shouldUseContext(userMessage) {
-        // Skip empty or whitespace-only messages
-        if (!userMessage || userMessage.trim().length === 0) return false;
-
-        // Short messages that benefit from context
-        if (userMessage.length < 50) return true;
-
-        // Ambiguous responses
-        const ambiguousPatterns = [
-            /^(yes|no|ok|sure|sounds good|agreed?|thanks?|got it)$/i,
-            /^(will do|on it|done|perfect|exactly|right)$/i,
-            /^(let me|i'll|we should|maybe|probably)$/i
-        ];
-
-        if (ambiguousPatterns.some(pattern => pattern.test(userMessage.trim()))) {
-            return true;
-        }
-
-        // Questions that might reference previous discussion
-        if (userMessage.includes('?') && userMessage.length < 100) {
-            return true;
-        }
-
-        // Pronouns without clear antecedents
-        const pronouns = /\b(this|that|it|they|them|these|those)\b/i;
-        if (pronouns.test(userMessage) && userMessage.length < 150) {
-            return true;
-        }
-
-        return false;
-    }
-
-    function getCurrentChannelId() {
-        // Try to get channel ID from URL
-        const url = window.location.href;
-
-        // Check for thread URL first
-        const threadMatch = url.match(/\/thread\/([^\/]+)/);
-        if (threadMatch) return `thread-${threadMatch[1]}`;
-
-        // Check for regular channel
-        const channelMatch = url.match(/\/client\/([^\/]+)/);
-        if (channelMatch) return channelMatch[1];
-
-        // Fallback: try to get from DOM
-        const channelElement = document.querySelector('[data-qa="channel_name"], .p-channel_sidebar__name');
-        const channelName = channelElement ? channelElement.textContent : 'unknown';
-
-        // If we're in a thread, append thread identifier
-        if (isInThread()) {
-            return `${channelName}-thread`;
-        }
-
-        return channelName;
-    }
-
-    function parseSlackTimestamp(timeElement) {
-        if (!timeElement) return Date.now();
-
-        // Try different timestamp formats
-        const datetime = timeElement.getAttribute('datetime') ||
-                        timeElement.getAttribute('data-ts') ||
-                        timeElement.title;
-
-        if (datetime) {
-            const parsed = new Date(datetime);
-            if (!isNaN(parsed.getTime())) return parsed.getTime();
-        }
-
-        // Fallback: parse visible time text
-        const timeText = timeElement.textContent;
-        const timeMatch = timeText.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
-
-        if (timeMatch) {
-            const today = new Date();
-            let hours = parseInt(timeMatch[1]);
-            const minutes = parseInt(timeMatch[2]);
-            const ampm = timeMatch[3];
-
-            if (ampm && ampm.toUpperCase() === 'PM' && hours !== 12) hours += 12;
-            if (ampm && ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;
-
-            today.setHours(hours, minutes, 0, 0);
-            return today.getTime();
-        }
-
-        return Date.now(); // Fallback to now
-    }
-
-    function sanitizeText(text) {
-        return text
-            .replace(/\n+/g, ' ') // Replace newlines with spaces
-            .replace(/\s+/g, ' ') // Normalize whitespace
-            .replace(/@channel|@here|@everyone/gi, '[mention]') // Replace mentions
-            .replace(/https?:\/\/[^\s]+/g, '[link]') // Replace URLs
-            .replace(/\b[\w.-]+@[\w.-]+\.\w+\b/g, '[email]') // Replace emails
-            .replace(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, '[phone]') // Replace phone numbers
-            .trim()
-            .substring(0, 200); // Limit length
-    }
-
-    function sanitizeSender(sender) {
-        const settings = getCurrentSettings();
-        const privacyMode = settings.smartContext?.privacyMode || false;
-
-        if (privacyMode) {
-            return sender.replace(/[a-zA-Z]/g, (char, index) =>
-                index === 0 ? char : '*'
-            ); // "John" becomes "J***"
-        }
-
-        return sender.split(' ')[0]; // First name only
-    }
-
-    function formatTime(timestamp) {
-        const date = new Date(timestamp);
-        return date.toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-        });
-    }
-
-    function isSystemMessage(message) {
-        const systemPatterns = [
-            /joined the channel/i,
-            /left the channel/i,
-            /set the channel topic/i,
-            /uploaded a file/i,
-            /started a call/i,
-            /shared a file/i,
-            /pinned a message/i
-        ];
-
-        return systemPatterns.some(pattern => pattern.test(message.text)) ||
-               message.sender.toLowerCase().includes('bot') ||
-               message.text.startsWith('/') ||
-               message.text.length < 3;
-    }
-
-    function cleanMessageText(text) {
-        if (!text) return '';
-
-        // Remove Slack-specific formatting
-        return text
-            .replace(/\u00A0/g, ' ') // Non-breaking spaces
-            .replace(/[\u200B-\u200D\uFEFF]/g, '') // Zero-width characters
-            .replace(/\s+/g, ' ') // Multiple spaces
-            .trim();
-    }
-
-    function extractMessageData(messageElement) {
-        try {
-            // Extract timestamp - try multiple selectors for different contexts
-            const timestampSelectors = [
-                '[data-qa="message_timestamp"]',
-                '[data-qa="message-timestamp"]',
-                '.c-timestamp',
-                'time',
-                '[data-qa="thread_message_timestamp"]',
-                '.p-thread_view__message_timestamp',
-                '.c-message__timestamp'
-            ];
-
-            let timeElement = null;
-            for (const selector of timestampSelectors) {
-                timeElement = messageElement.querySelector(selector);
-                if (timeElement) break;
-            }
-
-            const timestamp = parseSlackTimestamp(timeElement);
-
-            // Extract sender - try multiple selectors for different contexts
-            const senderSelectors = [
-                '[data-qa="message_sender_name"]',
-                '[data-qa="message-sender-name"]',
-                '.c-message__sender',
-                '.c-message__sender_link',
-                '[data-qa="thread_message_sender"]',
-                '.p-thread_view__message_sender',
-                '.c-message__sender_name'
-            ];
-
-            let senderElement = null;
-            for (const selector of senderSelectors) {
-                senderElement = messageElement.querySelector(selector);
-                if (senderElement) break;
-            }
-
-            const sender = senderElement ? senderElement.textContent.trim() : 'Unknown';
-
-            // Extract message text - try multiple selectors for different contexts
-            const textSelectors = [
-                '[data-qa="message_text"]',
-                '[data-qa="message-text"]',
-                '.c-message__body',
-                '.p-rich_text_section',
-                '[data-qa="thread_message_text"]',
-                '.p-thread_view__message_text',
-                '.c-message__message_text',
-                '.p-rich_text_block'
-            ];
-
-            let textElement = null;
-            for (const selector of textSelectors) {
-                textElement = messageElement.querySelector(selector);
-                if (textElement) break;
-            }
-
-            const text = textElement ? cleanMessageText(textElement.textContent) : '';
-
-            // Skip if no text or too short
-            if (!text || text.length < 2) return null;
-
-            return {
-                timestamp,
-                sender: sanitizeSender(sender),
-                text: sanitizeText(text),
-                time: formatTime(timestamp)
-            };
-        } catch (error) {
-            console.warn('Error extracting message:', error);
-            return null;
-        }
-    }
-
-    function isInThread() {
-        // Check multiple indicators that we're in a thread view
-        const threadIndicators = [
-            // URL-based detection
-            window.location.href.includes('/thread/'),
-
-            // DOM-based detection - look for any thread-related elements
-            !!document.querySelector('[data-qa*="thread"]'),
-            !!document.querySelector('.p-threads_view'),
-            !!document.querySelector('[data-qa="thread_view"]'),
-            !!document.querySelector('.p-thread_view'),
-
-            // Check if active element is in a thread container
-            !!document.activeElement?.closest('.p-thread_view, .p-threads_view, [data-qa*="thread"]'),
-
-            // Check for thread-specific elements with broader search
-            !!document.querySelector('[data-qa="thread_message_input"]'),
-            !!document.querySelector('[data-qa="thread-message-input"]'),
-
-            // Look for thread containers with content
-            !!document.querySelector('.p-thread_view .ql-editor'),
-            !!document.querySelector('.p-threads_view .ql-editor'),
-
-            // Check if there are multiple message inputs (main + thread)
-            document.querySelectorAll('.ql-editor').length > 1
-        ];
-
-        const isThread = threadIndicators.some(indicator => indicator);
-
-        // Enhanced debug info
-        const debugInfo = {
-            urlContainsThread: threadIndicators[0],
-            hasThreadDataQa: threadIndicators[1],
-            hasPThreadsView: threadIndicators[2],
-            hasThreadView: threadIndicators[3],
-            hasPThreadView: threadIndicators[4],
-            activeInThreadContainer: threadIndicators[5],
-            hasThreadMessageInput: threadIndicators[6],
-            hasThreadMessageInputAlt: threadIndicators[7],
-            hasThreadViewEditor: threadIndicators[8],
-            hasThreadsViewEditor: threadIndicators[9],
-            multipleEditors: threadIndicators[10],
-            finalResult: isThread,
-            totalQlEditors: document.querySelectorAll('.ql-editor').length,
-            allDataQaElements: Array.from(document.querySelectorAll('[data-qa*="thread"]')).map(el => el.getAttribute('data-qa'))
-        };
-
-        debugLog(`🔍 Thread detection:`, debugInfo);
-
-        // Show visual debug for thread detection
-        if (isThread) {
-            showDebugInfo(`🧵 THREAD DETECTED:
-URL has thread: ${debugInfo.urlContainsThread}
-Thread elements: ${debugInfo.hasThreadDataQa}
-Multiple editors: ${debugInfo.multipleEditors}
-Total .ql-editor: ${debugInfo.totalQlEditors}
-Thread data-qa: ${debugInfo.allDataQaElements.join(', ')}`);
-        }
-
-        return isThread;
-    }
-
-    function extractThreadMessages() {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayTimestamp = today.getTime();
-
-        // Thread-specific message selectors
-        const threadMessageSelectors = [
-            '[data-qa="thread_message"]',
-            '.c-message--thread',
-            '.p-thread_view__message',
-            '[data-qa="thread-message"]',
-            '.p-threads_view__message'
-        ];
-
-        let messages = [];
-        for (const selector of threadMessageSelectors) {
-            const elements = document.querySelectorAll(selector);
-            if (elements.length > 0) {
-                messages = Array.from(elements);
-                console.log(`🧵 Found ${messages.length} thread messages using selector: ${selector}`);
-                break;
-            }
-        }
-
-        // If no thread-specific messages found, try generic selectors within thread container
-        if (messages.length === 0) {
-            const threadContainer = document.querySelector('[data-qa="threads_view"], .p-threads_view, [data-qa="thread_view"]');
-            if (threadContainer) {
-                const genericSelectors = ['[data-qa="message"]', '.c-message', '[role="listitem"]'];
-                for (const selector of genericSelectors) {
-                    const elements = threadContainer.querySelectorAll(selector);
-                    if (elements.length > 0) {
-                        messages = Array.from(elements);
-                        console.log(`🧵 Found ${messages.length} messages in thread container using: ${selector}`);
-                        break;
+                    for (const selector of channelNameSelectors) {
+                        const element = document.querySelector(selector);
+                        if (element && element.textContent.trim()) {
+                            const channelName = element.textContent.trim();
+                            if (window.SlackPolishDebug) {
+                                window.SlackPolishDebug.addLog('channel-messages', 'Channel name found', {
+                                    channelName,
+                                    selector
+                                });
+                            }
+                            return channelName;
+                        }
                     }
-                }
-            }
-        }
 
-        // Extract and filter messages
-        const recentMessages = messages
-            .slice(-10) // Get last 10 messages
-            .map(extractMessageData)
-            .filter(msg => msg && msg.timestamp > todayTimestamp)
-            .filter(msg => !isSystemMessage(msg))
-            .slice(-5); // Keep only last 5 after filtering
-
-        console.log(`🧵 Extracted ${recentMessages.length} recent thread messages`);
-        return recentMessages;
-    }
-
-    function extractChannelMessages() {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayTimestamp = today.getTime();
-
-        // Find message container (Slack's main channel structure)
-        const messageSelectors = [
-            '[data-qa="message"]',
-            '.c-message',
-            '[role="listitem"]',
-            '[data-qa="virtual-list-item"]'
-        ];
-
-        let messages = [];
-        for (const selector of messageSelectors) {
-            const elements = document.querySelectorAll(selector);
-            if (elements.length > 0) {
-                messages = Array.from(elements);
-                console.log(`📝 Found ${messages.length} channel messages using selector: ${selector}`);
-                break;
-            }
-        }
-
-        // Extract and filter messages
-        const recentMessages = messages
-            .slice(-10) // Get last 10 messages
-            .map(extractMessageData)
-            .filter(msg => msg && msg.timestamp > todayTimestamp)
-            .filter(msg => !isSystemMessage(msg))
-            .slice(-5); // Keep only last 5 after filtering
-
-        console.log(`📝 Extracted ${recentMessages.length} recent channel messages`);
-        return recentMessages;
-    }
-
-    function extractRecentMessages() {
-        // Determine if we're in a thread or main channel and extract accordingly
-        if (isInThread()) {
-            console.log('🧵 Detected thread context, extracting thread messages');
-            return extractThreadMessages();
-        } else {
-            console.log('📝 Detected channel context, extracting channel messages');
-            return extractChannelMessages();
-        }
-    }
-
-    function getCachedMessages() {
-        const currentChannel = getCurrentChannelId();
-        const now = Date.now();
-
-        // Use cache if less than 30 seconds old and same channel
-        if (now - messageCache.timestamp < 30000 &&
-            messageCache.channelId === currentChannel) {
-            return messageCache.messages;
-        }
-
-        // Refresh cache
-        const messages = extractRecentMessages();
-        messageCache = {
-            timestamp: now,
-            messages,
-            channelId: currentChannel
-        };
-
-        return messages;
-    }
-
-    function formatContextForAI(messages, userMessage) {
-        if (!messages || messages.length === 0) return '';
-
-        const contextLines = messages.map(msg =>
-            `[${msg.time}] ${msg.sender}: "${msg.text}"`
-        );
-
-        const contextType = isInThread() ? 'thread discussion' : 'channel conversation';
-
-        return `CONVERSATION CONTEXT (recent messages from today's ${contextType}):
-${contextLines.join('\n')}
-
----
-USER MESSAGE TO IMPROVE: "${userMessage}"`;
-    }
-
-    // Improve text using OpenAI API
-    async function improveText(text, language, style) {
-        const config = window.SLACKPOLISH_CONFIG;
-        if (!config || !config.OPENAI_API_KEY) {
-            throw new Error('OpenAI API key not configured. Please set it in slack-config.js');
-        }
-
-        // Special handling for TRANSLATE style
-        if (style === 'TRANSLATE') {
-            console.log('🔄 TRANSLATE style detected - checking if translation is needed...');
-            console.log(`🎯 Target language: ${language}`);
-
-            // First, detect the language of the input text
-            const detectedLanguage = await makeOpenAIRequest([
-                {
-                    role: 'system',
-                    content: 'You are a language detector. Analyze the following text and determine its primary language. Respond with ONLY ONE WORD: "English", "Spanish", "French", "German", "Hebrew", "Chinese", "Hindi", "Bulgarian", etc. Be very strict about the language identification.'
-                },
-                { role: 'user', content: text }
-            ], 5, 0.0);
-
-            const detectedLanguageLower = detectedLanguage.toLowerCase();
-
-            console.log(`🔍 Detected source language: "${detectedLanguage}"`);
-
-            // Map target language to language names for comparison (internal logic)
-            const languageMap = {
-                'ENGLISH': 'english',
-                'SPANISH': 'spanish',
-                'FRENCH': 'french',
-                'GERMAN': 'german',
-                'HEBREW': 'hebrew',
-                'CHINESE': 'chinese',
-                'HINDI': 'hindi',
-                'BULGARIAN': 'bulgarian'
-            };
-
-            const targetLanguageName = languageMap[language] || 'english';
-            console.log(`🎯 Target language name: "${targetLanguageName}"`);
-
-            // If source and target languages are the same, return unchanged
-            if (detectedLanguageLower === targetLanguageName) {
-                console.log(`✅ Text is already in ${targetLanguageName}, no translation needed - returning original text`);
-                return text;
-            }
-
-            // Translate to the target language
-            // Map target language to translation prompts (internal logic)
-            const targetLanguagePrompts = {
-                'ENGLISH': 'English',
-                'SPANISH': 'Spanish',
-                'FRENCH': 'French',
-                'GERMAN': 'German',
-                'HEBREW': 'Hebrew',
-                'CHINESE': 'Chinese (Simplified)',
-                'HINDI': 'Hindi',
-                'BULGARIAN': 'Bulgarian'
-            };
-
-            const targetLanguagePrompt = targetLanguagePrompts[language] || 'English';
-            console.log(`🔄 Translating from ${detectedLanguage} to ${targetLanguagePrompt}...`);
-
-            const translatePrompt = `Translate the following text to ${targetLanguagePrompt}. Only return the translated text, nothing else. Do not improve, rephrase, or modify the meaning - just translate.`;
-
-            const translatedText = await makeOpenAIRequest([
-                { role: 'system', content: translatePrompt },
-                { role: 'user', content: text }
-            ], appConfig.OPENAI_MAX_TOKENS, 0.1);
-
-            console.log(`✅ Translation completed: "${text}" -> "${translatedText}"`);
-            return translatedText;
-        }
-
-        // Get current settings once
-        const currentUserSettings = getCurrentSettings();
-
-        // Smart Context System - Add context if it would improve results
-        let contextPrefix = '';
-        const smartContextEnabled = currentUserSettings.smartContext?.enabled !== false; // Default to true
-
-        if (smartContextEnabled && shouldUseContext(text)) {
-            const recentMessages = getCachedMessages();
-            if (recentMessages.length > 0) {
-                contextPrefix = formatContextForAI(recentMessages, text);
-                console.log(`🧠 Using smart context with ${recentMessages.length} recent messages`);
-            }
-        }
-
-        // Regular style processing (non-translate)
-        // Get prompts from config file for better, more detailed instructions
-        const configPrompts = config.PROMPTS || {};
-        const stylePrompts = configPrompts.STYLES || {};
-        const languagePrompts = configPrompts.LANGUAGES || {};
-
-        // Fallback to simple prompts if config is missing
-        const styleInstruction = stylePrompts[style] || 'Make this text more casual and friendly';
-        const languageInstruction = languagePrompts[language] || 'Respond in English';
-
-        // Add personal polish if provided
-        const personalPolish = currentUserSettings.personalPolish || '';
-        const personalInstruction = personalPolish ? ` Additionally, follow these personal style preferences: ${personalPolish}` : '';
-
-        // Combine context and prompt
-        const basePrompt = `${styleInstruction}. ${languageInstruction}.${personalInstruction} Only return the improved text, nothing else.`;
-        const prompt = contextPrefix ? `${contextPrefix}\n\n${basePrompt}` : basePrompt;
-
-        const improvedText = await makeOpenAIRequest([
-            { role: 'system', content: prompt },
-            { role: 'user', content: text }
-        ], appConfig.OPENAI_MAX_TOKENS, appConfig.OPENAI_TEMPERATURE);
-
-        return improvedText;
-    }
-
-    // Visual debug function - only shows if debug mode is enabled
-    function showDebugInfo(info) {
-        const settings = getCurrentSettings();
-        if (!settings.debugMode) {
-            return; // Debug mode is disabled, don't show visual debug
-        }
-
-        // Remove any existing debug info
-        const existing = document.getElementById('slackpolish-debug');
-        if (existing) existing.remove();
-
-        // Create debug overlay
-        const debugDiv = document.createElement('div');
-        debugDiv.id = 'slackpolish-debug';
-        debugDiv.style.cssText = `
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            background: #000;
-            color: #0f0;
-            padding: 10px;
-            border-radius: 5px;
-            font-family: monospace;
-            font-size: 12px;
-            z-index: 10000;
-            max-width: 400px;
-            white-space: pre-wrap;
-            border: 2px solid #0f0;
-        `;
-        debugDiv.textContent = info;
-        document.body.appendChild(debugDiv);
-
-        // Auto-remove after 10 seconds
-        setTimeout(() => {
-            if (debugDiv.parentNode) {
-                debugDiv.remove();
-            }
-        }, 10000);
-    }
-
-    // Debug console logging - only logs if debug mode is enabled
-    function debugLog(message, ...args) {
-        const settings = getCurrentSettings();
-        if (settings.debugMode) {
-            console.log(message, ...args);
-        }
-    }
-
-    // Main text improvement function
-    async function improveTextInSlack() {
-        try {
-            // Show debug info about current state
-            const debugInfo = `🔍 DEBUG INFO:
-URL: ${window.location.href}
-Is in thread: ${isInThread()}
-Active element: ${document.activeElement?.tagName}.${document.activeElement?.className}
-Active data-qa: ${document.activeElement?.getAttribute('data-qa')}
-
-Searching for text input...`;
-
-            showDebugInfo(debugInfo);
-
-            const text = extractTextFromInput();
-            if (!text.trim()) {
-                showDebugInfo('❌ No text found to improve');
-                console.log('❌ No text found to improve');
-                return;
-            }
-
-            // Show what text was found
-            const textInfo = `✅ FOUND TEXT: "${text}"
-Length: ${text.length} chars
-From: ${isInThread() ? 'THREAD' : 'CHANNEL'}`;
-
-            showDebugInfo(textInfo);
-
-            const settings = getCurrentSettings();
-            console.log(`🌍 Using language: ${settings.language}, 🎨 Style: ${settings.style}`);
-
-            showLoadingIndicator();
-
-            const improvedText = await improveText(text, settings.language, settings.style);
-
-            hideLoadingIndicator();
-
-            console.log('✅ Improvement successful');
-            console.log(`📝 Original: "${text}"`);
-            console.log(`✨ Improved: "${improvedText}"`);
-
-            replaceTextInInput(improvedText);
-
-        } catch (error) {
-            hideLoadingIndicator();
-            console.error('❌ Error during text improvement:', error);
-            handleApiError(error);
-        }
-    }
-
-    // Generate language options from config
-    function generateLanguageOptions(selectedLanguage) {
-        const languages = appConfig.SUPPORTED_LANGUAGES;
-        return Object.keys(languages).map(key => {
-            const lang = languages[key];
-            const selected = selectedLanguage === key ? 'selected' : '';
-            return `<option value="${key}" ${selected}>${lang.flag} ${lang.displayName}</option>`;
-        }).join('');
-    }
-
-    // Generate style options from config with descriptions
-    function generateStyleOptions(selectedStyle) {
-        const styles = appConfig.AVAILABLE_STYLES;
-        return Object.keys(styles).map(key => {
-            const style = styles[key];
-            const selected = selectedStyle === key ? 'selected' : '';
-            const displayText = `${style.name} - ${style.description}`;
-            return `<option value="${key}" ${selected}>${displayText}</option>`;
-        }).join('');
-    }
-
-    // Generate hotkey options from config
-    function generateHotkeyOptions(selectedHotkey) {
-        const hotkeys = appConfig.AVAILABLE_HOTKEYS;
-        return hotkeys.map(hotkey => {
-            const selected = selectedHotkey === hotkey ? 'selected' : '';
-            const icon = hotkey === 'Ctrl+Shift' ? '⌨️' : hotkey === 'Ctrl+Alt' ? '🔀' : '📑';
-            const label = hotkey === 'Ctrl+Shift' ? `${hotkey} (Default)` : hotkey;
-            return `<option value="${hotkey}" ${selected}>${icon} ${label}</option>`;
-        }).join('');
-    }
-
-    // Developer mode state
-    let developerModeEnabled = false;
-    let clickCount = 0;
-    let clickTimer = null;
-
-    // API key validation
-    function validateApiKey(apiKey) {
-        if (!apiKey) return { valid: false, message: 'API key is required' };
-        if (!apiKey.startsWith('sk-')) return { valid: false, message: 'API key should start with "sk-"' };
-        if (apiKey.length < 20) return { valid: false, message: 'API key seems too short' };
-        return { valid: true, message: 'API key format looks correct' };
-    }
-
-    // Test API key functionality
-    async function testApiKey(apiKey) {
-        try {
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
-                body: JSON.stringify({
-                    model: 'gpt-3.5-turbo',
-                    messages: [{ role: 'user', content: 'Test' }],
-                    max_tokens: 5
-                })
-            });
-
-            if (response.ok) {
-                return { success: true, message: 'API key is working!' };
-            } else if (response.status === 401) {
-                return { success: false, message: 'Invalid API key' };
-            } else if (response.status === 429) {
-                return { success: false, message: 'Rate limit exceeded or insufficient credits' };
-            } else {
-                return { success: false, message: `API error: ${response.status}` };
-            }
-        } catch (error) {
-            return { success: false, message: 'Network error: ' + error.message };
-        }
-    }
-
-    // Enhanced settings menu with dynamic options
-    function showSettingsMenu() {
-        const settings = getCurrentSettings();
-        console.log(`🌍 Current language: ${settings.language}, 🎨 Current style: ${settings.style}`);
-
-        // Remove existing menu
-        const existing = document.getElementById('slack-text-improver-menu');
-        if (existing) existing.remove();
-
-        const menu = document.createElement('div');
-        menu.id = 'slack-text-improver-menu';
-        menu.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            z-index: 10001;
-            font-family: Arial, sans-serif;
-            min-width: 300px;
-            max-width: 500px;
-            max-height: 80vh;
-            overflow-y: auto;
-        `;
-
-        menu.innerHTML = `
-            <div style="display: flex; align-items: center; margin-bottom: 20px; padding: 12px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border: 1px solid #dee2e6;">
-                <div style="background: white; border-radius: 8px; padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-right: 16px; display: flex; align-items: center; justify-content: center;" id="settings-menu-logo">
-                </div>
-                <div>
-                    <div style="font-weight: bold; font-size: 18px; color: #2c3e50; margin-bottom: 4px;">SlackPolish Settings</div>
-                    <div style="font-size: 13px; color: #6c757d;">AI-powered text enhancement for Slack</div>
-                    <div id="dev-mode-indicator" style="display: none; font-size: 11px; color: #007a5a; font-weight: normal; margin-top: 4px;">
-                        🔧 Developer Mode Active
-                    </div>
-                </div>
-            </div>
-
-            <div style="margin-bottom: 12px;">
-                <label style="display: block; margin-bottom: 4px; font-weight: bold; font-size: 13px;">🌍 Language:</label>
-                <select id="language-select" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                    ${generateLanguageOptions(settings.language)}
-                </select>
-            </div>
-
-            <div style="margin-bottom: 12px;">
-                <label style="display: block; margin-bottom: 4px; font-weight: bold; font-size: 13px;">✨ Style:</label>
-                <select id="style-select" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                    ${generateStyleOptions(settings.style)}
-                </select>
-            </div>
-
-            <div style="margin-bottom: 12px;">
-                <label style="display: block; margin-bottom: 4px; font-weight: bold; font-size: 13px;">⌨️ Hotkey:</label>
-                <select id="hotkey-select" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                    ${generateHotkeyOptions(settings.improveHotkey || 'Ctrl+Shift')}
-                </select>
-                <div style="font-size: 12px; color: #666; margin-top: 4px;">
-                    Choose your preferred hotkey combination. Settings hotkey (F12) cannot be changed.
-                </div>
-            </div>
-
-            <div style="margin-bottom: 12px;">
-                <label style="display: block; margin-bottom: 4px; font-weight: bold; font-size: 13px;">✨ Personal Style:</label>
-                <textarea id="personal-polish-input" placeholder="e.g., Use 'Hi' not 'Hey', avoid dashes, British spelling"
-                    style="width: 100%; height: 60px; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; resize: vertical; font-size: 13px;">${settings.personalPolish || ''}</textarea>
-                <div style="font-size: 11px; color: #666; margin-top: 2px;">
-                    Personal writing preferences for AI to consider.
-                </div>
-            </div>
-
-            <!-- Developer Mode Container (Hidden by default) -->
-            <div id="developer-options" style="display: none;">
-                <div style="border-top: 1px solid #ddd; margin: 15px 0; padding-top: 15px;">
-                    <div style="text-align: center; margin-bottom: 10px;">
-                        <span style="background: #007a5a; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold;">
-                            🔧 DEVELOPER MODE
-                        </span>
-                    </div>
-
-                    <!-- API Key Management -->
-                    <div style="margin-bottom: 12px;">
-                        <label style="display: block; margin-bottom: 4px; font-weight: bold; font-size: 13px;">
-                            🔑 OpenAI API Key
-                        </label>
-                        <div style="position: relative;">
-                            <input type="password" id="api-key-input" placeholder="sk-..."
-                                   value="${settings.apiKey || ''}"
-                                   style="width: 100%; padding: 6px 35px 6px 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; font-family: monospace;">
-                            <button type="button" id="toggle-api-key"
-                                    style="position: absolute; right: 5px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 14px; padding: 2px;">
-                                👁️
-                            </button>
-                        </div>
-                        <div style="display: flex; align-items: center; margin-top: 4px; gap: 8px;">
-                            <button id="test-api-key" style="padding: 4px 8px; border: 1px solid #007a5a; background: white; color: #007a5a; border-radius: 3px; cursor: pointer; font-size: 11px;">
-                                Test Key
-                            </button>
-                            <div id="api-key-status" style="font-size: 11px; color: #666; flex: 1;">
-                                Your OpenAI API key for text improvement. <a href="https://platform.openai.com/api-keys" target="_blank" style="color: #007a5a;">Get one here</a>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Smart Context Settings -->
-                    <div style="margin-bottom: 12px;">
-                        <label style="display: block; margin-bottom: 4px; font-weight: bold; font-size: 13px;">
-                            🧠 Smart Context
-                        </label>
-                        <div style="margin-bottom: 6px;">
-                            <label style="display: flex; align-items: center; cursor: pointer; font-size: 13px;">
-                                <input type="checkbox" id="smartContextEnabled" ${settings.smartContext?.enabled !== false ? 'checked' : ''}
-                                       style="margin-right: 6px;">
-                                <span>Enable (include recent messages)</span>
-                            </label>
-                        </div>
-                        <div style="margin-bottom: 6px;">
-                            <label style="display: flex; align-items: center; cursor: pointer; font-size: 13px;">
-                                <input type="checkbox" id="smartContextPrivacy" ${settings.smartContext?.privacyMode ? 'checked' : ''}
-                                       style="margin-right: 6px;">
-                                <span>Privacy Mode (anonymize names)</span>
-                            </label>
-                        </div>
-                        <div style="font-size: 11px; color: #666; margin-top: 2px;">
-                            Includes recent messages for short/ambiguous responses.
-                        </div>
-                    </div>
-
-                    <!-- Debug Mode Settings -->
-                    <div style="margin-bottom: 12px;">
-                        <label style="display: block; margin-bottom: 4px; font-weight: bold; font-size: 13px;">
-                            🔍 Debug Mode
-                        </label>
-                        <div style="margin-bottom: 6px;">
-                            <label style="display: flex; align-items: center; cursor: pointer; font-size: 13px;">
-                                <input type="checkbox" id="debugModeEnabled" ${settings.debugMode ? 'checked' : ''}
-                                       style="margin-right: 6px;">
-                                <span>Show debug info</span>
-                            </label>
-                        </div>
-                        <div style="font-size: 11px; color: #666; margin-top: 2px;">
-                            Shows green debug boxes for troubleshooting.
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div style="text-align: right; margin-top: 15px; position: relative;">
-                <!-- Hidden developer mode trigger -->
-                <div id="dev-mode-trigger" style="position: absolute; bottom: 0; left: 0; width: 30px; height: 30px; cursor: pointer; opacity: 0;"></div>
-
-                <button id="cancel-btn" style="margin-right: 8px; padding: 6px 12px; border: 1px solid #ddd; background: #f8f8f8; border-radius: 4px; cursor: pointer; font-size: 13px;">Cancel</button>
-                <button id="save-btn" style="padding: 6px 12px; border: none; background: #007a5a; color: white; border-radius: 4px; cursor: pointer; font-size: 13px;">Save</button>
-            </div>
-        `;
-
-        document.body.appendChild(menu);
-
-        // Add logo to settings menu
-        const logoContainer = document.getElementById('settings-menu-logo');
-        if (logoContainer) {
-            logoContainer.appendChild(createSlackPolishLogo(48));
-        }
-
-        // Developer mode trigger handler
-        document.getElementById('dev-mode-trigger').onclick = () => {
-            clickCount++;
-
-            // Reset click count after 2 seconds of inactivity
-            if (clickTimer) clearTimeout(clickTimer);
-            clickTimer = setTimeout(() => {
-                clickCount = 0;
-            }, 2000);
-
-            // Enable developer mode after 10 clicks
-            if (clickCount >= 10) {
-                developerModeEnabled = true;
-
-                // Show developer options
-                const devOptions = document.getElementById('developer-options');
-                if (devOptions) {
-                    devOptions.style.display = 'block';
-                    devOptions.scrollIntoView({ behavior: 'smooth' });
-                }
-
-                // Show developer mode indicator
-                const devIndicator = document.getElementById('dev-mode-indicator');
-                if (devIndicator) {
-                    devIndicator.style.display = 'block';
-                }
-
-                // Show confirmation on trigger
-                const trigger = document.getElementById('dev-mode-trigger');
-                trigger.style.background = '#007a5a';
-                trigger.style.opacity = '0.3';
-                trigger.style.borderRadius = '50%';
-                trigger.title = 'Developer mode enabled!';
-
-                // Reset click count
-                clickCount = 0;
-                clearTimeout(clickTimer);
-
-                console.log('🔧 Developer mode enabled!');
-            } else {
-                // Visual feedback for clicks
-                const trigger = document.getElementById('dev-mode-trigger');
-                trigger.style.background = '#ddd';
-                trigger.style.opacity = '0.2';
-                setTimeout(() => {
-                    trigger.style.background = '';
-                    trigger.style.opacity = '0';
-                }, 100);
-
-                console.log(`🔧 Developer mode: ${clickCount}/10 clicks`);
-            }
-        };
-
-        // API Key handlers (only if developer mode is enabled)
-        const toggleApiKey = document.getElementById('toggle-api-key');
-        const apiKeyInput = document.getElementById('api-key-input');
-        const apiKeyStatus = document.getElementById('api-key-status');
-        const testApiKeyBtn = document.getElementById('test-api-key');
-
-        if (toggleApiKey && apiKeyInput) {
-            // Toggle visibility handler
-            toggleApiKey.onclick = () => {
-                const isPassword = apiKeyInput.type === 'password';
-
-                apiKeyInput.type = isPassword ? 'text' : 'password';
-                toggleApiKey.textContent = isPassword ? '🙈' : '👁️';
-                toggleApiKey.title = isPassword ? 'Hide API key' : 'Show API key';
-            };
-
-            // Real-time validation handler
-            apiKeyInput.oninput = () => {
-                const apiKey = apiKeyInput.value.trim();
-                const validation = validateApiKey(apiKey);
-
-                if (apiKeyStatus) {
-                    if (!apiKey) {
-                        apiKeyStatus.innerHTML = 'Your OpenAI API key for text improvement. <a href="https://platform.openai.com/api-keys" target="_blank" style="color: #007a5a;">Get one here</a>';
-                        apiKeyStatus.style.color = '#666';
-                        apiKeyInput.style.borderColor = '#ddd';
-                    } else if (validation.valid) {
-                        apiKeyStatus.textContent = '✅ ' + validation.message;
-                        apiKeyStatus.style.color = '#28a745';
-                        apiKeyInput.style.borderColor = '#28a745';
-                    } else {
-                        apiKeyStatus.textContent = '❌ ' + validation.message;
-                        apiKeyStatus.style.color = '#dc3545';
-                        apiKeyInput.style.borderColor = '#dc3545';
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'Could not determine channel name', {
+                            availableSelectors: channelNameSelectors.map(sel => ({
+                                selector: sel,
+                                found: !!document.querySelector(sel)
+                            }))
+                        });
                     }
+
+                    return 'Unknown Channel';
+                } catch (error) {
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'Error getting channel name', {
+                            error: error.message
+                        });
+                    }
+                    return 'Unknown Channel';
                 }
-            };
+            },
 
-            // Initial validation
-            if (apiKeyInput.value.trim()) {
-                apiKeyInput.oninput();
-            }
-        }
+            async fetchChannelMessages(options = {}) {
+                const {
+                    count = 50,           // Number of messages to fetch
+                    oldest = null,        // Timestamp (string or number) - fetch messages after this time
+                    latest = null,        // Timestamp (string or number) - fetch messages before this time
+                    inclusive = true,     // Include messages with exact timestamps
+                    includeThreads = false, // Include thread replies
+                    getAllMessages = false // Fetch ALL messages in channel (ignores count)
+                } = options;
 
-        // Test API key button handler
-        if (testApiKeyBtn && apiKeyInput && apiKeyStatus) {
-            testApiKeyBtn.onclick = async () => {
-                const apiKey = apiKeyInput.value.trim();
-
-                if (!apiKey) {
-                    apiKeyStatus.textContent = '❌ Please enter an API key first';
-                    apiKeyStatus.style.color = '#dc3545';
-                    return;
+                if (window.SlackPolishDebug) {
+                    window.SlackPolishDebug.addLog('channel-messages', 'Fetching channel messages via API', {
+                        options,
+                        count,
+                        oldest,
+                        latest,
+                        getAllMessages
+                    });
                 }
-
-                // Show testing state
-                testApiKeyBtn.textContent = 'Testing...';
-                testApiKeyBtn.disabled = true;
-                apiKeyStatus.textContent = '🔄 Testing API key...';
-                apiKeyStatus.style.color = '#007a5a';
 
                 try {
-                    const result = await testApiKey(apiKey);
-
-                    if (result.success) {
-                        apiKeyStatus.textContent = '✅ ' + result.message;
-                        apiKeyStatus.style.color = '#28a745';
-                        apiKeyInput.style.borderColor = '#28a745';
-                    } else {
-                        apiKeyStatus.textContent = '❌ ' + result.message;
-                        apiKeyStatus.style.color = '#dc3545';
-                        apiKeyInput.style.borderColor = '#dc3545';
+                    const channelId = this.getCurrentChannelId();
+                    if (!channelId) {
+                        throw new Error('Could not determine current channel ID');
                     }
+
+                    let allMessages = [];
+                    let hasMore = true;
+                    let cursor = latest; // Start from latest timestamp
+                    let totalApiCalls = 0;
+                    const maxApiCalls = getAllMessages ? 100 : 10; // Safety limit
+
+                    while (hasMore && totalApiCalls < maxApiCalls) {
+                        totalApiCalls++;
+
+                        // Build API request parameters
+                        const apiParams = {
+                            channel: channelId,
+                            limit: getAllMessages ? 1000 : Math.min(count - allMessages.length, 1000),
+                            inclusive: inclusive
+                        };
+
+                        // Add timestamp parameters
+                        if (oldest) {
+                            apiParams.oldest = this.convertToSlackTimestamp(oldest);
+                        }
+                        if (cursor) {
+                            apiParams.latest = this.convertToSlackTimestamp(cursor);
+                        }
+
+                        if (window.SlackPolishDebug) {
+                            window.SlackPolishDebug.addLog('channel-messages', 'Making API call', {
+                                call: totalApiCalls,
+                                params: apiParams,
+                                currentMessageCount: allMessages.length
+                            });
+                        }
+
+                        // Call Slack's internal conversations.history API
+                        const response = await this.callSlackAPI('conversations.history', apiParams);
+
+                        if (!response.ok) {
+                            throw new Error(`Slack API error: ${response.error || 'Unknown error'}`);
+                        }
+
+                        const messages = response.messages || [];
+
+                        if (window.SlackPolishDebug) {
+                            window.SlackPolishDebug.addLog('channel-messages', 'API response received', {
+                                messagesReceived: messages.length,
+                                hasMore: response.has_more,
+                                responseMetadata: response.response_metadata
+                            });
+                        }
+
+                        // Process and add messages
+                        const processedMessages = messages.map(msg => this.processSlackMessage(msg));
+                        allMessages.push(...processedMessages);
+
+                        // Check if we should continue
+                        hasMore = response.has_more && (getAllMessages || allMessages.length < count);
+
+                        // Update cursor for next request (oldest message timestamp)
+                        if (hasMore && messages.length > 0) {
+                            cursor = messages[messages.length - 1].ts;
+                        }
+
+                        // Safety check
+                        if (!getAllMessages && allMessages.length >= count) {
+                            hasMore = false;
+                        }
+                    }
+
+                    // Trim to requested count if not getting all messages
+                    if (!getAllMessages && allMessages.length > count) {
+                        allMessages = allMessages.slice(0, count);
+                    }
+
+                    // Include thread messages if requested
+                    if (includeThreads) {
+                        allMessages = await this.includeThreadReplies(allMessages, channelId);
+                    }
+
+                    const result = {
+                        channelId,
+                        channelName: this.getCurrentChannelName(),
+                        messages: allMessages,
+                        totalReturned: allMessages.length,
+                        apiCallsMade: totalApiCalls,
+                        fetchedAt: new Date().toISOString(),
+                        parameters: {
+                            count,
+                            oldest,
+                            latest,
+                            getAllMessages,
+                            includeThreads
+                        }
+                    };
+
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'Message fetching completed', result);
+                    }
+
+                    return result;
+
                 } catch (error) {
-                    apiKeyStatus.textContent = '❌ Test failed: ' + error.message;
-                    apiKeyStatus.style.color = '#dc3545';
-                } finally {
-                    testApiKeyBtn.textContent = 'Test Key';
-                    testApiKeyBtn.disabled = false;
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'Error fetching messages', {
+                            error: error.message,
+                            stack: error.stack
+                        });
+                    }
+                    throw error;
                 }
-            };
-        }
+            },
 
-        // Event handlers
-        document.getElementById('cancel-btn').onclick = () => menu.remove();
+            convertToSlackTimestamp(timestamp) {
+                if (typeof timestamp === 'string') {
+                    // If it's already a Slack timestamp (contains decimal)
+                    if (timestamp.includes('.')) {
+                        return timestamp;
+                    }
+                    // If it's an ISO string, convert to Slack timestamp
+                    return (new Date(timestamp).getTime() / 1000).toString();
+                }
+                if (typeof timestamp === 'number') {
+                    // If it's milliseconds, convert to seconds
+                    if (timestamp > 1000000000000) {
+                        return (timestamp / 1000).toString();
+                    }
+                    // If it's already seconds, convert to string
+                    return timestamp.toString();
+                }
+                if (timestamp instanceof Date) {
+                    return (timestamp.getTime() / 1000).toString();
+                }
+                return timestamp;
+            },
 
-        document.getElementById('save-btn').onclick = () => {
-            const newSettings = {
-                ...settings,
-                language: document.getElementById('language-select').value,
-                style: document.getElementById('style-select').value,
-                improveHotkey: document.getElementById('hotkey-select').value,
-                personalPolish: document.getElementById('personal-polish-input').value
-            };
-
-            // Only save developer options if developer mode is enabled
-            if (developerModeEnabled) {
-                // Save API key
-                const apiKeyInput = document.getElementById('api-key-input');
-                const apiKeyStatus = document.getElementById('api-key-status');
-                if (apiKeyInput) {
-                    const apiKeyValue = apiKeyInput.value.trim();
-                    if (apiKeyValue) {
-                        newSettings.apiKey = apiKeyValue;
-                        console.log('🔑 API key updated');
-
-                        // Show immediate feedback
-                        if (apiKeyStatus) {
-                            apiKeyStatus.textContent = '✅ API key saved and will be used for next requests';
-                            apiKeyStatus.style.color = '#28a745';
+            async callSlackAPI(method, params) {
+                try {
+                    // Try to use Slack's internal API system
+                    if (window.TS && window.TS.api) {
+                        if (window.SlackPolishDebug) {
+                            window.SlackPolishDebug.addLog('channel-messages', 'Using TS.api for Slack API call', {
+                                method,
+                                params
+                            });
                         }
-                    } else if (settings.apiKey) {
-                        // If field is empty but we had a key before, remove it
-                        delete newSettings.apiKey;
-                        console.log('🔑 API key removed');
 
-                        if (apiKeyStatus) {
-                            apiKeyStatus.textContent = '⚠️ API key removed - using config file key';
-                            apiKeyStatus.style.color = '#ffc107';
+                        return new Promise((resolve, reject) => {
+                            window.TS.api.call(method, params, (response) => {
+                                if (response.ok) {
+                                    resolve(response);
+                                } else {
+                                    reject(new Error(response.error || 'API call failed'));
+                                }
+                            });
+                        });
+                    }
+
+                    // Fallback: Try to find Slack's internal fetch mechanism
+                    if (window.webpackChunkSlack) {
+                        // Look for Slack's API modules in webpack chunks
+                        const apiModule = this.findSlackAPIModule();
+                        if (apiModule) {
+                            if (window.SlackPolishDebug) {
+                                window.SlackPolishDebug.addLog('channel-messages', 'Using webpack API module', {
+                                    method,
+                                    params
+                                });
+                            }
+                            return await apiModule.call(method, params);
                         }
                     }
-                }
 
-                // Save other developer options
-                newSettings.smartContext = {
-                    ...settings.smartContext,
-                    enabled: document.getElementById('smartContextEnabled').checked,
-                    privacyMode: document.getElementById('smartContextPrivacy').checked
-                };
-                newSettings.debugMode = document.getElementById('debugModeEnabled').checked;
-            }
-
-            saveSettings(newSettings);
-            currentSettings = newSettings; // Update current settings immediately
-
-            menu.remove();
-
-            console.log(`✅ Settings saved! New hotkey: ${newSettings.improveHotkey}`);
-            if (developerModeEnabled && newSettings.apiKey) {
-                console.log('🔑 API key updated and will be used for next requests');
-            }
-        };
-
-        // Close on Escape
-        const escapeHandler = (e) => {
-            if (e.key === 'Escape') {
-                menu.remove();
-                document.removeEventListener('keydown', escapeHandler);
-            }
-        };
-        document.addEventListener('keydown', escapeHandler);
-    }
-
-    // Enhanced hotkey handler with debug info
-    function handleKeyDown(event) {
-        // Debug log key presses only if debug mode is enabled
-        debugLog(`🔍 KEY PRESSED: ${event.key}, Ctrl: ${event.ctrlKey}, Shift: ${event.shiftKey}, Alt: ${event.altKey}, Meta: ${event.metaKey}`);
-        debugLog(`🔍 Active element:`, document.activeElement);
-        debugLog(`🔍 Active element tag:`, document.activeElement?.tagName);
-        debugLog(`🔍 Active element classes:`, document.activeElement?.className);
-        debugLog(`🔍 Active element data-qa:`, document.activeElement?.getAttribute('data-qa'));
-        debugLog(`🔍 Current URL:`, window.location.href);
-        debugLog(`🔍 Is in thread:`, isInThread());
-
-        const settings = getCurrentSettings();
-        const activeElement = document.activeElement;
-
-        // Debug: Test each condition individually
-        const conditions = {
-            isInput: activeElement?.tagName === 'INPUT',
-            isTextarea: activeElement?.tagName === 'TEXTAREA',
-            isContentEditable: activeElement?.contentEditable === 'true',
-            hasTextboxRole: activeElement?.getAttribute('role') === 'textbox',
-            matchesMessageInput: activeElement?.matches('[data-qa="message_input"]'),
-            matchesThreadInput: activeElement?.matches('[data-qa="thread_message_input"]'),
-            matchesQlEditor: activeElement?.matches('.ql-editor'),
-            matchesTextyInput: activeElement?.matches('.c-texty_input'),
-            matchesMessageField: activeElement?.matches('.p-message_input_field'),
-            closestMessageInput: !!activeElement?.closest('[data-qa="message_input"]'),
-            closestThreadInput: !!activeElement?.closest('[data-qa="thread_message_input"]'),
-            closestQlEditor: !!activeElement?.closest('.ql-editor'),
-            closestTextyInput: !!activeElement?.closest('.c-texty_input'),
-            closestMessageField: !!activeElement?.closest('.p-message_input_field')
-        };
-
-        debugLog(`🔍 TEXT FIELD CONDITIONS:`, conditions);
-
-        const isInTextField = activeElement && (
-            conditions.isInput ||
-            conditions.isTextarea ||
-            conditions.isContentEditable ||
-            conditions.hasTextboxRole ||
-            conditions.matchesMessageInput ||
-            conditions.matchesThreadInput ||
-            conditions.matchesQlEditor ||
-            conditions.matchesTextyInput ||
-            conditions.matchesMessageField ||
-            conditions.closestMessageInput ||
-            conditions.closestThreadInput ||
-            conditions.closestQlEditor ||
-            conditions.closestTextyInput ||
-            conditions.closestMessageField
-        );
-
-        debugLog(`🔍 IS IN TEXT FIELD: ${isInTextField}`);
-
-        // Check for text improvement hotkey - prioritize this check
-        const improveHotkey = settings.improveHotkey || 'Ctrl+Shift';
-        console.log(`🔍 Checking hotkey match: "${improveHotkey}" (in text field: ${isInTextField})`);
-        if (hotkeyMatches(event, improveHotkey)) {
-            console.log(`🎯 ${improveHotkey} detected - triggering text improvement!`);
-            // Try to improve text regardless of text field detection for better thread support
-            setTimeout(() => improveTextInSlack(), 10);
-            event.preventDefault();
-            event.stopPropagation();
-            return;
-        }
-
-        // Check for settings menu hotkey (fixed F12) - works everywhere
-        if (event.code === 'F12' && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey) {
-            const location = isInTextField ? 'in text field' : '';
-            console.log(`🎯 F12 detected ${location} - opening settings!`);
-            setTimeout(() => showSettingsMenu(), 10);
-            event.preventDefault();
-            event.stopPropagation();
-        }
-    }
-
-    // Initialize
-    function initialize() {
-        console.log('🔧 Initializing SlackPolish...');
-
-        loadSettings();
-
-        // Add event listeners
-        document.addEventListener('keydown', handleKeyDown, true);
-        document.addEventListener('keydown', handleChannelSummaryHotkey, true);
-
-        window.addEventListener('focus', () => {
-            isSlackFocused = true;
-            console.log('👁️ Slack window focused');
-        });
-
-        window.addEventListener('blur', () => {
-            isSlackFocused = false;
-            console.log('👁️ Slack window blurred');
-        });
-
-        const settings = getCurrentSettings();
-        console.log('✅ SlackPolish initialized!');
-        console.log('💡 Usage:');
-        console.log(`   - Press ${settings.improveHotkey || 'Ctrl+Shift'} to improve text`);
-        console.log('   - Press F10 to open channel summary');
-        console.log('   - Press F12 to open settings menu');
-        console.log('⚠️  Remember to set your OpenAI API key in slack-config.js');
-    }
-
-    // ========================================
-    // CHANNEL SUMMARY FUNCTIONALITY
-    // ========================================
-
-    class ChannelSummarizer {
-        constructor() {
-            this.summaryWindow = null;
-            this.preferences = this.loadPreferences();
-            this.isProcessing = false;
-        }
-
-        loadPreferences() {
-            try {
-                const saved = localStorage.getItem('slackpolish_summary_preferences');
-                return saved ? JSON.parse(saved) : {
-                    depth: window.SLACKPOLISH_CONFIG?.CHANNEL_SUMMARY?.DEFAULT_DEPTH || 'last24hours',
-                    level: window.SLACKPOLISH_CONFIG?.CHANNEL_SUMMARY?.DEFAULT_LEVEL || 'short',
-                    windowSize: window.SLACKPOLISH_CONFIG?.CHANNEL_SUMMARY?.WINDOW_SIZE || { width: 800, height: 600 }
-                };
-            } catch (error) {
-                console.error('Failed to load summary preferences:', error);
-                return {
-                    depth: 'last24hours',
-                    level: 'short',
-                    windowSize: { width: 800, height: 600 }
-                };
-            }
-        }
-
-        savePreferences() {
-            try {
-                localStorage.setItem('slackpolish_summary_preferences', JSON.stringify(this.preferences));
-            } catch (error) {
-                console.error('Failed to save summary preferences:', error);
-            }
-        }
-
-        getCurrentChannelInfo() {
-            try {
-                // Extract current channel information from Slack DOM
-                const channelHeader = document.querySelector('[data-qa="channel_header"]') ||
-                                    document.querySelector('[data-qa="dm_header"]') ||
-                                    document.querySelector('.p-view_header__channel_title');
-
-                if (!channelHeader) {
-                    throw new Error('Could not detect current channel');
-                }
-
-                const channelName = channelHeader.textContent?.trim() || 'Unknown Channel';
-                const channelId = this.extractChannelId();
-
-                return {
-                    name: channelName,
-                    id: channelId,
-                    type: channelName.startsWith('#') ? 'channel' : 'dm'
-                };
-            } catch (error) {
-                console.error('Failed to get channel info:', error);
-                return {
-                    name: 'Current Channel',
-                    id: null,
-                    type: 'unknown'
-                };
-            }
-        }
-
-        extractChannelId() {
-            try {
-                // Try to extract channel ID from URL or DOM attributes
-                const url = window.location.href;
-                const channelMatch = url.match(/\/client\/([^\/]+)/);
-                return channelMatch ? channelMatch[1] : null;
-            } catch (error) {
-                console.error('Failed to extract channel ID:', error);
-                return null;
-            }
-        }
-
-        async openSummaryWindow() {
-            if (this.summaryWindow && !this.summaryWindow.closed) {
-                this.summaryWindow.focus();
-                return;
-            }
-
-            const channelInfo = this.getCurrentChannelInfo();
-            const windowFeatures = `width=${this.preferences.windowSize.width},height=${this.preferences.windowSize.height},scrollbars=yes,resizable=yes`;
-
-            this.summaryWindow = window.open('', 'SlackPolishSummary', windowFeatures);
-
-            if (!this.summaryWindow) {
-                alert('❌ Could not open summary window. Please allow popups for Slack.');
-                return;
-            }
-
-            this.createSummaryWindowContent(channelInfo);
-        }
-
-        createSummaryWindowContent(channelInfo) {
-            const doc = this.summaryWindow.document;
-            doc.open();
-            doc.write(this.generateSummaryHTML(channelInfo));
-            doc.close();
-
-            // Add event listeners to the new window
-            this.setupSummaryWindowEvents();
-        }
-
-        generateSummaryHTML(channelInfo) {
-            const logoSrc = window.SLACKPOLISH_LOGO_BASE64 || "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIj48Y2lyY2xlIGN4PSIyNTYiIGN5PSIyNTYiIHI9IjIwMCIgZmlsbD0iIzEyNjRhMyIvPjx0ZXh0IHg9IjI1NiIgeT0iMjgwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTIwIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+U1A8L3RleHQ+PC9zdmc+";
-
-            return `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>SlackPolish Summary</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-        }
-        .container {
-            background: white;
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-            max-width: 100%;
-        }
-        .header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 24px;
-            padding-bottom: 16px;
-            border-bottom: 2px solid #f0f0f0;
-        }
-        .logo {
-            width: 48px;
-            height: 48px;
-            margin-right: 16px;
-            background: white;
-            border-radius: 8px;
-            padding: 4px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .title {
-            flex: 1;
-        }
-        .title h1 {
-            margin: 0;
-            color: #1264a3;
-            font-size: 24px;
-            font-weight: 600;
-        }
-        .subtitle {
-            color: #666;
-            font-size: 14px;
-            margin-top: 4px;
-        }
-        .controls {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 24px;
-            margin-bottom: 24px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
-        .control-group {
-            display: flex;
-            flex-direction: column;
-        }
-        .control-group label {
-            font-weight: 600;
-            margin-bottom: 12px;
-            color: #333;
-            font-size: 14px;
-        }
-        .radio-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .radio-option {
-            display: flex;
-            align-items: center;
-            padding: 8px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .radio-option:hover {
-            background: rgba(18, 100, 163, 0.1);
-        }
-        .radio-option input[type="radio"] {
-            margin-right: 8px;
-        }
-        .summarize-btn {
-            grid-column: 1 / -1;
-            justify-self: center;
-            background: linear-gradient(135deg, #1264a3 0%, #0d4f73 100%);
-            color: white;
-            border: none;
-            padding: 12px 32px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-top: 16px;
-        }
-        .summarize-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 16px rgba(18, 100, 163, 0.3);
-        }
-        .summarize-btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-        .summary-section {
-            margin-top: 24px;
-            padding-top: 24px;
-            border-top: 2px solid #f0f0f0;
-        }
-        .summary-meta {
-            background: #f8f9fa;
-            padding: 12px 16px;
-            border-radius: 6px;
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 16px;
-        }
-        .summary-content {
-            background: #fafafa;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 20px;
-            min-height: 200px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            line-height: 1.6;
-            white-space: pre-wrap;
-            user-select: text;
-            cursor: text;
-        }
-        .loading {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #666;
-            font-style: italic;
-        }
-        .spinner {
-            width: 20px;
-            height: 20px;
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid #1264a3;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 12px;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .error {
-            color: #d32f2f;
-            background: #ffebee;
-            padding: 12px 16px;
-            border-radius: 6px;
-            border-left: 4px solid #d32f2f;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <img src="${logoSrc}" alt="SlackPolish" class="logo">
-            <div class="title">
-                <h1>SlackPolish Summary</h1>
-                <div class="subtitle">Channel: ${channelInfo.name}</div>
-            </div>
-        </div>
-
-        <div class="controls">
-            <div class="control-group">
-                <label>Summary Depth:</label>
-                <div class="radio-group">
-                    <div class="radio-option">
-                        <input type="radio" name="depth" value="last24hours" id="depth-24h" ${this.preferences.depth === 'last24hours' ? 'checked' : ''}>
-                        <label for="depth-24h">Last 24 hours</label>
-                    </div>
-                    <div class="radio-option">
-                        <input type="radio" name="depth" value="last7days" id="depth-7d" ${this.preferences.depth === 'last7days' ? 'checked' : ''}>
-                        <label for="depth-7d">Last 7 days</label>
-                    </div>
-                    <div class="radio-option">
-                        <input type="radio" name="depth" value="last30days" id="depth-30d" ${this.preferences.depth === 'last30days' ? 'checked' : ''}>
-                        <label for="depth-30d">Last 30 days</label>
-                    </div>
-                    <div class="radio-option">
-                        <input type="radio" name="depth" value="entirechannel" id="depth-all" ${this.preferences.depth === 'entirechannel' ? 'checked' : ''}>
-                        <label for="depth-all">Entire channel</label>
-                    </div>
-                </div>
-            </div>
-
-            <div class="control-group">
-                <label>Summary Level:</label>
-                <div class="radio-group">
-                    <div class="radio-option">
-                        <input type="radio" name="level" value="short" id="level-short" ${this.preferences.level === 'short' ? 'checked' : ''}>
-                        <label for="level-short">Short</label>
-                    </div>
-                    <div class="radio-option">
-                        <input type="radio" name="level" value="medium" id="level-medium" ${this.preferences.level === 'medium' ? 'checked' : ''}>
-                        <label for="level-medium">Medium</label>
-                    </div>
-                    <div class="radio-option">
-                        <input type="radio" name="level" value="comprehensive" id="level-comp" ${this.preferences.level === 'comprehensive' ? 'checked' : ''}>
-                        <label for="level-comp">Comprehensive</label>
-                    </div>
-                </div>
-            </div>
-
-            <button class="summarize-btn" onclick="window.opener.channelSummarizer.generateSummary()">
-                Summarize
-            </button>
-        </div>
-
-        <div class="summary-section" id="summarySection" style="display: none;">
-            <div class="summary-meta" id="summaryMeta"></div>
-            <div class="summary-content" id="summaryContent"></div>
-        </div>
-    </div>
-</body>
-</html>`;
-        }
-
-        setupSummaryWindowEvents() {
-            const doc = this.summaryWindow.document;
-
-            // Add event listeners for radio buttons to save preferences
-            const depthRadios = doc.querySelectorAll('input[name="depth"]');
-            const levelRadios = doc.querySelectorAll('input[name="level"]');
-
-            depthRadios.forEach(radio => {
-                radio.addEventListener('change', () => {
-                    if (radio.checked) {
-                        this.preferences.depth = radio.value;
-                        this.savePreferences();
+                    // Last resort: Try direct fetch to Slack API (may not work due to CORS)
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'Attempting direct API call', {
+                            method,
+                            params
+                        });
                     }
-                });
-            });
 
-            levelRadios.forEach(radio => {
-                radio.addEventListener('change', () => {
-                    if (radio.checked) {
-                        this.preferences.level = radio.value;
-                        this.savePreferences();
+                    throw new Error('No available Slack API interface found');
+
+                } catch (error) {
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'Slack API call failed', {
+                            method,
+                            params,
+                            error: error.message
+                        });
                     }
-                });
-            });
-        }
-
-        async generateSummary() {
-            if (this.isProcessing) return;
-
-            this.isProcessing = true;
-            const doc = this.summaryWindow.document;
-            const summarySection = doc.getElementById('summarySection');
-            const summaryContent = doc.getElementById('summaryContent');
-            const summaryMeta = doc.getElementById('summaryMeta');
-            const summarizeBtn = doc.querySelector('.summarize-btn');
-
-            // Show loading state
-            summarySection.style.display = 'block';
-            summaryContent.innerHTML = '<div class="loading"><div class="spinner"></div>Generating summary...</div>';
-            summarizeBtn.disabled = true;
-            summarizeBtn.textContent = 'Generating...';
-
-            try {
-                // Get current selections
-                const selectedDepth = doc.querySelector('input[name="depth"]:checked')?.value || 'last24hours';
-                const selectedLevel = doc.querySelector('input[name="level"]:checked')?.value || 'short';
-
-                // Update preferences
-                this.preferences.depth = selectedDepth;
-                this.preferences.level = selectedLevel;
-                this.savePreferences();
-
-                // Get channel messages
-                const messages = await this.fetchChannelMessages(selectedDepth);
-
-                if (!messages || messages.length === 0) {
-                    throw new Error('No messages found in the selected time range.');
+                    throw error;
                 }
+            },
 
-                // Generate summary using OpenAI
-                const summary = await this.generateAISummary(messages, selectedLevel);
-
-                // Display results
-                const now = new Date().toLocaleString();
-                summaryMeta.textContent = `Generated: ${now} | ${messages.length} messages analyzed`;
-                summaryContent.textContent = summary;
-
-            } catch (error) {
-                console.error('Summary generation failed:', error);
-                summaryContent.innerHTML = `<div class="error">❌ ${error.message}</div>`;
-                summaryMeta.textContent = '';
-            } finally {
-                this.isProcessing = false;
-                summarizeBtn.disabled = false;
-                summarizeBtn.textContent = 'Summarize';
-            }
-        }
-
-        async fetchChannelMessages(depth) {
-            try {
-                // This is a simplified version - in a real implementation,
-                // we would need to access Slack's internal APIs or DOM
-                const messages = this.extractMessagesFromDOM(depth);
-                return messages;
-            } catch (error) {
-                console.error('Failed to fetch messages:', error);
-                throw new Error('Could not access channel messages. Please ensure you have the necessary permissions.');
-            }
-        }
-
-        extractMessagesFromDOM(depth) {
-            try {
-                // Extract messages from Slack's DOM
-                const messageElements = document.querySelectorAll('[data-qa="message"]');
-                const messages = [];
-                const now = Date.now();
-
-                // Calculate time cutoff based on depth
-                let cutoffTime = 0;
-                if (depth !== 'entirechannel') {
-                    const config = window.SLACKPOLISH_CONFIG?.CHANNEL_SUMMARY?.DEPTH_OPTIONS?.[depth];
-                    if (config && config.hours) {
-                        cutoffTime = now - (config.hours * 60 * 60 * 1000);
+            findSlackAPIModule() {
+                try {
+                    // This is a simplified approach - in practice, we'd need to inspect
+                    // Slack's webpack modules to find the API interface
+                    if (window.webpackChunkSlack) {
+                        // Look through webpack chunks for API modules
+                        // This would need to be implemented based on Slack's current structure
+                        if (window.SlackPolishDebug) {
+                            window.SlackPolishDebug.addLog('channel-messages', 'Searching for Slack API module in webpack chunks');
+                        }
                     }
+                    return null;
+                } catch (error) {
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'Error finding Slack API module', {
+                            error: error.message
+                        });
+                    }
+                    return null;
                 }
+            },
 
-                messageElements.forEach(element => {
-                    try {
-                        const messageText = element.querySelector('[data-qa="message-text"]')?.textContent?.trim();
-                        const timestamp = this.extractMessageTimestamp(element);
-                        const author = this.extractMessageAuthor(element);
+            processSlackMessage(slackMessage) {
+                try {
+                    return {
+                        ts: slackMessage.ts,
+                        type: slackMessage.type || 'message',
+                        user: slackMessage.user || slackMessage.username || 'Unknown',
+                        text: slackMessage.text || '',
+                        timestamp: new Date(parseFloat(slackMessage.ts) * 1000).toISOString(),
+                        thread_ts: slackMessage.thread_ts || null,
+                        reply_count: slackMessage.reply_count || 0,
+                        reactions: slackMessage.reactions || [],
+                        files: slackMessage.files || [],
+                        attachments: slackMessage.attachments || [],
+                        blocks: slackMessage.blocks || [],
+                        subtype: slackMessage.subtype || null,
+                        bot_id: slackMessage.bot_id || null,
+                        app_id: slackMessage.app_id || null,
+                        edited: slackMessage.edited || null
+                    };
+                } catch (error) {
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'Error processing Slack message', {
+                            error: error.message,
+                            message: slackMessage
+                        });
+                    }
+                    return {
+                        ts: slackMessage.ts || Date.now().toString(),
+                        type: 'message',
+                        user: 'Unknown',
+                        text: 'Error processing message',
+                        timestamp: new Date().toISOString()
+                    };
+                }
+            },
 
-                        if (messageText && messageText.length > 3) {
-                            // Check if message is within time range
-                            if (depth === 'entirechannel' || timestamp >= cutoffTime) {
-                                messages.push({
-                                    text: messageText,
-                                    author: author || 'Unknown',
-                                    timestamp: timestamp,
-                                    date: new Date(timestamp).toLocaleString()
+            async includeThreadReplies(messages, channelId) {
+                try {
+                    const messagesWithThreads = [];
+
+                    for (const message of messages) {
+                        messagesWithThreads.push(message);
+
+                        // If message has replies, fetch them
+                        if (message.reply_count > 0 && message.ts) {
+                            try {
+                                const threadResponse = await this.callSlackAPI('conversations.replies', {
+                                    channel: channelId,
+                                    ts: message.ts
+                                });
+
+                                if (threadResponse.ok && threadResponse.messages) {
+                                    // Skip the parent message (first in array) and add replies
+                                    const replies = threadResponse.messages.slice(1).map(msg => ({
+                                        ...this.processSlackMessage(msg),
+                                        isThreadReply: true,
+                                        parentTs: message.ts
+                                    }));
+                                    messagesWithThreads.push(...replies);
+                                }
+                            } catch (error) {
+                                if (window.SlackPolishDebug) {
+                                    window.SlackPolishDebug.addLog('channel-messages', 'Error fetching thread replies', {
+                                        messageTs: message.ts,
+                                        error: error.message
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    return messagesWithThreads;
+                } catch (error) {
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'Error including thread replies', {
+                            error: error.message
+                        });
+                    }
+                    return messages; // Return original messages if thread fetching fails
+                }
+            },
+
+            extractMessagesFromDOM() {
+                try {
+                    const messages = [];
+
+                    // Find message containers - improved selectors for DMs and channels
+                    const messageSelectors = [
+                        '[data-qa="virtual_list_item"]', // Main message containers
+                        '.c-message_kit__message', // Alternative message containers
+                        '[data-qa="message"]', // DM message containers
+                        '.c-message__content', // Fallback
+                        '.c-virtual_list__item', // Another virtual list variant
+                        '[role="listitem"]' // Generic list items that might contain messages
+                    ];
+
+                    let messageElements = [];
+
+                    for (const selector of messageSelectors) {
+                        messageElements = document.querySelectorAll(selector);
+                        if (messageElements.length > 0) {
+                            if (window.SlackPolishDebug) {
+                                window.SlackPolishDebug.addLog('channel-messages', 'Found messages with selector', {
+                                    selector,
+                                    count: messageElements.length
+                                });
+                            }
+                            break;
+                        }
+                    }
+
+                    if (messageElements.length === 0) {
+                        if (window.SlackPolishDebug) {
+                            window.SlackPolishDebug.addLog('channel-messages', 'No message elements found', {
+                                triedSelectors: messageSelectors
+                            });
+                        }
+                        return [];
+                    }
+
+                    // Extract message data from each element
+                    messageElements.forEach((element, index) => {
+                        try {
+                            const messageData = this.extractMessageData(element);
+                            if (messageData) {
+                                messages.push(messageData);
+                            }
+                        } catch (error) {
+                            if (window.SlackPolishDebug) {
+                                window.SlackPolishDebug.addLog('channel-messages', 'Error extracting message data', {
+                                    index,
+                                    error: error.message
                                 });
                             }
                         }
-                    } catch (error) {
-                        console.warn('Failed to extract message:', error);
+                    });
+
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'Messages extracted from DOM', {
+                            totalElements: messageElements.length,
+                            extractedMessages: messages.length,
+                            sampleMessage: messages[0]
+                        });
+                    }
+
+                    return messages;
+
+                } catch (error) {
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'Error in extractMessagesFromDOM', {
+                            error: error.message,
+                            stack: error.stack
+                        });
+                    }
+                    return [];
+                }
+            },
+
+            extractMessageData(element) {
+                try {
+                    // Extract basic message information
+                    const messageData = {
+                        type: 'message',
+                        timestamp: null,
+                        user: null,
+                        text: '',
+                        reactions: [],
+                        thread_ts: null,
+                        reply_count: 0
+                    };
+
+                    // Get timestamp - improved selectors for DMs
+                    const timestampSelectors = [
+                        '[data-ts]',
+                        '.c-timestamp',
+                        '[data-qa="message_timestamp"]',
+                        '.c-message__timestamp',
+                        'time'
+                    ];
+
+                    for (const selector of timestampSelectors) {
+                        const timestampElement = element.querySelector(selector);
+                        if (timestampElement) {
+                            let ts = timestampElement.getAttribute('data-ts');
+                            if (!ts && timestampElement.getAttribute('datetime')) {
+                                // Convert datetime to timestamp
+                                ts = (new Date(timestampElement.getAttribute('datetime')).getTime() / 1000).toString();
+                            }
+                            if (ts) {
+                                messageData.timestamp = new Date(parseFloat(ts) * 1000).toISOString();
+                                break;
+                            }
+                        }
+                    }
+
+                    // Get user information - improved selectors for DMs
+                    const userSelectors = [
+                        '[data-qa="message_sender_name"]',
+                        '.c-message__sender',
+                        '[data-qa="message_sender"]',
+                        '.c-message_kit__sender',
+                        '.c-message__sender_name',
+                        '.c-message_attachment__author_name',
+                        '[data-qa="message_author_name"]'
+                    ];
+
+                    for (const selector of userSelectors) {
+                        const userEl = element.querySelector(selector);
+                        if (userEl && userEl.textContent.trim()) {
+                            messageData.user = userEl.textContent.trim();
+                            break;
+                        }
+                    }
+
+                    // Get message text - improved selectors for DMs
+                    const textSelectors = [
+                        '[data-qa="message_content"]',
+                        '.c-message__body',
+                        '.p-rich_text_section',
+                        '.c-message_kit__text',
+                        '.c-message__content_text',
+                        '.c-message_attachment__text',
+                        '.ql-editor p'
+                    ];
+
+                    for (const selector of textSelectors) {
+                        const textEl = element.querySelector(selector);
+                        if (textEl && textEl.textContent.trim()) {
+                            messageData.text = textEl.textContent.trim();
+                            break;
+                        }
+                    }
+
+                    // If no text found with specific selectors, try getting all text content
+                    if (!messageData.text) {
+                        // Filter out timestamp and user name from the full text
+                        let fullText = element.textContent || '';
+                        if (messageData.user) {
+                            fullText = fullText.replace(messageData.user, '').trim();
+                        }
+                        // Remove common timestamp patterns
+                        fullText = fullText.replace(/\d{1,2}:\d{2}\s*(AM|PM)?/gi, '').trim();
+                        fullText = fullText.replace(/Yesterday|Today|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday/gi, '').trim();
+
+                        if (fullText.length > 10) { // Only use if we have substantial text
+                            messageData.text = fullText;
+                        }
+                    }
+
+                    // Get thread information
+                    const threadElement = element.querySelector('[data-qa="thread_reply_bar"]');
+                    if (threadElement) {
+                        const replyText = threadElement.textContent;
+                        const replyMatch = replyText.match(/(\d+)\s+repl/);
+                        if (replyMatch) {
+                            messageData.reply_count = parseInt(replyMatch[1]);
+                        }
+                    }
+
+                    // Get reactions
+                    const reactionElements = element.querySelectorAll('[data-qa="reaction"]');
+                    reactionElements.forEach(reactionEl => {
+                        const emoji = reactionEl.querySelector('.c-emoji');
+                        const count = reactionEl.querySelector('.c-reaction__count');
+                        if (emoji && count) {
+                            messageData.reactions.push({
+                                emoji: emoji.getAttribute('data-emoji-name') || emoji.textContent,
+                                count: parseInt(count.textContent) || 1
+                            });
+                        }
+                    });
+
+                    // Only return if we have essential data
+                    if (messageData.text || messageData.user) {
+                        return messageData;
+                    }
+
+                    return null;
+
+                } catch (error) {
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'Error extracting message data', {
+                            error: error.message
+                        });
+                    }
+                    return null;
+                }
+            },
+
+            // Helper function for testing - can be called from browser console
+            async testChannelMessages(options = {}) {
+                try {
+                    console.log('🔧 SLACKPOLISH: Testing Channel Messages module...');
+                    console.log('📋 Options:', options);
+
+                    const result = await this.fetchChannelMessages(options);
+
+                    console.log('🔧 SLACKPOLISH: Channel Messages Test Results:');
+                    console.log('📍 Channel:', result.channelName, '(' + result.channelId + ')');
+                    console.log('📊 Messages returned:', result.totalReturned);
+                    console.log('🔄 API calls made:', result.apiCallsMade);
+                    console.log('⏰ Fetched at:', result.fetchedAt);
+                    console.log('⚙️ Parameters used:', result.parameters);
+
+                    if (result.messages.length > 0) {
+                        console.log('💬 First message:', result.messages[0]);
+                        console.log('💬 Last message:', result.messages[result.messages.length - 1]);
+                        console.log('📝 Sample message texts:');
+                        result.messages.slice(0, 5).forEach((msg, i) => {
+                            console.log(`  ${i + 1}. [${msg.user}]: ${msg.text.substring(0, 100)}${msg.text.length > 100 ? '...' : ''}`);
+                        });
+                    }
+
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'Test completed successfully', result);
+                    }
+
+                    return result;
+                } catch (error) {
+                    console.error('❌ SLACKPOLISH: Channel Messages test failed:', error);
+
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'Test failed', {
+                            error: error.message,
+                            stack: error.stack
+                        });
+                    }
+
+                    throw error;
+                }
+            },
+
+            // Convenience methods for common use cases
+            async getRecentMessages(count = 20) {
+                return await this.fetchChannelMessages({ count });
+            },
+
+            async getRecentMessagesFromDOM(count = 20) {
+                try {
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'Using DOM fallback for recent messages', {
+                            count
+                        });
+                    }
+
+                    const channelId = this.getCurrentChannelId();
+                    const channelName = this.getCurrentChannelName();
+                    const messages = this.extractMessagesFromDOM();
+
+                    // Get the most recent messages up to the requested count
+                    const recentMessages = messages.slice(-count);
+
+                    const result = {
+                        channelId,
+                        channelName,
+                        messages: recentMessages,
+                        totalReturned: recentMessages.length,
+                        method: 'DOM',
+                        fetchedAt: new Date().toISOString()
+                    };
+
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'DOM fallback completed', result);
+                    }
+
+                    return result;
+                } catch (error) {
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'DOM fallback failed', {
+                            error: error.message,
+                            stack: error.stack
+                        });
+                    }
+                    throw error;
+                }
+            },
+
+            async getMessagesFromDate(date, count = 100) {
+                const oldest = date instanceof Date ? date : new Date(date);
+                return await this.fetchChannelMessages({
+                    oldest: oldest.toISOString(),
+                    count
+                });
+            },
+
+            async getMessagesInRange(startDate, endDate, includeThreads = false) {
+                const oldest = startDate instanceof Date ? startDate : new Date(startDate);
+                const latest = endDate instanceof Date ? endDate : new Date(endDate);
+                return await this.fetchChannelMessages({
+                    oldest: oldest.toISOString(),
+                    latest: latest.toISOString(),
+                    getAllMessages: true,
+                    includeThreads
+                });
+            },
+
+            async getAllChannelMessages(includeThreads = false) {
+                return await this.fetchChannelMessages({
+                    getAllMessages: true,
+                    includeThreads
+                });
+            },
+
+            async getRecentMessagesFromDOM(count = 20) {
+                try {
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'Using DOM fallback for recent messages', {
+                            count
+                        });
+                    }
+
+                    const channelId = this.getCurrentChannelId();
+                    const channelName = this.getCurrentChannelName();
+                    const messages = this.extractMessagesFromDOM();
+
+                    // Get the most recent messages up to the requested count
+                    const recentMessages = messages.slice(-count);
+
+                    const result = {
+                        channelId,
+                        channelName,
+                        messages: recentMessages,
+                        totalReturned: recentMessages.length,
+                        method: 'DOM',
+                        fetchedAt: new Date().toISOString()
+                    };
+
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'DOM fallback completed', result);
+                    }
+
+                    return result;
+                } catch (error) {
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', 'DOM fallback failed', {
+                            error: error.message,
+                            stack: error.stack
+                        });
+                    }
+                    throw error;
+                }
+            }
+        };
+
+        // Expose test functions globally for easy console access
+        window.testChannelMessages = function(options) {
+            if (window.SlackPolishChannelMessages) {
+                return window.SlackPolishChannelMessages.testChannelMessages(options);
+            } else {
+                console.error('❌ SLACKPOLISH: Channel Messages module not available');
+            }
+        };
+
+        // Expose convenience methods globally
+        window.getRecentMessages = function(count = 20) {
+            if (window.SlackPolishChannelMessages) {
+                return window.SlackPolishChannelMessages.getRecentMessages(count);
+            } else {
+                console.error('❌ SLACKPOLISH: Channel Messages module not available');
+            }
+        };
+
+        window.getMessagesFromDate = function(date, count = 100) {
+            if (window.SlackPolishChannelMessages) {
+                return window.SlackPolishChannelMessages.getMessagesFromDate(date, count);
+            } else {
+                console.error('❌ SLACKPOLISH: Channel Messages module not available');
+            }
+        };
+
+        window.getAllChannelMessages = function(includeThreads = false) {
+            if (window.SlackPolishChannelMessages) {
+                return window.SlackPolishChannelMessages.getAllChannelMessages(includeThreads);
+            } else {
+                console.error('❌ SLACKPOLISH: Channel Messages module not available');
+            }
+        };
+    }
+
+    // Initialize global OpenAI system
+    function initializeGlobalOpenAISystem() {
+        if (window.SlackPolishOpenAI) return; // Already initialized
+
+        window.SlackPolishOpenAI = {
+            async testApiKey(apiKey, model = 'gpt-4-turbo') {
+                if (window.SlackPolishDebug) {
+                    window.SlackPolishDebug.addLog('openai', 'Testing API key', {
+                        hasApiKey: !!apiKey,
+                        model,
+                        keyLength: apiKey ? apiKey.length : 0
+                    });
+                }
+
+                try {
+                    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKey}`
+                        },
+                        body: JSON.stringify({
+                            model: model,
+                            messages: [{
+                                role: 'user',
+                                content: 'Test message - please respond with just "OK"'
+                            }],
+                            max_tokens: 10,
+                            temperature: 0
+                        })
+                    });
+
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('openai', 'API test response received', {
+                            status: response.status,
+                            statusText: response.statusText,
+                            ok: response.ok
+                        });
+                    }
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        const usage = data.usage;
+
+                        if (window.SlackPolishDebug) {
+                            window.SlackPolishDebug.addLog('openai', 'API test successful', {
+                                model: data.model,
+                                usage: usage,
+                                response: data.choices?.[0]?.message?.content
+                            });
+                        }
+
+                        return {
+                            success: true,
+                            message: `✅ API key is valid! Model: ${data.model || model}`,
+                            data: {
+                                model: data.model,
+                                usage: usage
+                            }
+                        };
+                    } else {
+                        const errorData = await response.json().catch(() => ({}));
+                        const errorMessage = errorData.error?.message || `HTTP ${response.status}: ${response.statusText}`;
+
+                        if (window.SlackPolishDebug) {
+                            window.SlackPolishDebug.addLog('openai', 'API test failed', {
+                                status: response.status,
+                                error: errorMessage,
+                                errorData
+                            });
+                        }
+
+                        return {
+                            success: false,
+                            message: `❌ ${errorMessage}`,
+                            error: errorData
+                        };
+                    }
+                } catch (error) {
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('openai', 'API test network error', {
+                            error: error.message,
+                            stack: error.stack
+                        });
+                    }
+
+                    return {
+                        success: false,
+                        message: `❌ Network error: ${error.message}`,
+                        error: error
+                    };
+                }
+            },
+
+            async improveText(apiKey, model, prompt, options = {}) {
+                if (window.SlackPolishDebug) {
+                    window.SlackPolishDebug.addLog('openai', 'Text improvement request', {
+                        model,
+                        promptLength: prompt.length,
+                        options
+                    });
+                }
+
+                try {
+                    const requestBody = {
+                        model: model,
+                        messages: [{ role: 'user', content: prompt }],
+                        max_tokens: options.maxTokens || 500,
+                        temperature: options.temperature || 0.7
+                    };
+
+                    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKey}`
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
+
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('openai', 'Text improvement response', {
+                            status: response.status,
+                            ok: response.ok
+                        });
+                    }
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    const result = data.choices?.[0]?.message?.content || '';
+
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('openai', 'Text improvement successful', {
+                            resultLength: result.length,
+                            usage: data.usage
+                        });
+                    }
+
+                    return result;
+                } catch (error) {
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('openai', 'Text improvement error', {
+                            error: error.message
+                        });
+                    }
+                    throw error;
+                }
+            }
+        };
+    }
+
+    // Initialize global debug system
+    function initializeGlobalDebugSystem() {
+        if (window.SlackPolishDebug) return; // Already initialized
+
+        window.SlackPolishDebug = {
+            logs: [],
+            debugWindow: null,
+            isEnabled: false,
+
+            setEnabled: function(enabled) {
+                this.isEnabled = enabled;
+                if (enabled && this.logs.length > 0 && !this.debugWindow) {
+                    this.createDebugWindow();
+                }
+            },
+
+            addLog: function(source, message, data = null) {
+                if (!this.isEnabled) return;
+
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = {
+                    timestamp,
+                    source,
+                    message,
+                    data: data ? (typeof data === 'object' ? JSON.stringify(data, null, 2) : data) : null
+                };
+
+                this.logs.push(logEntry);
+
+                // Keep only last 100 entries to prevent memory issues
+                if (this.logs.length > 100) {
+                    this.logs.shift();
+                }
+
+                // Create or update debug window
+                if (!this.debugWindow) {
+                    this.createDebugWindow();
+                } else {
+                    this.updateDebugWindow();
+                }
+            },
+
+            createDebugWindow: function() {
+                if (!document.body || this.debugWindow) return;
+
+                // Create debug window overlay
+                this.debugWindow = document.createElement('div');
+                this.debugWindow.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    width: 600px;
+                    height: 500px;
+                    background: #1a1d29;
+                    color: #e8e8e8;
+                    border: 2px solid #2eb67d;
+                    border-radius: 8px;
+                    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+                    font-size: 11px;
+                    z-index: 10001;
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+                    display: flex;
+                    flex-direction: column;
+                `;
+
+                // Create header
+                const header = document.createElement('div');
+                header.style.cssText = `
+                    background: #2eb67d;
+                    color: white;
+                    padding: 8px 12px;
+                    font-weight: bold;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    border-radius: 6px 6px 0 0;
+                `;
+                header.innerHTML = `
+                    <span>🐛 SlackPolish Debug Console</span>
+                    <div>
+                        <button id="clear-debug" style="background: none; border: 1px solid white; color: white; cursor: pointer; font-size: 12px; margin-right: 8px; padding: 2px 6px; border-radius: 3px;">Clear</button>
+                        <button id="close-debug" style="background: none; border: none; color: white; cursor: pointer; font-size: 16px;">×</button>
+                    </div>
+                `;
+
+                // Create content area
+                const content = document.createElement('div');
+                content.id = 'debug-content';
+                content.style.cssText = `
+                    flex: 1;
+                    padding: 12px;
+                    overflow-y: auto;
+                    background: #1a1d29;
+                    border-radius: 0 0 6px 6px;
+                `;
+
+                this.debugWindow.appendChild(header);
+                this.debugWindow.appendChild(content);
+                document.body.appendChild(this.debugWindow);
+
+                // Add close functionality
+                header.querySelector('#close-debug').addEventListener('click', () => {
+                    this.debugWindow.remove();
+                    this.debugWindow = null;
+                });
+
+                // Add clear functionality
+                header.querySelector('#clear-debug').addEventListener('click', () => {
+                    this.logs = [];
+                    this.updateDebugWindow();
+                });
+
+                // Make draggable
+                this.makeDebugWindowDraggable(header);
+
+                // Initial content update
+                this.updateDebugWindow();
+            },
+
+            updateDebugWindow: function() {
+                if (!this.debugWindow) return;
+
+                const content = this.debugWindow.querySelector('#debug-content');
+                if (!content) return;
+
+                if (this.logs.length === 0) {
+                    content.innerHTML = '<div style="color: #666; text-align: center; margin-top: 50px;">No debug logs yet...</div>';
+                    return;
+                }
+
+                content.innerHTML = this.logs.map(log => {
+                    const sourceColors = {
+                        'text-improver': '#2eb67d',
+                        'settings': '#e01e5a',
+                        'channel-summary': '#ecb22e',
+                        'default': '#2eb67d'
+                    };
+                    const sourceColor = sourceColors[log.source] || sourceColors.default;
+
+                    let html = `<div style="margin-bottom: 8px; padding: 6px; background: #252837; border-radius: 4px; border-left: 3px solid ${sourceColor};">`;
+                    html += `<div style="color: ${sourceColor}; font-size: 10px; margin-bottom: 4px;">[${log.timestamp}] ${log.source.toUpperCase()}</div>`;
+                    html += `<div style="color: #e8e8e8; margin-bottom: 4px;">${log.message}</div>`;
+                    if (log.data) {
+                        html += `<div style="color: #a0a0a0; font-size: 10px; white-space: pre-wrap; background: #1a1d29; padding: 4px; border-radius: 2px; margin-top: 4px; max-height: 200px; overflow-y: auto;">${log.data}</div>`;
+                    }
+                    html += `</div>`;
+                    return html;
+                }).join('');
+
+                // Auto-scroll to bottom
+                content.scrollTop = content.scrollHeight;
+            },
+
+            makeDebugWindowDraggable: function(header) {
+                let isDragging = false;
+                let currentX;
+                let currentY;
+                let initialX;
+                let initialY;
+                let xOffset = 0;
+                let yOffset = 0;
+
+                header.addEventListener('mousedown', (e) => {
+                    if (e.target.tagName === 'BUTTON') return; // Don't drag when clicking buttons
+
+                    initialX = e.clientX - xOffset;
+                    initialY = e.clientY - yOffset;
+                    isDragging = true;
+                    header.style.cursor = 'grabbing';
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (isDragging) {
+                        e.preventDefault();
+                        currentX = e.clientX - initialX;
+                        currentY = e.clientY - initialY;
+
+                        xOffset = currentX;
+                        yOffset = currentY;
+
+                        this.debugWindow.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
                     }
                 });
 
-                // Sort by timestamp (oldest first)
-                messages.sort((a, b) => a.timestamp - b.timestamp);
+                document.addEventListener('mouseup', () => {
+                    if (isDragging) {
+                        initialX = currentX;
+                        initialY = currentY;
+                        isDragging = false;
+                        header.style.cursor = 'grab';
+                    }
+                });
 
-                return messages;
-            } catch (error) {
-                console.error('Failed to extract messages from DOM:', error);
-                throw new Error('Could not read channel messages from the current view.');
+                header.style.cursor = 'grab';
             }
+        };
+    }
+
+    // Initialize
+    function init() {
+        // Initialize global systems first
+        initializeGlobalChannelMessagesSystem();
+        initializeGlobalOpenAISystem();
+        initializeGlobalDebugSystem();
+
+        utils.log('SlackPolish Text Improver initializing...');
+
+        // Load settings from localStorage
+        loadSettings();
+
+        // Set up real-time settings updates
+        setupSettingsListener();
+
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', setupEventListeners);
+        } else {
+            setupEventListeners();
         }
 
-        extractMessageTimestamp(element) {
-            try {
-                // Try to find timestamp in various possible locations
-                const timeElement = element.querySelector('[data-qa="message-timestamp"]') ||
-                                  element.querySelector('.c-timestamp') ||
-                                  element.querySelector('[aria-label*="sent at"]');
+        utils.log('SlackPolish Text Improver initialized successfully');
+    }
 
-                if (timeElement) {
-                    const timeStr = timeElement.getAttribute('datetime') ||
-                                   timeElement.getAttribute('data-ts') ||
-                                   timeElement.textContent;
+    // Set up storage event listener for real-time settings updates
+    function setupSettingsListener() {
+        // Listen for localStorage changes from the settings script
+        window.addEventListener('storage', function(e) {
+            if (e.key === 'slackpolish_settings' || e.key === 'slackpolish_openai_api_key') {
+                utils.log('Settings changed in storage, reloading...');
+                const oldHotkey = CONFIG.HOTKEY;
+                const oldDebugMode = CONFIG.DEBUG_MODE;
+                loadSettings();
 
-                    if (timeStr) {
-                        const timestamp = new Date(timeStr).getTime();
-                        return isNaN(timestamp) ? Date.now() : timestamp;
-                    }
+                // If hotkey changed, re-setup event listeners
+                if (oldHotkey !== CONFIG.HOTKEY) {
+                    utils.log(`Hotkey changed from ${oldHotkey} to ${CONFIG.HOTKEY}, re-setting up listeners`);
+                    setupEventListeners();
                 }
 
-                return Date.now(); // Fallback to current time
-            } catch (error) {
-                return Date.now();
+                // If debug mode changed, update global debug system
+                if (oldDebugMode !== CONFIG.DEBUG_MODE && window.SlackPolishDebug) {
+                    window.SlackPolishDebug.setEnabled(CONFIG.DEBUG_MODE);
+                    utils.log(`Debug mode ${CONFIG.DEBUG_MODE ? 'enabled' : 'disabled'}`);
+                }
+
+                utils.log('Settings reloaded successfully');
             }
-        }
+        });
 
-        extractMessageAuthor(element) {
-            try {
-                const authorElement = element.querySelector('[data-qa="message-sender-name"]') ||
-                                    element.querySelector('.c-message__sender') ||
-                                    element.querySelector('[data-qa="message-sender"]');
+        // Also listen for custom events (for same-tab updates)
+        window.addEventListener('slackpolish-settings-updated', function() {
+            utils.log('Settings updated via custom event, reloading...');
+            const oldHotkey = CONFIG.HOTKEY;
+            loadSettings();
 
-                return authorElement?.textContent?.trim() || 'Unknown';
-            } catch (error) {
-                return 'Unknown';
-            }
-        }
-
-        async generateAISummary(messages, level) {
-            try {
-                const config = window.SLACKPOLISH_CONFIG?.CHANNEL_SUMMARY?.LEVEL_OPTIONS?.[level];
-                const maxTokens = config?.maxTokens || 500;
-
-                // Prepare messages for AI processing
-                const messageText = messages.map(msg =>
-                    `[${msg.date}] ${msg.author}: ${msg.text}`
-                ).join('\n');
-
-                // Create appropriate prompt based on level
-                const prompt = this.createSummaryPrompt(messageText, level, messages.length);
-
-                // Call OpenAI API
-                const response = await this.callOpenAI(prompt, maxTokens);
-
-                return response;
-            } catch (error) {
-                console.error('AI summary generation failed:', error);
-                throw new Error('Failed to generate AI summary. Please check your OpenAI API key and try again.');
-            }
-        }
-
-        createSummaryPrompt(messageText, level, messageCount) {
-            const basePrompt = `Please analyze the following Slack channel conversation with ${messageCount} messages and provide a ${level} summary:
-
-${messageText}
-
-`;
-
-            switch (level) {
-                case 'short':
-                    return basePrompt + `Provide a SHORT summary (1-2 paragraphs) focusing on:
-- Key discussion points
-- Important decisions made
-- Critical action items
-
-Keep it concise and highlight only the most important information.`;
-
-                case 'medium':
-                    return basePrompt + `Provide a MEDIUM summary (3-5 paragraphs) including:
-- Main topics discussed
-- Key decisions and their context
-- Action items with assignees
-- Important announcements or updates
-- Notable participant contributions
-
-Organize the information clearly with appropriate headings.`;
-
-                case 'comprehensive':
-                    return basePrompt + `Provide a COMPREHENSIVE summary (1-2 pages) with detailed analysis including:
-- Chronological flow of major discussions
-- Detailed breakdown of each main topic
-- All decisions made with full context and rationale
-- Complete action item list with assignees and deadlines
-- Participant analysis and contribution patterns
-- Files, links, and resources shared
-- Follow-up items and next steps
-
-Structure this as a detailed report with clear sections and headings.`;
-
-                default:
-                    return basePrompt + 'Provide a summary of the key points discussed.';
-            }
-        }
-
-        async callOpenAI(prompt, maxTokens) {
-            const apiKey = window.SLACKPOLISH_CONFIG?.OPENAI_API_KEY;
-            if (!apiKey) {
-                throw new Error('OpenAI API key not configured. Please set your API key in the settings.');
+            // If hotkey changed, re-setup event listeners
+            if (oldHotkey !== CONFIG.HOTKEY) {
+                utils.log(`Hotkey changed from ${oldHotkey} to ${CONFIG.HOTKEY}, re-setting up listeners`);
+                setupEventListeners();
             }
 
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
-                body: JSON.stringify({
-                    model: 'gpt-3.5-turbo',
-                    messages: [
-                        {
-                            role: 'system',
-                            content: 'You are a helpful assistant that creates clear, well-structured summaries of Slack conversations for Redis Enterprise team members.'
-                        },
-                        {
-                            role: 'user',
-                            content: prompt
-                        }
-                    ],
-                    max_tokens: maxTokens,
-                    temperature: 0.3
-                })
-            });
+            utils.log('Settings reloaded successfully');
+        });
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error?.message || `OpenAI API error: ${response.status}`);
-            }
-
-            const data = await response.json();
-            return data.choices?.[0]?.message?.content || 'No summary generated.';
-        }
+        utils.log('Real-time settings listener initialized');
     }
 
-    // Initialize channel summarizer
-    window.channelSummarizer = null;
+    // Start the application
+    init();
 
-    // Add F10 hotkey handler for channel summary
-    function handleChannelSummaryHotkey(event) {
-        const summaryHotkey = window.SLACKPOLISH_CONFIG?.CHANNEL_SUMMARY?.HOTKEY || 'F10';
-
-        if (event.key === summaryHotkey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
-            event.preventDefault();
-            event.stopPropagation();
-
-            if (!window.channelSummarizer) {
-                window.channelSummarizer = new ChannelSummarizer();
-            }
-
-            window.channelSummarizer.openSummaryWindow();
-        }
-    }
-
-    // Start when DOM is ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initialize);
-    } else {
-        initialize();
-    }
 })();
+// === SLACKPOLISH INJECTION END ===

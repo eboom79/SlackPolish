@@ -10,6 +10,8 @@ import subprocess
 import shutil
 import re
 import argparse
+import json
+from datetime import datetime
 from pathlib import Path
 import time
 
@@ -283,23 +285,92 @@ def validate_injection_file(file_path, force=False):
         print_error(f"Error validating file: {e}")
         return False
 
-def inject_scripts(injection_file, config_path, script_path):
+def inject_scripts(injection_file, config_path, *script_paths):
     """Inject SlackPolish scripts into the target file."""
     try:
         # Read existing content
         with open(injection_file, 'r', encoding='utf-8') as f:
             content = f.read()
-        
-        # Remove any existing SlackPolish injections
-        patterns = [
-            r'// === SLACKPOLISH INJECTION START ===.*?// === SLACKPOLISH INJECTION END ===',
-            r'// === SLACK TEXT IMPROVER INJECTION START ===.*?// === SLACK TEXT IMPROVER INJECTION END ==='
+
+        # COMPREHENSIVE CLEANUP - Remove ALL SlackPolish code
+        print_info("Performing comprehensive cleanup of all SlackPolish code...")
+
+        # Patterns to remove everything SlackPolish-related
+        cleanup_patterns = [
+            # Main injection blocks with optional semicolons - more comprehensive
+            r'// === SLACKPOLISH INJECTION START ===.*?// === SLACKPOLISH INJECTION END ===;?\s*(?:// === SLACKPOLISH INJECTION END ===;?\s*)*',
+            r'// === SLACK TEXT IMPROVER INJECTION START ===.*?// === SLACK TEXT IMPROVER INJECTION END ===;?\s*(?:// === SLACK TEXT IMPROVER INJECTION END ===;?\s*)*',
+
+            # Individual file markers (new structure)
+            r'// === SLACK-TEXT-IMPROVER\.JS ===.*?(?=// === |\Z)',
+            r'// === SLACK-SETTINGS\.JS ===.*?(?=// === |\Z)',
+            r'// === SLACK-CHANNEL-SUMMARY\.JS ===.*?(?=// === |\Z)',
+            r'// === LOGO-DATA\.JS ===.*?(?=// === |\Z)',
+
+            # Orphaned end markers - multiple consecutive ones
+            r'(?:// === SLACKPOLISH INJECTION END ===;?\s*)+',
+            r'(?:// === SLACK TEXT IMPROVER INJECTION END ===;?\s*)+',
+
+            # Config and utilities
+            r'window\.SLACKPOLISH_CONFIG\s*=.*?};?',
+            r'window\.SlackPolishUtils\s*=.*?};?',
+            r'window\.SLACKPOLISH_LOGO_BASE64\s*=.*?;',
+            r'window\.SLACKPOLISH_LOGO_DATA\s*=.*?;',
+
+            # Class definitions (old single-file structure)
+            r'class SlackTextImprover\s*{.*?}\s*\)\(\);?',
+            r'class SlackSettings\s*{.*?}\s*\)\(\);?',
+            r'class SlackChannelSummary\s*{.*?}\s*\)\(\);?',
+
+            # Function-based implementations
+            r'\(function\(\)\s*{\s*[\'"]use strict[\'"];.*?SlackTextImprover.*?}\)\(\);?',
+            r'\(function\(\)\s*{\s*[\'"]use strict[\'"];.*?SlackSettings.*?}\)\(\);?',
+            r'\(function\(\)\s*{\s*[\'"]use strict[\'"];.*?SlackChannelSummary.*?}\)\(\);?',
+
+            # Any remaining SlackPolish references
+            r'SlackPolish[A-Za-z]*\s*[=:].*?[;}]',
+            r'// SlackPolish.*?\n',
+            r'/\* SlackPolish.*?\*/',
+
+            # Cleanup any orphaned semicolons or empty lines left behind
+            r';\s*;\s*;+',
+            r'\n\s*\n\s*\n+',
         ]
-        
-        for pattern in patterns:
-            content = re.sub(pattern, '', content, flags=re.DOTALL)
-        
-        # Read scripts
+
+        original_length = len(content)
+
+        for i, pattern in enumerate(cleanup_patterns):
+            before_length = len(content)
+            content = re.sub(pattern, '', content, flags=re.DOTALL | re.MULTILINE)
+            after_length = len(content)
+            if before_length != after_length:
+                print_info(f"  Pattern {i+1}: Removed {before_length - after_length} characters")
+
+        # Additional targeted cleanup for duplicate end markers
+        # This handles the specific case of duplicate injection end markers
+        duplicate_patterns = [
+            r'// === SLACKPOLISH INJECTION END ===;\s*\n\s*// === SLACKPOLISH INJECTION END ===',
+            r'// === SLACK TEXT IMPROVER INJECTION END ===;\s*\n\s*// === SLACK TEXT IMPROVER INJECTION END ===',
+        ]
+
+        for i, pattern in enumerate(duplicate_patterns):
+            before_length = len(content)
+            content = re.sub(pattern, '// === SLACKPOLISH INJECTION END ===', content, flags=re.DOTALL | re.MULTILINE)
+            after_length = len(content)
+            if before_length != after_length:
+                print_info(f"  Duplicate cleanup {i+1}: Removed {before_length - after_length} characters")
+
+        # Final cleanup - remove excessive whitespace
+        content = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)
+        content = re.sub(r';\s*;+', ';', content)
+
+        total_removed = original_length - len(content)
+        if total_removed > 0:
+            print_success(f"Comprehensive cleanup complete: Removed {total_removed} characters of old code")
+        else:
+            print_info("No old SlackPolish code found to remove")
+
+        # Read config script
         with open(config_path, 'r', encoding='utf-8') as f:
             config_script = f.read()
 
@@ -309,14 +380,49 @@ def inject_scripts(injection_file, config_path, script_path):
             with open("logo-data.js", 'r', encoding='utf-8') as f:
                 logo_script = f.read()
 
-        with open(script_path, 'r', encoding='utf-8') as f:
-            main_script = f.read()
-        
-        # Ensure proper ending
+        # Read the single text improver script
+        text_improver_script = ""
+        if os.path.exists('slack-text-improver.js'):
+            with open('slack-text-improver.js', 'r', encoding='utf-8') as f:
+                text_improver_script = f.read().strip()
+                # Ensure script ends with a semicolon
+                if not text_improver_script.endswith(';'):
+                    text_improver_script += ';'
+
+        # Read the settings script
+        settings_script = ""
+        if os.path.exists('slack-settings.js'):
+            with open('slack-settings.js', 'r', encoding='utf-8') as f:
+                settings_script = f.read().strip()
+                # Ensure script ends with a semicolon
+                if not settings_script.endswith(';'):
+                    settings_script += ';'
+
+        # Read the channel summary script
+        channel_summary_script = ""
+        if os.path.exists('slack-channel-summary.js'):
+            with open('slack-channel-summary.js', 'r', encoding='utf-8') as f:
+                channel_summary_script = f.read().strip()
+                # Ensure script ends with a semicolon
+                if not channel_summary_script.endswith(';'):
+                    channel_summary_script += ';'
+
+        # Ensure config script ends properly
+        config_script = config_script.strip()
+        if not config_script.endswith(';'):
+            config_script += ';'
+
+        # Ensure logo script ends properly
+        if logo_script:
+            logo_script = logo_script.strip()
+            if not logo_script.endswith(';'):
+                logo_script += ';'
+
+        # Ensure proper ending of main content
         if not content.rstrip().endswith(';'):
             content = content.rstrip() + ';\n'
-        
-        # Inject scripts
+
+        # Inject scripts with proper separation
         injection = f"""
 ;
 // === SLACKPOLISH INJECTION START ===
@@ -324,19 +430,26 @@ def inject_scripts(injection_file, config_path, script_path):
 
 {logo_script}
 
-{main_script}
+// === SLACK-TEXT-IMPROVER.JS ===
+{text_improver_script}
+
+// === SLACK-SETTINGS.JS ===
+{settings_script}
+
+// === SLACK-CHANNEL-SUMMARY.JS ===
+{channel_summary_script}
 // === SLACKPOLISH INJECTION END ===
 """
-        
+
         content += injection
-        
+
         # Write back
         with open(injection_file, 'w', encoding='utf-8') as f:
             f.write(content)
-        
+
         print_success("Scripts injected successfully!")
         return True
-        
+
     except Exception as e:
         print_error(f"Error injecting scripts: {e}")
         return False
@@ -397,7 +510,7 @@ def main():
         return 1
     
     # Check required files
-    required_files = ["slack-config.js", "slack-text-improver.js", "logo-data.js"]
+    required_files = ["slack-config.js", "slack-core.js", "slack-settings.js", "slack-channel-summary.js", "logo-data.js"]
     for file in required_files:
         if not os.path.exists(file):
             print_error(f"Required file not found: {file}")
@@ -459,8 +572,8 @@ def main():
         return 1
     
     # Inject scripts
-    print_info("Injecting SlackPolish...")
-    if not inject_scripts(injection_file, "slack-config.js", "slack-text-improver.js"):
+    print_info("Injecting SlackPolish Text Improver...")
+    if not inject_scripts(injection_file, "slack-config.js"):
         print_error("Failed to inject scripts")
         return 1
     
@@ -475,10 +588,9 @@ def main():
     
     print_header("🎉 Installation completed successfully!")
     print("Next steps:")
-    print("1. Edit slack-config.js and add your OpenAI API key")
-    print("2. Restart Slack")
-    print("3. Press Ctrl+Shift in any message field to test")
-    print("4. Press F12 to open settings")
+    print("1. Restart Slack")
+    print("2. Configure your OpenAI API key in SlackPolish settings")
+    print("3. Press Ctrl+Shift in any message field to test text improvement")
     
     return 0
 

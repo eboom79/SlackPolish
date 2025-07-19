@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SlackPolish Settings Menu Mock</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: rgba(0,0,0,0.5);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .settings-menu {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            font-family: Arial, sans-serif;
+            min-width: 300px;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 12px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+
+        .logo-container {
+            background: white;
+            border-radius: 8px;
+            padding: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-right: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #1264a3 0%, #0d5aa7 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 20px;
+        }
+
+        .header-text {
+            flex: 1;
+        }
+
+        .header-title {
+            font-weight: bold;
+            font-size: 18px;
+            color: #2c3e50;
+            margin-bottom: 4px;
+        }
+
+        .header-subtitle {
+            font-size: 13px;
+            color: #6c757d;
+        }
+
+        .dev-mode-indicator {
+            display: none;
+            font-size: 11px;
+            color: #007a5a;
+            font-weight: normal;
+            margin-top: 4px;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: bold;
+            font-size: 13px;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            box-sizing: border-box;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #007a5a;
+            box-shadow: 0 0 0 2px rgba(0, 122, 90, 0.2);
+        }
+
+        .form-help {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .form-help-small {
+            font-size: 11px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        textarea.form-control {
+            height: 60px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .developer-options {
+            display: none;
+            border-top: 1px solid #ddd;
+            margin: 15px 0;
+            padding-top: 15px;
+        }
+
+        .dev-mode-badge {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .dev-mode-badge span {
+            background: #007a5a;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .api-key-container {
+            position: relative;
+        }
+
+        .api-key-toggle {
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 2px;
+        }
+
+        .api-key-actions {
+            display: flex;
+            align-items: center;
+            margin-top: 4px;
+            gap: 8px;
+        }
+
+        .test-btn {
+            padding: 4px 8px;
+            border: 1px solid #007a5a;
+            background: white;
+            color: #007a5a;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+
+        .test-btn:hover {
+            background: #f0f8f5;
+        }
+
+        .api-status {
+            font-size: 11px;
+            color: #666;
+            flex: 1;
+        }
+
+        .checkbox-group {
+            margin-bottom: 6px;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .checkbox-label input[type="checkbox"] {
+            margin-right: 6px;
+        }
+
+        .button-group {
+            text-align: right;
+            margin-top: 15px;
+            position: relative;
+        }
+
+        .dev-trigger {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            opacity: 0;
+            border-radius: 50%;
+            transition: all 0.1s;
+        }
+
+        .dev-trigger:hover {
+            background: #ddd;
+            opacity: 0.2;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            margin-left: 8px;
+        }
+
+        .btn-secondary {
+            border: 1px solid #ddd;
+            background: #f8f8f8;
+            color: #333;
+        }
+
+        .btn-primary {
+            border: none;
+            background: #007a5a;
+            color: white;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .show-dev {
+            display: block !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="settings-menu">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo-container">
+                <div class="logo">SP</div>
+            </div>
+            <div class="header-text">
+                <div class="header-title">SlackPolish Settings</div>
+                <div class="header-subtitle">AI-powered text enhancement for Slack</div>
+                <div class="dev-mode-indicator" id="dev-mode-indicator">
+                    🔧 Developer Mode Active
+                </div>
+            </div>
+        </div>
+
+        <!-- Language Selection -->
+        <div class="form-group">
+            <label class="form-label">🌍 Language:</label>
+            <select class="form-control">
+                <option value="ENGLISH" selected>🇺🇸 English</option>
+                <option value="SPANISH">🇪🇸 Spanish</option>
+                <option value="FRENCH">🇫🇷 French</option>
+                <option value="GERMAN">🇩🇪 German</option>
+                <option value="ITALIAN">🇮🇹 Italian</option>
+                <option value="PORTUGUESE">🇵🇹 Portuguese</option>
+                <option value="DUTCH">🇳🇱 Dutch</option>
+                <option value="JAPANESE">🇯🇵 Japanese</option>
+                <option value="CHINESE">🇨🇳 Chinese</option>
+            </select>
+        </div>
+
+        <!-- Style Selection -->
+        <div class="form-group">
+            <label class="form-label">✨ Style:</label>
+            <select class="form-control">
+                <option value="CASUAL" selected>Casual - Friendly and relaxed tone</option>
+                <option value="PROFESSIONAL">Professional - Business-appropriate language</option>
+                <option value="FORMAL">Formal - Very polite and structured</option>
+                <option value="CONCISE">Concise - Brief and to the point</option>
+                <option value="CREATIVE">Creative - Engaging and expressive</option>
+            </select>
+        </div>
+
+        <!-- Hotkey Selection -->
+        <div class="form-group">
+            <label class="form-label">⌨️ Hotkey:</label>
+            <select class="form-control">
+                <option value="Ctrl+Shift" selected>⌨️ Ctrl+Shift (Default)</option>
+                <option value="Ctrl+Alt">🔀 Ctrl+Alt</option>
+                <option value="Ctrl+Tab">📑 Ctrl+Tab</option>
+            </select>
+            <div class="form-help">
+                Choose your preferred hotkey combination. Settings hotkey (F12) cannot be changed.
+            </div>
+        </div>
+
+        <!-- Personal Style -->
+        <div class="form-group">
+            <label class="form-label">✨ Personal Style:</label>
+            <textarea class="form-control" placeholder="e.g., Use 'Hi' not 'Hey', avoid dashes, British spelling"></textarea>
+            <div class="form-help-small">
+                Personal writing preferences for AI to consider.
+            </div>
+        </div>
+
+        <!-- Developer Options (Hidden by default) -->
+        <div class="developer-options" id="developer-options">
+            <div class="dev-mode-badge">
+                <span>🔧 DEVELOPER MODE</span>
+            </div>
+
+            <!-- API Key Management -->
+            <div class="form-group">
+                <label class="form-label">🔑 OpenAI API Key</label>
+                <div class="api-key-container">
+                    <input type="password" class="form-control" placeholder="sk-..." style="font-family: monospace; padding-right: 35px;">
+                    <button type="button" class="api-key-toggle" title="Show/Hide API key">👁️</button>
+                </div>
+                <div class="api-key-actions">
+                    <button class="test-btn">Test Key</button>
+                    <div class="api-status">
+                        Your OpenAI API key for text improvement. <a href="https://platform.openai.com/api-keys" target="_blank" style="color: #007a5a;">Get one here</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Smart Context Settings -->
+            <div class="form-group">
+                <label class="form-label">🧠 Smart Context</label>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" checked>
+                        <span>Enable (include recent messages)</span>
+                    </label>
+                </div>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox">
+                        <span>Privacy Mode (anonymize names)</span>
+                    </label>
+                </div>
+                <div class="form-help-small">
+                    Includes recent messages for short/ambiguous responses.
+                </div>
+            </div>
+
+            <!-- Debug Mode Settings -->
+            <div class="form-group">
+                <label class="form-label">🔍 Debug Mode</label>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox">
+                        <span>Show debug info</span>
+                    </label>
+                </div>
+                <div class="form-help-small">
+                    Shows green debug boxes for troubleshooting.
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="button-group">
+            <!-- Hidden developer mode trigger -->
+            <div class="dev-trigger" id="dev-trigger" title="Click 10 times to enable developer mode"></div>
+            
+            <button class="btn btn-secondary">Cancel</button>
+            <button class="btn btn-primary">Save</button>
+        </div>
+    </div>
+
+    <script>
+        // Developer mode functionality
+        let clickCount = 0;
+        let clickTimer = null;
+
+        document.getElementById('dev-trigger').addEventListener('click', function() {
+            clickCount++;
+            
+            // Visual feedback
+            this.style.background = '#ddd';
+            this.style.opacity = '0.2';
+            setTimeout(() => {
+                this.style.background = '';
+                this.style.opacity = '0';
+            }, 100);
+
+            // Reset click count after 2 seconds of inactivity
+            if (clickTimer) clearTimeout(clickTimer);
+            clickTimer = setTimeout(() => {
+                clickCount = 0;
+            }, 2000);
+
+            console.log(`Developer mode: ${clickCount}/10 clicks`);
+
+            // Enable developer mode after 10 clicks
+            if (clickCount >= 10) {
+                const devOptions = document.getElementById('developer-options');
+                const devIndicator = document.getElementById('dev-mode-indicator');
+                
+                devOptions.classList.add('show-dev');
+                devIndicator.style.display = 'block';
+                
+                // Show confirmation on trigger
+                this.style.background = '#007a5a';
+                this.style.opacity = '0.3';
+                this.title = 'Developer mode enabled!';
+                
+                // Reset click count
+                clickCount = 0;
+                clearTimeout(clickTimer);
+                
+                console.log('🔧 Developer mode enabled!');
+                
+                // Scroll to developer options
+                devOptions.scrollIntoView({ behavior: 'smooth' });
+            }
+        });
+
+        // API Key toggle functionality
+        document.querySelector('.api-key-toggle').addEventListener('click', function() {
+            const input = document.querySelector('.api-key-container input');
+            const isPassword = input.type === 'password';
+            
+            input.type = isPassword ? 'text' : 'password';
+            this.textContent = isPassword ? '🙈' : '👁️';
+            this.title = isPassword ? 'Hide API key' : 'Show API key';
+        });
+
+        // Test API key functionality
+        document.querySelector('.test-btn').addEventListener('click', function() {
+            const statusDiv = document.querySelector('.api-status');
+            const originalText = this.textContent;
+            
+            this.textContent = 'Testing...';
+            this.disabled = true;
+            statusDiv.textContent = '🔄 Testing API key...';
+            statusDiv.style.color = '#007a5a';
+            
+            // Simulate API test
+            setTimeout(() => {
+                statusDiv.innerHTML = '✅ API key is working!';
+                statusDiv.style.color = '#28a745';
+                this.textContent = originalText;
+                this.disabled = false;
+            }, 2000);
+        });
+    </script>
+</body>
+</html>

@@ -4,6 +4,14 @@
 try {
 window.SLACKPOLISH_CONFIG = {
     // ========================================
+    // VERSION INFORMATION
+    // ========================================
+    VERSION: "1.0.52",
+    BUILD: 52,
+    BUILD_DATE: "2025-07-19",
+    DESCRIPTION: "Settings: added version and build number display in settings menu header",
+
+    // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
     // ========================================
     // Set to true to force reset all saved settings to defaults
@@ -19,12 +27,20 @@ window.SLACKPOLISH_CONFIG = {
     RESET_API_KEY_VERSION: 'install-1752747170',
 
     // ========================================
-    // REQUIRED: OpenAI API Configuration
+    // OpenAI API Configuration
     // ========================================
-    OPENAI_API_KEY:'',
-    OPENAI_MODEL: 'gpt-3.5-turbo',  // Can be changed to 'gpt-4', 'gpt-4-turbo', etc.
-    OPENAI_MAX_TOKENS: 500,         // Maximum tokens for responses
+    // NOTE: API key is stored in localStorage, not here for security
+    OPENAI_MODEL: 'gpt-4-turbo',     // High-quality model for better summaries (was: gpt-3.5-turbo)
+    OPENAI_MAX_TOKENS: 500,         // Maximum tokens for text improvement responses
     OPENAI_TEMPERATURE: 0.7,        // Creativity level (0.0 = deterministic, 1.0 = creative)
+
+    // ========================================
+    // CHANNEL SUMMARY TOKEN LIMITS
+    // ========================================
+    // Token limits respecting model constraints (max 4096 completion tokens)
+    EXECUTIVE_SUMMARY_MAX_TOKENS: 2000,      // Executive Summary: concise but complete
+    COMPREHENSIVE_SUMMARY_MAX_TOKENS: 4000,  // Comprehensive Summary: detailed analysis
+    DEFAULT_SUMMARY_MAX_TOKENS: 3000,        // Default/fallback for summaries
 
     // ========================================
     // DEFAULT SETTINGS
@@ -156,19 +172,14 @@ window.SLACKPOLISH_CONFIG = {
         // Summary level options
         LEVEL_OPTIONS: {
             'short': {
-                label: 'Short',
-                description: 'Key points and decisions (1-2 paragraphs)',
-                maxTokens: 500
-            },
-            'medium': {
-                label: 'Medium',
-                description: 'Main topics, decisions, and action items (3-5 paragraphs)',
-                maxTokens: 1000
+                label: 'Executive Summary',
+                description: 'Structured bullet points with key topics and decisions',
+                maxTokens: 3000  // Increased for complete executive summaries
             },
             'comprehensive': {
-                label: 'Comprehensive',
-                description: 'Detailed breakdown with participants and timeline (1-2 pages)',
-                maxTokens: 2000
+                label: 'Comprehensive Summary',
+                description: 'Detailed analysis with participants, context, and timeline',
+                maxTokens: 8000  // Significantly increased for thorough analysis
             }
         }
     }

@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SlackPolish Channel Summary - Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        .logo {
+            width: 48px;
+            height: 48px;
+            margin-right: 16px;
+            background: #1264a3;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .title {
+            flex: 1;
+        }
+        .title h1 {
+            margin: 0;
+            color: #1264a3;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+        .demo-section {
+            margin-bottom: 32px;
+        }
+        .demo-section h2 {
+            color: #333;
+            font-size: 20px;
+            margin-bottom: 16px;
+            border-left: 4px solid #1264a3;
+            padding-left: 12px;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+        .feature-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #1264a3;
+        }
+        .feature-card h3 {
+            margin: 0 0 12px 0;
+            color: #1264a3;
+            font-size: 16px;
+        }
+        .feature-card p {
+            margin: 0;
+            color: #666;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .usage-steps {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+        }
+        .usage-steps h3 {
+            margin: 0 0 16px 0;
+            color: #1264a3;
+        }
+        .usage-steps ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .usage-steps li {
+            margin-bottom: 8px;
+            color: #333;
+        }
+        .demo-window {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+        .demo-window-header {
+            background: #f5f5f5;
+            padding: 8px 16px;
+            border-bottom: 1px solid #ddd;
+            font-size: 12px;
+            color: #666;
+        }
+        .demo-window-content {
+            padding: 20px;
+            background: white;
+        }
+        .controls-demo {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .control-group label {
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #333;
+            font-size: 14px;
+        }
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .radio-option {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .radio-option:hover {
+            background: rgba(18, 100, 163, 0.1);
+        }
+        .radio-option input[type="radio"] {
+            margin-right: 8px;
+        }
+        .summarize-btn {
+            grid-column: 1 / -1;
+            justify-self: center;
+            background: linear-gradient(135deg, #1264a3 0%, #0d4f73 100%);
+            color: white;
+            border: none;
+            padding: 12px 32px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 16px;
+        }
+        .summarize-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(18, 100, 163, 0.3);
+        }
+        .summary-example {
+            background: #fafafa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        .highlight {
+            background: #fff3cd;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">SP</div>
+            <div class="title">
+                <h1>SlackPolish Channel Summary</h1>
+                <div class="subtitle">AI-Powered Channel Summarization Demo</div>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>🚀 New Feature: Channel Summarization</h2>
+            <p>SlackPolish now includes powerful channel summarization capabilities, allowing Redis Enterprise team members to quickly understand channel conversations with AI-generated summaries.</p>
+        </div>
+
+        <div class="demo-section">
+            <h2>✨ Key Features</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3>🎯 Smart Time Ranges</h3>
+                    <p>Choose from Last 24 hours, 7 days, 30 days, or entire channel history</p>
+                </div>
+                <div class="feature-card">
+                    <h3>📊 Multiple Summary Levels</h3>
+                    <p>Short, Medium, or Comprehensive summaries based on your needs</p>
+                </div>
+                <div class="feature-card">
+                    <h3>⚡ F10 Hotkey</h3>
+                    <p>Quick access with F10 key from any channel or conversation</p>
+                </div>
+                <div class="feature-card">
+                    <h3>💾 Smart Preferences</h3>
+                    <p>Remembers your preferred settings for future use</p>
+                </div>
+                <div class="feature-card">
+                    <h3>📋 Copy-Friendly</h3>
+                    <p>Non-editable but fully copyable summary text</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🎨 Professional UI</h3>
+                    <p>Clean, branded interface with SlackPolish styling</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>📖 How to Use</h2>
+            <div class="usage-steps">
+                <h3>Simple 4-Step Process:</h3>
+                <ol>
+                    <li>Navigate to any Slack channel or conversation</li>
+                    <li>Press <span class="highlight">F10</span> to open the summary window</li>
+                    <li>Select your preferred time range and summary level</li>
+                    <li>Click "Summarize" and get your AI-generated summary!</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>🖥️ Summary Window Interface</h2>
+            <div class="demo-window">
+                <div class="demo-window-header">SlackPolish Summary Window</div>
+                <div class="demo-window-content">
+                    <div class="controls-demo">
+                        <div class="control-group">
+                            <label>Summary Depth:</label>
+                            <div class="radio-group">
+                                <div class="radio-option">
+                                    <input type="radio" name="depth" value="last24hours" checked>
+                                    <label>Last 24 hours</label>
+                                </div>
+                                <div class="radio-option">
+                                    <input type="radio" name="depth" value="last7days">
+                                    <label>Last 7 days</label>
+                                </div>
+                                <div class="radio-option">
+                                    <input type="radio" name="depth" value="last30days">
+                                    <label>Last 30 days</label>
+                                </div>
+                                <div class="radio-option">
+                                    <input type="radio" name="depth" value="entirechannel">
+                                    <label>Entire channel</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label>Summary Level:</label>
+                            <div class="radio-group">
+                                <div class="radio-option">
+                                    <input type="radio" name="level" value="short" checked>
+                                    <label>Short</label>
+                                </div>
+                                <div class="radio-option">
+                                    <input type="radio" name="level" value="medium">
+                                    <label>Medium</label>
+                                </div>
+                                <div class="radio-option">
+                                    <input type="radio" name="level" value="comprehensive">
+                                    <label>Comprehensive</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button class="summarize-btn">Summarize</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>📝 Example Summary Output</h2>
+            <div class="summary-example">## Key Discussion Points
+• Redis Enterprise v7.2 deployment planning discussed
+• Q3 performance optimization initiatives outlined  
+• Team onboarding process improvements proposed
+
+## Important Decisions
+• Approved migration to new infrastructure (July 15)
+• Weekly team sync moved to Tuesdays at 10 AM
+• New documentation standards adopted
+
+## Action Items
+• @john: Update deployment docs by July 20
+• @sarah: Schedule infrastructure review meeting
+• @mike: Prepare performance benchmarks
+
+## Active Participants
+Most active: @john (12 messages), @sarah (8 messages), @mike (6 messages)</div>
+        </div>
+
+        <div class="demo-section">
+            <h2>🎯 Perfect for Redis Enterprise Teams</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3>📚 Onboarding</h3>
+                    <p>New team members can quickly catch up on channel history</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🤝 Meeting Prep</h3>
+                    <p>Generate summaries before team meetings for better context</p>
+                </div>
+                <div class="feature-card">
+                    <h3>📖 Documentation</h3>
+                    <p>Create channel summaries for project documentation</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🔄 Knowledge Transfer</h3>
+                    <p>Preserve important discussions and decisions</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>🔧 Technical Details</h2>
+            <p><strong>Hotkey:</strong> F10 (configurable in settings)<br>
+            <strong>AI Model:</strong> OpenAI GPT-3.5-turbo<br>
+            <strong>Preferences:</strong> Automatically saved and restored<br>
+            <strong>Integration:</strong> Seamlessly integrated with existing SlackPolish features</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -36,6 +36,10 @@ function assert(condition, message) {
 const scriptPath = path.join(__dirname, '../../slack-text-improver.js');
 const scriptContent = fs.readFileSync(scriptPath, 'utf8');
 
+// Load channel summary script for testing
+const channelSummaryPath = path.join(__dirname, '../../slack-channel-summary.js');
+const channelSummaryContent = fs.readFileSync(channelSummaryPath, 'utf8');
+
 // Load config for testing
 const configPath = path.join(__dirname, '../../slack-config.js');
 const configContent = fs.readFileSync(configPath, 'utf8');
@@ -45,18 +49,18 @@ console.log('=====================================\n');
 
 // Test 1: Channel Summary Configuration Exists
 runTest('Channel Summary Configuration Exists', () => {
-    assert(configContent.includes('CHANNEL_SUMMARY'), 'CHANNEL_SUMMARY configuration not found');
-    assert(configContent.includes('HOTKEY: \'F10\''), 'Default F10 hotkey not configured');
-    assert(configContent.includes('DEFAULT_DEPTH: \'last24hours\''), 'Default depth not configured');
-    assert(configContent.includes('DEFAULT_LEVEL: \'short\''), 'Default level not configured');
+    assert(channelSummaryContent.includes('SlackChannelSummary'), 'SlackChannelSummary object not found');
+    assert(channelSummaryContent.includes('F10'), 'F10 hotkey not configured');
+    assert(channelSummaryContent.includes('Channel Summary'), 'Channel Summary functionality not found');
+    assert(channelSummaryContent.includes('Executive Summary'), 'Executive Summary option not found');
 });
 
-// Test 2: Channel Summary Class Definition
+// Test 2: Channel Summary Object Definition
 runTest('ChannelSummarizer Class Definition', () => {
-    assert(scriptContent.includes('class ChannelSummarizer'), 'ChannelSummarizer class not found');
-    assert(scriptContent.includes('constructor()'), 'ChannelSummarizer constructor not found');
-    assert(scriptContent.includes('loadPreferences()'), 'loadPreferences method not found');
-    assert(scriptContent.includes('savePreferences()'), 'savePreferences method not found');
+    assert(channelSummaryContent.includes('const SlackChannelSummary'), 'SlackChannelSummary object not found');
+    assert(channelSummaryContent.includes('loadSettings'), 'loadSettings method not found');
+    assert(channelSummaryContent.includes('showChannelSummary'), 'showChannelSummary method not found');
+    assert(channelSummaryContent.includes('createLogo'), 'createLogo method not found');
 });
 
 // Test 3: Summary Window Creation

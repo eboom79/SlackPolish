@@ -1,0 +1,141 @@
+SlackPolish TODO - Unused Configuration Parameters & Feature Improvements
+==============================================================================
+
+📋 OVERVIEW
+-----------
+This file tracks unused configuration parameters from slack-config.js and 
+recommendations for implementing them to enhance SlackPolish functionality.
+
+🔥 HIGH PRIORITY - Add to Settings Menu
+=======================================
+
+1. 🧠 Smart Context Max Messages
+   - Current: Hardcoded to 5 messages
+   - Config: smartContext.maxMessages = 5 (unused)
+   - Implementation: Add dropdown in settings menu
+   - Options: 3, 5, 10, 15 messages
+   - Impact: Let users control context size
+
+2. 🤖 OpenAI Temperature Control
+   - Current: Not configurable
+   - Config: OPENAI_TEMPERATURE = 0.7 (unused)
+   - Implementation: Add slider in developer mode
+   - Range: 0.1 (deterministic) to 1.0 (creative)
+   - Impact: Control AI creativity level
+
+3. 🎯 OpenAI Max Tokens Control
+   - Current: Not configurable
+   - Config: OPENAI_MAX_TOKENS = 500 (unused)
+   - Implementation: Add slider in developer mode
+   - Range: 100-1000 tokens
+   - Impact: Control response length
+
+⚡ MEDIUM PRIORITY - Implement in Code Logic
+===========================================
+
+4. 📏 Smart Context Message Length Filter
+   - Current: No filtering by message length
+   - Config: smartContext.minMessageLength = 3 (unused)
+   - Implementation: Filter out very short messages in getSmartContext()
+   - Logic: Skip messages shorter than configured length
+   - Impact: Better context quality
+
+5. ⏰ Smart Context Age Filter
+   - Current: No age-based filtering
+   - Config: smartContext.maxContextAge = 24 hours (unused)
+   - Implementation: Filter messages by timestamp in getSmartContext()
+   - Logic: Only include messages within configured time window
+   - Impact: More relevant context
+
+6. 🧵 Thread Context Inclusion
+   - Current: No thread parent message inclusion
+   - Config: smartContext.includeThreadContext = true (unused)
+   - Implementation: Include parent messages when in thread replies
+   - Logic: Fetch thread parent for better context understanding
+   - Impact: Better context in threaded conversations
+
+🚀 FUTURE FEATURES - Major Implementations
+==========================================
+
+7. 📊 Channel Summary Feature (Complete Implementation)
+   - Current: Fully configured but not implemented
+   - Config: Entire CHANNEL_SUMMARY section (unused)
+   - Components needed:
+     * F10 hotkey handler
+     * Summary window UI
+     * Time range selection (24h, 7d, 30d, entire channel)
+     * Summary level selection (Executive, Comprehensive)
+     * Message fetching and processing
+     * OpenAI summarization
+   - Impact: Major new feature for channel analysis
+
+8. 🎨 Advanced Smart Context Settings Panel
+   - Current: Basic enabled/privacy mode only
+   - Implementation: Dedicated Smart Context settings section
+   - Features:
+     * Message count slider
+     * Age filter dropdown
+     * Thread context toggle
+     * Message length filter
+     * Preview of context that would be included
+   - Impact: Granular control over Smart Context behavior
+
+📝 IMPLEMENTATION DETAILS
+========================
+
+Settings Menu Additions (High Priority):
+----------------------------------------
+- Add "Advanced" section in developer mode
+- Smart Context Max Messages: Dropdown (3, 5, 10, 15)
+- OpenAI Temperature: Slider with labels (Conservative → Creative)
+- OpenAI Max Tokens: Slider with labels (Brief → Detailed)
+
+Code Logic Improvements (Medium Priority):
+------------------------------------------
+- Modify getSmartContext() to use configurable parameters
+- Add message filtering by length and age
+- Implement thread parent message inclusion
+- Update prompt building to respect token limits
+
+Future Feature Planning:
+-----------------------
+- Channel Summary: Separate module with UI components
+- Advanced Smart Context: Enhanced settings panel
+- Performance optimization for large message histories
+- User preference persistence and sync
+
+🔧 TECHNICAL NOTES
+==================
+
+Configuration Usage Status:
+---------------------------
+✅ USED: smartContext.enabled, smartContext.privacyMode
+❌ UNUSED: smartContext.maxMessages, minMessageLength, maxContextAge, includeThreadContext
+❌ UNUSED: OPENAI_MAX_TOKENS, OPENAI_TEMPERATURE
+❌ UNUSED: All CHANNEL_SUMMARY settings
+❌ UNUSED: All summary token limit settings
+
+Files to Modify:
+----------------
+- slack-settings.js: Add new UI controls
+- slack-text-improver.js: Implement parameter usage
+- slack-config.js: Potentially add new parameters
+
+Testing Requirements:
+--------------------
+- Test Smart Context with different message counts
+- Verify OpenAI parameter changes affect responses
+- Test message filtering logic
+- Validate settings persistence
+
+🎯 NEXT STEPS
+=============
+
+1. Implement Smart Context Max Messages (easiest win)
+2. Add OpenAI Temperature/Token controls to developer mode
+3. Implement message filtering logic
+4. Plan Channel Summary feature architecture
+5. Create advanced Smart Context settings panel
+
+Priority Order: High → Medium → Future Features
+Focus: User-requested features and configuration completeness
