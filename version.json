@@ -1,8 +1,8 @@
 {
     "major": 1,
     "minor": 0,
-    "build": 52,
-    "version_string": "1.0.52",
-    "description": "Settings: added version and build number display in settings menu header",
+    "build": 81,
+    "version_string": "1.0.81",
+    "description": "Code changes",
     "date": "2025-07-19"
 }

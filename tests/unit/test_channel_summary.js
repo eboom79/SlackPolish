@@ -63,104 +63,105 @@ runTest('ChannelSummarizer Class Definition', () => {
     assert(channelSummaryContent.includes('createLogo'), 'createLogo method not found');
 });
 
-// Test 3: Summary Window Creation
-runTest('Summary Window Creation Methods', () => {
-    assert(scriptContent.includes('openSummaryWindow()'), 'openSummaryWindow method not found');
-    assert(scriptContent.includes('createSummaryWindowContent'), 'createSummaryWindowContent method not found');
-    assert(scriptContent.includes('generateSummaryHTML'), 'generateSummaryHTML method not found');
+// Test 3: Channel Summary Methods
+runTest('Channel Summary Core Methods', () => {
+    assert(channelSummaryContent.includes('generateChannelSummary'), 'generateChannelSummary method not found');
+    assert(channelSummaryContent.includes('calculateDateRange'), 'calculateDateRange method not found');
+    assert(channelSummaryContent.includes('formatMessagesForDisplay'), 'formatMessagesForDisplay method not found');
+    assert(channelSummaryContent.includes('parseMessageTimestamp'), 'parseMessageTimestamp method not found');
 });
 
-// Test 4: Message Processing Methods
-runTest('Message Processing Methods', () => {
-    assert(scriptContent.includes('fetchChannelMessages'), 'fetchChannelMessages method not found');
-    assert(scriptContent.includes('extractMessagesFromDOM'), 'extractMessagesFromDOM method not found');
-    assert(scriptContent.includes('extractMessageTimestamp'), 'extractMessageTimestamp method not found');
-    assert(scriptContent.includes('extractMessageAuthor'), 'extractMessageAuthor method not found');
+// Test 4: Global DOM Module Integration
+runTest('Global DOM Module Integration', () => {
+    assert(channelSummaryContent.includes('window.SlackPolishChannelMessages'), 'SlackPolishChannelMessages integration not found');
+    assert(channelSummaryContent.includes('fetchChannelMessages'), 'fetchChannelMessages call not found');
+    assert(channelSummaryContent.includes('getMessagesInRange'), 'getMessagesInRange call not found');
+    assert(channelSummaryContent.includes('getAllMessages: true'), 'getAllMessages option not found');
 });
 
-// Test 5: AI Integration Methods
-runTest('AI Integration Methods', () => {
-    assert(scriptContent.includes('generateAISummary'), 'generateAISummary method not found');
-    assert(scriptContent.includes('createSummaryPrompt'), 'createSummaryPrompt method not found');
-    assert(scriptContent.includes('callOpenAI'), 'callOpenAI method not found');
+// Test 5: Time Range Processing
+runTest('Time Range Processing', () => {
+    assert(channelSummaryContent.includes('24 * 60 * 60 * 1000'), '24 hour calculation not found');
+    assert(channelSummaryContent.includes('7 * 24 * 60 * 60 * 1000'), '7 day calculation not found');
+    assert(channelSummaryContent.includes('30 * 24 * 60 * 60 * 1000'), '30 day calculation not found');
+    assert(channelSummaryContent.includes('new Date(0)'), 'Entire channel date handling not found');
 });
 
-// Test 6: Hotkey Handler Integration
-runTest('F10 Hotkey Handler Integration', () => {
-    assert(scriptContent.includes('handleChannelSummaryHotkey'), 'Channel summary hotkey handler not found');
-    assert(scriptContent.includes('addEventListener(\'keydown\', handleChannelSummaryHotkey'), 'Hotkey handler not registered');
-    assert(scriptContent.includes('event.key === summaryHotkey'), 'Hotkey detection logic not found');
+// Test 6: Error Handling and Loading States
+runTest('Error Handling and Loading States', () => {
+    assert(channelSummaryContent.includes('try {'), 'Error handling try blocks not found');
+    assert(channelSummaryContent.includes('catch (error)'), 'Error handling catch blocks not found');
+    assert(channelSummaryContent.includes('generateBtn.disabled = true'), 'Loading state button disable not found');
+    assert(channelSummaryContent.includes('⏳ Fetching Messages'), 'Loading message not found');
 });
 
-// Test 7: Summary Depth Options
-runTest('Summary Depth Options Configuration', () => {
-    assert(configContent.includes('DEPTH_OPTIONS'), 'DEPTH_OPTIONS not configured');
-    assert(configContent.includes('last24hours'), 'last24hours option not found');
-    assert(configContent.includes('last7days'), 'last7days option not found');
-    assert(configContent.includes('last30days'), 'last30days option not found');
-    assert(configContent.includes('entirechannel'), 'entirechannel option not found');
+// Test 7: Time Range Options
+runTest('Time Range Options in UI', () => {
+    assert(channelSummaryContent.includes('24 hours'), '24 hours option not found');
+    assert(channelSummaryContent.includes('7 days'), '7 days option not found');
+    assert(channelSummaryContent.includes('30 days'), '30 days option not found');
+    assert(channelSummaryContent.includes('Entire channel'), 'Entire channel option not found');
 });
 
-// Test 8: Summary Level Options
-runTest('Summary Level Options Configuration', () => {
-    assert(configContent.includes('LEVEL_OPTIONS'), 'LEVEL_OPTIONS not configured');
-    assert(configContent.includes('short'), 'short level option not found');
-    assert(configContent.includes('medium'), 'medium level option not found');
-    assert(configContent.includes('comprehensive'), 'comprehensive level option not found');
-    assert(configContent.includes('maxTokens'), 'maxTokens configuration not found');
+// Test 8: Message Formatting
+runTest('Message Formatting Functions', () => {
+    assert(channelSummaryContent.includes('getTimeRangeText'), 'getTimeRangeText method not found');
+    assert(channelSummaryContent.includes('No messages found'), 'No messages handling not found');
+    assert(channelSummaryContent.includes('Total Messages:'), 'Message count display not found');
+    assert(channelSummaryContent.includes('Generated:'), 'Generation timestamp not found');
 });
 
 // Test 9: HTML Template Generation
 runTest('HTML Template Generation', () => {
-    assert(scriptContent.includes('SlackPolish Summary'), 'Summary window title not found');
-    assert(scriptContent.includes('Summary Depth:'), 'Summary depth UI not found');
-    assert(scriptContent.includes('Summary Level:'), 'Summary level UI not found');
-    assert(scriptContent.includes('Summarize'), 'Summarize button not found');
+    assert(channelSummaryContent.includes('SlackPolish Channel Summary'), 'Summary window title not found');
+    assert(channelSummaryContent.includes('Time Range:'), 'Time range UI not found');
+    assert(channelSummaryContent.includes('Summary Level:'), 'Summary level UI not found');
+    assert(channelSummaryContent.includes('Generate Summary'), 'Generate Summary button not found');
 });
 
-// Test 10: Error Handling
+// Test 10: Error Handling Implementation
 runTest('Error Handling Implementation', () => {
-    assert(scriptContent.includes('try {'), 'Error handling try blocks not found');
-    assert(scriptContent.includes('catch (error)'), 'Error handling catch blocks not found');
-    assert(scriptContent.includes('throw new Error'), 'Error throwing not implemented');
-    assert(scriptContent.includes('console.error'), 'Error logging not implemented');
+    assert(channelSummaryContent.includes('try {'), 'Error handling try blocks not found');
+    assert(channelSummaryContent.includes('catch (error)'), 'Error handling catch blocks not found');
+    assert(channelSummaryContent.includes('Error fetching messages'), 'Error message handling not implemented');
+    assert(channelSummaryContent.includes('utils.debug'), 'Debug logging not implemented');
 });
 
-// Test 11: Preferences Persistence
-runTest('Preferences Persistence', () => {
-    assert(scriptContent.includes('localStorage.setItem'), 'Preferences saving not implemented');
-    assert(scriptContent.includes('localStorage.getItem'), 'Preferences loading not implemented');
-    assert(scriptContent.includes('slackpolish_summary_preferences'), 'Preferences key not defined');
+// Test 11: Settings Integration
+runTest('Settings Integration', () => {
+    assert(channelSummaryContent.includes('loadSettings'), 'Settings loading not implemented');
+    assert(channelSummaryContent.includes('localStorage.getItem'), 'LocalStorage access not implemented');
+    assert(channelSummaryContent.includes('slackpolish_settings'), 'Settings key not defined');
 });
 
-// Test 12: Integration with Main Script
-runTest('Integration with Main Script', () => {
-    assert(scriptContent.includes('window.channelSummarizer'), 'Global channelSummarizer not found');
-    assert(scriptContent.includes('new ChannelSummarizer()'), 'ChannelSummarizer instantiation not found');
-    assert(scriptContent.includes('Press F10 to open channel summary'), 'F10 usage instruction not found');
+// Test 12: Global Module Integration
+runTest('Global Module Integration', () => {
+    assert(scriptContent.includes('window.SlackPolishChannelMessages'), 'Global channel messages module not found');
+    assert(scriptContent.includes('initializeGlobalChannelMessagesSystem'), 'Channel messages system initialization not found');
+    assert(scriptContent.includes('getCurrentChannelId'), 'Channel ID extraction not found');
 });
 
-// Test 13: OpenAI API Integration
-runTest('OpenAI API Integration', () => {
-    assert(scriptContent.includes('https://api.openai.com/v1/chat/completions'), 'OpenAI API endpoint not found');
-    assert(scriptContent.includes('gpt-3.5-turbo'), 'GPT model not specified');
-    assert(scriptContent.includes('Authorization'), 'API authorization not implemented');
-    assert(scriptContent.includes('Bearer'), 'Bearer token not used');
+// Test 13: Message Processing Integration
+runTest('Message Processing Integration', () => {
+    assert(scriptContent.includes('extractMessagesFromDOM'), 'DOM message extraction not found');
+    assert(scriptContent.includes('getRecentMessages'), 'Recent messages method not found');
+    assert(scriptContent.includes('getMessagesInRange'), 'Message range method not found');
+    assert(scriptContent.includes('includeThreads'), 'Thread inclusion not found');
 });
 
 // Test 14: UI Styling and Layout
 runTest('UI Styling and Layout', () => {
-    assert(scriptContent.includes('font-family:'), 'CSS styling not found');
-    assert(scriptContent.includes('background: linear-gradient'), 'Gradient background not found');
-    assert(scriptContent.includes('border-radius:'), 'Border radius styling not found');
-    assert(scriptContent.includes('.summarize-btn'), 'Summarize button styling not found');
+    assert(channelSummaryContent.includes('font-family:'), 'CSS styling not found');
+    assert(channelSummaryContent.includes('border-radius:'), 'Border radius styling not found');
+    assert(channelSummaryContent.includes('padding:'), 'Padding styling not found');
+    assert(channelSummaryContent.includes('background:'), 'Background styling not found');
 });
 
-// Test 15: Channel Information Extraction
-runTest('Channel Information Extraction', () => {
-    assert(scriptContent.includes('getCurrentChannelInfo'), 'getCurrentChannelInfo method not found');
-    assert(scriptContent.includes('data-qa="channel_header"'), 'Channel header detection not implemented');
-    assert(scriptContent.includes('extractChannelId'), 'extractChannelId method not found');
+// Test 15: Timestamp Processing
+runTest('Timestamp Processing', () => {
+    assert(channelSummaryContent.includes('parseMessageTimestamp'), 'Timestamp parsing method not found');
+    assert(channelSummaryContent.includes('toLocaleString'), 'Date formatting not found');
+    assert(channelSummaryContent.includes('getTime()'), 'Time extraction not found');
 });
 
 console.log('\n=====================================');

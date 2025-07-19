@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.0.52",
-    BUILD: 52,
+    VERSION: "1.0.81",
+    BUILD: 81,
     BUILD_DATE: "2025-07-19",
-    DESCRIPTION: "Settings: added version and build number display in settings menu header",
+    DESCRIPTION: "Code changes",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)

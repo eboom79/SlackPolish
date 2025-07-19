@@ -1519,13 +1519,17 @@ Requirements:
                         reply_count: 0
                     };
 
-                    // Get timestamp - improved selectors for DMs
+                    // Get timestamp - enhanced selectors for current Slack DOM
                     const timestampSelectors = [
                         '[data-ts]',
                         '.c-timestamp',
                         '[data-qa="message_timestamp"]',
                         '.c-message__timestamp',
-                        'time'
+                        'time',
+                        '[datetime]',
+                        '.c-message_kit__timestamp',
+                        '.p-message_pane__message__timestamp',
+                        '.c-message_attachment__timestamp'
                     ];
 
                     for (const selector of timestampSelectors) {
@@ -1536,10 +1540,51 @@ Requirements:
                                 // Convert datetime to timestamp
                                 ts = (new Date(timestampElement.getAttribute('datetime')).getTime() / 1000).toString();
                             }
+                            if (!ts && timestampElement.textContent) {
+                                // Try to parse text content as time
+                                const timeText = timestampElement.textContent.trim();
+                                const timeMatch = timeText.match(/(\d{1,2}:\d{2}\s*(?:AM|PM))/i);
+                                if (timeMatch) {
+                                    const today = new Date();
+                                    const [time, period] = timeMatch[1].split(/\s*(AM|PM)/i);
+                                    const [hours, minutes] = time.split(':').map(Number);
+
+                                    let hour24 = hours;
+                                    if (period && period.toUpperCase() === 'PM' && hours !== 12) {
+                                        hour24 += 12;
+                                    } else if (period && period.toUpperCase() === 'AM' && hours === 12) {
+                                        hour24 = 0;
+                                    }
+
+                                    const timestamp = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hour24, minutes);
+                                    ts = (timestamp.getTime() / 1000).toString();
+                                }
+                            }
                             if (ts) {
                                 messageData.timestamp = new Date(parseFloat(ts) * 1000).toISOString();
                                 break;
                             }
+                        }
+                    }
+
+                    // If still no timestamp, try to extract from element's text content (fallback for DMs)
+                    if (!messageData.timestamp) {
+                        const textContent = element.textContent || '';
+                        const timeMatch = textContent.match(/(\d{1,2}:\d{2}\s*(?:AM|PM))/i);
+                        if (timeMatch) {
+                            const today = new Date();
+                            const [time, period] = timeMatch[1].split(/\s*(AM|PM)/i);
+                            const [hours, minutes] = time.split(':').map(Number);
+
+                            let hour24 = hours;
+                            if (period && period.toUpperCase() === 'PM' && hours !== 12) {
+                                hour24 += 12;
+                            } else if (period && period.toUpperCase() === 'AM' && hours === 12) {
+                                hour24 = 0;
+                            }
+
+                            const timestamp = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hour24, minutes);
+                            messageData.timestamp = timestamp.toISOString();
                         }
                     }
 
@@ -1559,6 +1604,22 @@ Requirements:
                         if (userEl && userEl.textContent.trim()) {
                             messageData.user = userEl.textContent.trim();
                             break;
+                        }
+                    }
+
+                    // If no user found, try to extract from text content (fallback for DMs)
+                    if (!messageData.user) {
+                        const textContent = element.textContent || '';
+                        // Look for patterns like "Eyal Boumgarten (you)" or "John Smith"
+                        const userMatch = textContent.match(/^([^0-9]+?)(?:\s*\(you\))?\s*\d{1,2}:\d{2}/);
+                        if (userMatch) {
+                            messageData.user = userMatch[1].trim();
+                        } else {
+                            // Try to find any name-like pattern at the beginning
+                            const nameMatch = textContent.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
+                            if (nameMatch) {
+                                messageData.user = nameMatch[1].trim();
+                            }
                         }
                     }
 
