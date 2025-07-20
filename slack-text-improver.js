@@ -14,6 +14,7 @@
         CUSTOM_INSTRUCTIONS: '',
         HOTKEY: 'Ctrl+Shift',
         DEBUG_MODE: false,
+        ADD_EMOJI_SIGNATURE: false,
         SMART_CONTEXT: {
             enabled: true,
             privacyMode: false
@@ -92,6 +93,7 @@
                 CONFIG.CUSTOM_INSTRUCTIONS = settings.customInstructions || settings.personalPolish || CONFIG.CUSTOM_INSTRUCTIONS;
                 CONFIG.HOTKEY = settings.improveHotkey || CONFIG.HOTKEY;
                 CONFIG.DEBUG_MODE = typeof settings.debugMode === 'boolean' ? settings.debugMode : CONFIG.DEBUG_MODE;
+                CONFIG.ADD_EMOJI_SIGNATURE = typeof settings.addEmojiSignature === 'boolean' ? settings.addEmojiSignature : false;
 
                 utils.log('Settings loaded from localStorage');
 
@@ -252,6 +254,16 @@
 
                 if (response && response.trim()) {
                     utils.log('Text improvement completed successfully');
+
+                    // EMERGENCY DEBUG: Log what we're about to return
+                    console.log('🚨 DEBUG: About to return response:', {
+                        responseLength: response.trim().length,
+                        responsePreview: response.trim().substring(0, 100) + '...',
+                        originalText: originalText,
+                        promptLength: prompt.length,
+                        promptPreview: prompt.substring(0, 100) + '...'
+                    });
+
                     utils.debug('Text improvement successful', {
                         originalLength: originalText.length,
                         improvedLength: response.trim().length,
@@ -643,12 +655,30 @@ Requirements:
             const improvedText = await textImprover.improveText(originalText);
 
             if (improvedText) {
+                // Add emoji signature if enabled
+                let finalText = improvedText;
+                if (CONFIG.ADD_EMOJI_SIGNATURE) {
+                    finalText = improvedText + ' :slack_polish:';
+                }
+
+                // EMERGENCY DEBUG: Log what we're about to paste
+                console.log('🚨 DEBUG: About to paste to Slack:', {
+                    originalText: originalText,
+                    improvedText: improvedText,
+                    finalText: finalText,
+                    finalTextLength: finalText.length,
+                    finalTextPreview: finalText.substring(0, 200) + (finalText.length > 200 ? '...' : ''),
+                    emojiSignatureEnabled: CONFIG.ADD_EMOJI_SIGNATURE || false
+                });
+
                 utils.debug('Setting improved text', {
                     originalText,
                     improvedText,
-                    lengthChange: improvedText.length - originalText.length
+                    finalText,
+                    emojiSignatureEnabled: CONFIG.ADD_EMOJI_SIGNATURE || false,
+                    lengthChange: finalText.length - originalText.length
                 });
-                utils.setTextInElement(messageInput, improvedText);
+                utils.setTextInElement(messageInput, finalText);
             } else {
                 utils.debug('No improved text received', { improvedText });
             }

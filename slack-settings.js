@@ -39,7 +39,8 @@
                 privacyMode: false
             },
             debugMode: false,
-            apiKey: ''
+            apiKey: '',
+            addEmojiSignature: false
         },
 
         // Load settings from localStorage
@@ -348,6 +349,20 @@
                                     Shows green debug boxes for troubleshooting.
                                 </div>
                             </div>
+
+                            <!-- Emoji Signature Settings -->
+                            <div style="margin-bottom: 12px;">
+                                <label style="display: block; margin-bottom: 4px; font-weight: bold; font-size: 13px;">✨ Emoji Signature</label>
+                                <div style="margin-bottom: 6px;">
+                                    <label style="display: flex; align-items: center; cursor: pointer; font-size: 13px;">
+                                        <input type="checkbox" id="emoji-signature" ${currentSettings.addEmojiSignature ? 'checked' : ''} style="margin-right: 6px;">
+                                        <span>Add :slack_polish: emoji to improved messages</span>
+                                    </label>
+                                </div>
+                                <div style="font-size: 11px; color: #666; margin-top: 2px;">
+                                    Adds SlackPolish emoji signature to identify AI-improved messages.
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Action Buttons -->
@@ -524,6 +539,7 @@
                         privacyMode: menu.querySelector('#smart-context-privacy') ? menu.querySelector('#smart-context-privacy').checked : false
                     },
                     debugMode: menu.querySelector('#debug-mode') ? menu.querySelector('#debug-mode').checked : false,
+                    addEmojiSignature: menu.querySelector('#emoji-signature') ? menu.querySelector('#emoji-signature').checked : false,
                     apiKey: menu.querySelector('#api-key-input') ? menu.querySelector('#api-key-input').value.trim() : ''
                 };
 

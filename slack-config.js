@@ -6,9 +6,9 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.0.82",
-    BUILD: 82,
-    BUILD_DATE: "2025-07-19",
+    VERSION: "1.0.85",
+    BUILD: 85,
+    BUILD_DATE: "2025-07-20",
     DESCRIPTION: "Code changes",
 
     // ========================================
