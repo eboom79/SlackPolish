@@ -533,23 +533,38 @@
         // Get current channel information
         getCurrentChannelInfo: function() {
             try {
+                utils.log('🔍 Starting channel name detection...');
                 utils.debug('🔍 Starting channel detection...');
 
                 // Try multiple selectors for channel name
                 let channelName = 'Unknown Channel';
                 const selectors = [
-                    // Modern Slack selectors
+                    // 2025 Modern Slack selectors (most likely to work)
                     '[data-qa="channel_header_name"]',
                     '[data-qa="channel-name"]',
+                    '[data-qa="channel_name"]',
                     '[data-qa="channel_header"] [data-qa="channel_name"]',
                     '[data-qa="channel_header"] h1',
                     '[data-qa="dm_header"] h1',
+                    '[data-qa="channel_header"] span',
+                    '[data-qa="channel_header"] button span',
 
                     // Header title selectors
                     '.p-view_header__channel_title',
                     '.p-channel_header__name',
                     '.p-channel_header__title',
                     '[data-qa="channel_header"] .p-channel_header__title',
+                    '.p-view_header__title',
+                    '.p-view_header__breadcrumbs',
+
+                    // New 2025 selectors (common patterns)
+                    'h1[data-qa*="channel"]',
+                    'span[data-qa*="channel"]',
+                    'button[data-qa*="channel"] span',
+                    '[class*="channel_header"] h1',
+                    '[class*="channel_header"] span',
+                    '[class*="view_header"] h1',
+                    '[class*="view_header"] span',
 
                     // Sidebar selectors
                     '.p-channel_sidebar__name--selected',
@@ -562,26 +577,49 @@
                     'header h1',
                     '[role="banner"] h1',
                     '.c-view_header h1',
-
-                    // Breadcrumb selectors
-                    '.p-view_header__breadcrumbs',
-                    '.p-view_header__title'
+                    'main h1',
+                    'section h1'
                 ];
 
+                utils.log(`🔍 Trying ${selectors.length} DOM selectors for channel name...`);
                 utils.debug('🔍 Trying DOM selectors for channel name...', { totalSelectors: selectors.length });
+
+                // First, let's inspect what header elements are actually available
+                const headerElements = document.querySelectorAll('header, [data-qa*="header"], [class*="header"], h1, h2, h3');
+                const headerSample = Array.from(headerElements).slice(0, 5).map(el => ({
+                    tag: el.tagName,
+                    class: el.className.substring(0, 50),
+                    dataQa: el.getAttribute('data-qa'),
+                    text: el.textContent?.trim().substring(0, 30)
+                }));
+
+                utils.log(`🔍 Found ${headerElements.length} header elements in DOM`);
+                utils.log('🔍 Header elements sample: ' + JSON.stringify(headerSample, null, 2));
+                utils.debug('🔍 Available header elements in DOM', {
+                    count: headerElements.length,
+                    sample: headerSample
+                });
 
                 for (let i = 0; i < selectors.length; i++) {
                     const selector = selectors[i];
                     try {
                         const element = document.querySelector(selector);
+                        const hasText = element ? !!element.textContent?.trim() : false;
+                        const text = element ? element.textContent?.trim().substring(0, 50) : null;
+
+                        if (element && hasText) {
+                            utils.log(`✅ FOUND channel name: "${text}" using selector: ${selector}`);
+                        }
+
                         utils.debug(`🔍 Selector ${i + 1}/${selectors.length}: ${selector}`, {
                             found: !!element,
-                            hasText: element ? !!element.textContent?.trim() : false,
-                            text: element ? element.textContent?.trim().substring(0, 50) : null
+                            hasText: hasText,
+                            text: text
                         });
 
                         if (element && element.textContent?.trim()) {
                             channelName = element.textContent.trim();
+                            utils.log(`✅ SUCCESS: Channel name detected as "${channelName}"`);
                             utils.debug('✅ Found channel name using selector', { selector, channelName });
                             break;
                         }
@@ -592,13 +630,16 @@
 
                 // If still no name found, try to extract from URL
                 if (channelName === 'Unknown Channel') {
+                    utils.log('❌ No DOM selector worked, trying URL extraction...');
                     utils.debug('🔍 No DOM selector worked, trying URL extraction...');
                     const currentUrl = window.location.href;
+                    utils.log(`🔍 Current URL: ${currentUrl}`);
                     utils.debug('🔍 Current URL', { url: currentUrl });
 
                     const urlMatch = currentUrl.match(/\/client\/[^\/]+\/([^\/\?]+)/);
                     if (urlMatch && urlMatch[1]) {
                         const channelId = urlMatch[1];
+                        utils.log(`🔍 Extracted channel ID from URL: ${channelId}`);
                         utils.debug('🔍 Extracted channel ID from URL', { channelId });
 
                         // If it looks like a channel ID, format it nicely
@@ -609,8 +650,10 @@
                         } else {
                             channelName = channelId;
                         }
+                        utils.log(`✅ SUCCESS: Using URL-based channel name: "${channelName}"`);
                         utils.debug('✅ Using URL-based channel name', { channelName, channelId });
                     } else {
+                        utils.log('❌ Could not extract channel ID from URL');
                         utils.debug('❌ Could not extract channel ID from URL');
                     }
                 }

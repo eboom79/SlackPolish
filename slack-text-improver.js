@@ -1096,35 +1096,110 @@ Requirements:
 
             getCurrentChannelName() {
                 try {
-                    // Try to get channel name from various DOM elements
+                    // Try to get channel name from various DOM elements (2025 enhanced selectors)
                     const channelNameSelectors = [
+                        // 2025 Modern Slack selectors (most likely to work)
+                        '[data-qa="channel_header_name"]',
+                        '[data-qa="channel-name"]',
+                        '[data-qa="channel_name"]',
                         '[data-qa="channel_header"] [data-qa="channel_name"]',
                         '[data-qa="channel_header"] h1',
+                        '[data-qa="dm_header"] h1',
+                        '[data-qa="channel_header"] span',
+                        '[data-qa="channel_header"] button span',
+
+                        // Header title selectors
+                        '.p-view_header__channel_title',
+                        '.p-channel_header__name',
                         '.p-channel_header__title',
-                        '.p-channel_header__name'
+                        '[data-qa="channel_header"] .p-channel_header__title',
+                        '.p-view_header__title',
+                        '.p-view_header__breadcrumbs',
+
+                        // New 2025 selectors (common patterns)
+                        'h1[data-qa*="channel"]',
+                        'span[data-qa*="channel"]',
+                        'button[data-qa*="channel"] span',
+                        '[class*="channel_header"] h1',
+                        '[class*="channel_header"] span',
+                        '[class*="view_header"] h1',
+                        '[class*="view_header"] span',
+
+                        // Sidebar selectors
+                        '.p-channel_sidebar__name--selected',
+                        '.c-channel_entity__name',
+
+                        // Generic header selectors
+                        'header h1',
+                        '[role="banner"] h1',
+                        '.c-view_header h1',
+                        'main h1',
+                        'section h1'
                     ];
 
-                    for (const selector of channelNameSelectors) {
+                    // Add enhanced debugging
+                    if (window.SlackPolishDebug) {
+                        window.SlackPolishDebug.addLog('channel-messages', `🔍 Starting channel name detection with ${channelNameSelectors.length} selectors...`);
+
+                        // Show sample of available header elements
+                        const headerElements = document.querySelectorAll('header, [data-qa*="header"], [class*="header"], h1, h2, h3');
+                        const headerSample = Array.from(headerElements).slice(0, 3).map(el => ({
+                            tag: el.tagName,
+                            class: el.className.substring(0, 30),
+                            dataQa: el.getAttribute('data-qa'),
+                            text: el.textContent?.trim().substring(0, 20)
+                        }));
+
+                        window.SlackPolishDebug.addLog('channel-messages', `🔍 Found ${headerElements.length} header elements. Sample:`, headerSample);
+                    }
+
+                    for (let i = 0; i < channelNameSelectors.length; i++) {
+                        const selector = channelNameSelectors[i];
                         const element = document.querySelector(selector);
-                        if (element && element.textContent.trim()) {
-                            const channelName = element.textContent.trim();
+                        const hasText = element ? !!element.textContent?.trim() : false;
+                        const text = element ? element.textContent?.trim() : null;
+
+                        if (window.SlackPolishDebug && (element || i < 5)) { // Log first 5 attempts or any found elements
+                            window.SlackPolishDebug.addLog('channel-messages', `🔍 Selector ${i + 1}/${channelNameSelectors.length}: ${selector}`, {
+                                found: !!element,
+                                hasText: hasText,
+                                text: text?.substring(0, 30)
+                            });
+                        }
+
+                        if (element && hasText) {
+                            const channelName = text.trim();
                             if (window.SlackPolishDebug) {
-                                window.SlackPolishDebug.addLog('channel-messages', 'Channel name found', {
-                                    channelName,
-                                    selector
-                                });
+                                window.SlackPolishDebug.addLog('channel-messages', `✅ SUCCESS: Channel name found: "${channelName}" using selector: ${selector}`);
                             }
                             return channelName;
                         }
                     }
 
                     if (window.SlackPolishDebug) {
-                        window.SlackPolishDebug.addLog('channel-messages', 'Could not determine channel name', {
-                            availableSelectors: channelNameSelectors.map(sel => ({
-                                selector: sel,
-                                found: !!document.querySelector(sel)
-                            }))
-                        });
+                        window.SlackPolishDebug.addLog('channel-messages', '❌ Could not determine channel name from any selector');
+                        window.SlackPolishDebug.addLog('channel-messages', 'Trying URL fallback...');
+
+                        // Try URL extraction as fallback
+                        const currentUrl = window.location.href;
+                        const urlMatch = currentUrl.match(/\/client\/[^\/]+\/([^\/\?]+)/);
+                        if (urlMatch && urlMatch[1]) {
+                            const channelId = urlMatch[1];
+                            let channelName = 'Unknown Channel';
+
+                            if (channelId.startsWith('C')) {
+                                channelName = `#${channelId}`;
+                            } else if (channelId.startsWith('D')) {
+                                channelName = 'Direct Message';
+                            } else {
+                                channelName = channelId;
+                            }
+
+                            window.SlackPolishDebug.addLog('channel-messages', `✅ SUCCESS: Using URL-based channel name: "${channelName}"`);
+                            return channelName;
+                        } else {
+                            window.SlackPolishDebug.addLog('channel-messages', '❌ URL extraction also failed');
+                        }
                     }
 
                     return 'Unknown Channel';
