@@ -40,7 +40,8 @@
             },
             debugMode: false,
             apiKey: '',
-            addEmojiSignature: false
+            addEmojiSignature: false,
+            hideSummaryConfirmation: false
         },
 
         // Load settings from localStorage
@@ -65,6 +66,10 @@
                     settings.apiKey = savedApiKey;
                 }
 
+                // Load summary confirmation setting from separate localStorage key
+                const hideSummaryConfirmation = localStorage.getItem('slackpolish_hide_summary_confirmation');
+                settings.hideSummaryConfirmation = (hideSummaryConfirmation === 'true');
+
                 return settings;
             } catch (error) {
                 utils.log('Error loading settings: ' + error.message);
@@ -81,9 +86,17 @@
                     localStorage.setItem('slackpolish_openai_api_key', settings.apiKey);
                 }
 
+                // Save summary confirmation setting separately
+                if (settings.hideSummaryConfirmation) {
+                    localStorage.setItem('slackpolish_hide_summary_confirmation', 'true');
+                } else {
+                    localStorage.removeItem('slackpolish_hide_summary_confirmation');
+                }
+
                 // Save other settings
                 const settingsToSave = { ...settings };
                 delete settingsToSave.apiKey; // Don't save API key in main settings
+                delete settingsToSave.hideSummaryConfirmation; // Don't save in main settings (saved separately)
 
                 localStorage.setItem('slackpolish_settings', JSON.stringify(settingsToSave));
                 utils.log('Settings saved successfully');
@@ -363,6 +376,20 @@
                                     Adds SlackPolish emoji signature to identify AI-improved messages.
                                 </div>
                             </div>
+
+                            <!-- Channel Summary Settings -->
+                            <div style="margin-bottom: 12px;">
+                                <label style="display: block; margin-bottom: 4px; font-weight: bold; font-size: 13px;">📊 Channel Summary</label>
+                                <div style="margin-bottom: 6px;">
+                                    <label style="display: flex; align-items: center; cursor: pointer; font-size: 13px;">
+                                        <input type="checkbox" id="show-scrolling-message" ${!currentSettings.hideSummaryConfirmation ? 'checked' : ''} style="margin-right: 6px;">
+                                        <span>Show scrolling message on channel summary</span>
+                                    </label>
+                                </div>
+                                <div style="font-size: 11px; color: #666; margin-top: 2px;">
+                                    Shows confirmation popup before generating channel summary.
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Action Buttons -->
@@ -540,6 +567,7 @@
                     },
                     debugMode: menu.querySelector('#debug-mode') ? menu.querySelector('#debug-mode').checked : false,
                     addEmojiSignature: menu.querySelector('#emoji-signature') ? menu.querySelector('#emoji-signature').checked : false,
+                    hideSummaryConfirmation: menu.querySelector('#show-scrolling-message') ? !menu.querySelector('#show-scrolling-message').checked : false,
                     apiKey: menu.querySelector('#api-key-input') ? menu.querySelector('#api-key-input').value.trim() : ''
                 };
 

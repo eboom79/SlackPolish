@@ -179,7 +179,7 @@
 
             // Generate button
             generateBtn.addEventListener('click', () => {
-                this.generateChannelSummary(summaryWindow);
+                this.showConfirmationPopup(summaryWindow);
             });
 
             // Copy button
@@ -208,6 +208,139 @@
             summaryWindow.addEventListener('click', (e) => {
                 if (e.target === summaryWindow) {
                     summaryWindow.remove();
+                }
+            });
+        },
+
+        // Show confirmation popup before generating summary
+        showConfirmationPopup: function(summaryWindow) {
+            // Check if user has disabled this popup
+            const hidePopup = localStorage.getItem('slackpolish_hide_summary_confirmation');
+            if (hidePopup === 'true') {
+                utils.debug('Confirmation popup disabled, proceeding directly to summary generation');
+                // Skip popup and proceed directly to summary generation
+                this.generateChannelSummary(summaryWindow);
+                return;
+            }
+            // Create popup overlay
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 10001;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+
+            // Create popup content
+            const popup = document.createElement('div');
+            popup.style.cssText = `
+                background: white;
+                border-radius: 8px;
+                padding: 24px;
+                max-width: 400px;
+                width: 90%;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                text-align: center;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            `;
+
+            popup.innerHTML = `
+                <h3 style="margin: 0 0 16px 0; color: #333; font-size: 18px;">
+                    📊 Generate Channel Summary
+                </h3>
+                <p style="margin: 0 0 20px 0; color: #666; line-height: 1.4;">
+                    SlackPolish will analyze the messages in this channel and generate an AI-powered summary based on your selected time range and summary level.
+                </p>
+                <div style="margin: 0 0 20px 0; text-align: left;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #666; cursor: pointer;">
+                        <input type="checkbox" id="dont-show-again-checkbox" style="margin: 0;">
+                        <span>Don't show this message again</span>
+                    </label>
+                </div>
+                <div style="display: flex; gap: 12px; justify-content: center;">
+                    <button id="cancel-generate-btn" style="
+                        background: #f8f8f8;
+                        color: #333;
+                        border: 1px solid #ddd;
+                        padding: 10px 20px;
+                        border-radius: 4px;
+                        font-size: 14px;
+                        cursor: pointer;
+                        font-weight: bold;
+                    ">
+                        Let me scroll
+                    </button>
+                    <button id="confirm-generate-btn" style="
+                        background: #007a5a;
+                        color: white;
+                        border: none;
+                        padding: 10px 20px;
+                        border-radius: 4px;
+                        font-size: 14px;
+                        cursor: pointer;
+                        font-weight: bold;
+                    ">
+                        OK, Generate Summary
+                    </button>
+                </div>
+            `;
+
+            overlay.appendChild(popup);
+            document.body.appendChild(overlay);
+
+            // Handle checkbox state
+            const checkbox = popup.querySelector('#dont-show-again-checkbox');
+
+            // Load saved checkbox state
+            const savedState = localStorage.getItem('slackpolish_hide_summary_confirmation');
+            if (savedState === 'true') {
+                checkbox.checked = true;
+            }
+
+            // Handle OK button click
+            const confirmBtn = popup.querySelector('#confirm-generate-btn');
+            confirmBtn.addEventListener('click', () => {
+                // Save checkbox state (checked or unchecked)
+                if (checkbox.checked) {
+                    localStorage.setItem('slackpolish_hide_summary_confirmation', 'true');
+                    utils.debug('User opted to hide summary confirmation popup');
+                } else {
+                    localStorage.removeItem('slackpolish_hide_summary_confirmation');
+                    utils.debug('User opted to show summary confirmation popup');
+                }
+                // Remove popup
+                overlay.remove();
+                // Proceed with original implementation
+                this.generateChannelSummary(summaryWindow);
+            });
+
+            // Handle "Let me scroll" button click
+            const cancelBtn = popup.querySelector('#cancel-generate-btn');
+            cancelBtn.addEventListener('click', () => {
+                // Save checkbox state (checked or unchecked)
+                if (checkbox.checked) {
+                    localStorage.setItem('slackpolish_hide_summary_confirmation', 'true');
+                    utils.debug('User opted to hide summary confirmation popup');
+                } else {
+                    localStorage.removeItem('slackpolish_hide_summary_confirmation');
+                    utils.debug('User opted to show summary confirmation popup');
+                }
+                // Remove popup
+                overlay.remove();
+                // Close the entire Channel Summary window
+                summaryWindow.remove();
+            });
+
+            // Handle clicking outside popup to close
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    overlay.remove();
                 }
             });
         },
