@@ -485,12 +485,15 @@
             let endDate = now;
 
             switch (timeRange) {
+                case '1':
                 case 'last24hours':
                     startDate = new Date(now.getTime() - (24 * 60 * 60 * 1000));
                     break;
+                case '7':
                 case 'last7days':
                     startDate = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
                     break;
+                case '30':
                 case 'last30days':
                     startDate = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
                     break;
@@ -508,10 +511,13 @@
         // Get appropriate message count for time range
         getMessageCountForTimeRange: function(timeRange) {
             switch (timeRange) {
+                case '1':
                 case 'last24hours':
                     return 50;
+                case '7':
                 case 'last7days':
                     return 200;
+                case '30':
                 case 'last30days':
                     return 500;
                 case 'all':
