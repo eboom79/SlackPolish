@@ -176,6 +176,22 @@
             const generateBtn = summaryWindow.querySelector('#generate-summary-btn');
             const copyBtn = summaryWindow.querySelector('#copy-summary-btn');
             const closeBtn = summaryWindow.querySelector('#close-summary-btn');
+            const timeRangeSelect = summaryWindow.querySelector('#time-range-select');
+            const summaryLevelSelect = summaryWindow.querySelector('#summary-level-select');
+
+            // Load saved settings and apply them
+            this.loadSavedSettings(timeRangeSelect, summaryLevelSelect);
+
+            // Save settings when user changes them
+            timeRangeSelect.addEventListener('change', () => {
+                this.saveSetting('slackpolish_channel_summary_time_range', timeRangeSelect.value);
+                utils.log(`Time range changed to: ${timeRangeSelect.value}`);
+            });
+
+            summaryLevelSelect.addEventListener('change', () => {
+                this.saveSetting('slackpolish_channel_summary_level', summaryLevelSelect.value);
+                utils.log(`Summary level changed to: ${summaryLevelSelect.value}`);
+            });
 
             // Generate button
             generateBtn.addEventListener('click', () => {
@@ -210,6 +226,42 @@
                     summaryWindow.remove();
                 }
             });
+        },
+
+        // Load saved settings and apply them to the dropdowns
+        loadSavedSettings: function(timeRangeSelect, summaryLevelSelect) {
+            try {
+                // Load saved time range (default: "7" for 7 days)
+                const savedTimeRange = localStorage.getItem('slackpolish_channel_summary_time_range') || '7';
+                if (timeRangeSelect) {
+                    timeRangeSelect.value = savedTimeRange;
+                    utils.log(`Loaded saved time range: ${savedTimeRange}`);
+                }
+
+                // Load saved summary level (default: "executive")
+                const savedSummaryLevel = localStorage.getItem('slackpolish_channel_summary_level') || 'executive';
+                if (summaryLevelSelect) {
+                    summaryLevelSelect.value = savedSummaryLevel;
+                    utils.log(`Loaded saved summary level: ${savedSummaryLevel}`);
+                }
+
+                utils.debug('Channel summary settings loaded', {
+                    timeRange: savedTimeRange,
+                    summaryLevel: savedSummaryLevel
+                });
+            } catch (error) {
+                utils.debug('Error loading saved settings', { error: error.message });
+            }
+        },
+
+        // Save a setting to localStorage
+        saveSetting: function(key, value) {
+            try {
+                localStorage.setItem(key, value);
+                utils.debug(`Setting saved: ${key} = ${value}`);
+            } catch (error) {
+                utils.debug('Error saving setting', { key, value, error: error.message });
+            }
         },
 
         // Show confirmation popup before generating summary
