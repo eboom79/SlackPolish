@@ -510,7 +510,7 @@ def main():
         return 1
     
     # Check required files
-    required_files = ["slack-config.js", "slack-core.js", "slack-settings.js", "slack-channel-summary.js", "logo-data.js"]
+    required_files = ["slack-config.js", "slack-text-improver.js", "slack-settings.js", "slack-channel-summary.js", "logo-data.js"]
     for file in required_files:
         if not os.path.exists(file):
             print_error(f"Required file not found: {file}")
