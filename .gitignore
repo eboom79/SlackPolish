@@ -102,3 +102,7 @@ working-versions/
 # Local development
 local-test/
 debug/
+
+# Slack debug extractions (temporary debugging files)
+slack_debug_extract/
+slack_debug_extract*/
