@@ -31,6 +31,60 @@
     // Load API key and settings from localStorage
     function loadSettings() {
         try {
+            // Check for emergency reset flags FIRST (installer-managed version system)
+            const config = window.SLACKPOLISH_CONFIG || {};
+
+            try {
+                // Check for full settings reset (only if flag is true AND version is different)
+                if (config.RESET_SAVED_SETTINGS === true) {
+                    const resetVersion = config.RESET_SAVED_SETTINGS_VERSION || 'v1';
+                    const lastResetVersion = localStorage.getItem('slackpolish-last-settings-reset-version');
+
+                    if (resetVersion !== lastResetVersion) {
+                        utils.log(`🚨 RESET_SAVED_SETTINGS flag detected (version: ${resetVersion}) - clearing all saved settings including API key`);
+                        localStorage.removeItem('slackpolish_settings');
+                        localStorage.removeItem('slackpolish_openai_api_key');
+
+                        // Mark this reset version as completed
+                        localStorage.setItem('slackpolish-last-settings-reset-version', resetVersion);
+
+                        utils.log('✅ All settings reset to defaults due to RESET_SAVED_SETTINGS flag');
+                        utils.log('💡 This reset happened once for this installation - managed by installer');
+                    } else {
+                        utils.log(`⏭️ RESET_SAVED_SETTINGS already performed for version ${resetVersion} - skipping`);
+                    }
+                } else {
+                    utils.log('⏭️ RESET_SAVED_SETTINGS flag is false - no reset needed');
+                }
+
+                // Check for API key reset flag (independent of settings reset)
+                if (config.RESET_API_KEY === true) {
+                    const resetVersion = config.RESET_API_KEY_VERSION || 'v1';
+                    const lastResetVersion = localStorage.getItem('slackpolish-last-apikey-reset-version');
+
+                    if (resetVersion !== lastResetVersion) {
+                        utils.log(`🔑 RESET_API_KEY flag detected (version: ${resetVersion}) - clearing saved API key only`);
+                        try {
+                            localStorage.removeItem('slackpolish_openai_api_key');
+                            utils.log('✅ API key reset to config file value, other settings preserved');
+
+                            // Mark this reset version as completed
+                            localStorage.setItem('slackpolish-last-apikey-reset-version', resetVersion);
+
+                            utils.log('💡 This reset happened once for this installation - managed by installer');
+                        } catch (error) {
+                            utils.log(`❌ Error resetting API key: ${error.message}`);
+                        }
+                    } else {
+                        utils.log(`⏭️ RESET_API_KEY already performed for version ${resetVersion} - skipping`);
+                    }
+                } else {
+                    utils.log('⏭️ RESET_API_KEY flag is false - no reset needed');
+                }
+            } catch (error) {
+                utils.log(`❌ Error in reset logic: ${error.message}`);
+            }
+
             const savedApiKey = localStorage.getItem('slackpolish_openai_api_key');
             if (savedApiKey) {
                 CONFIG.OPENAI_API_KEY = savedApiKey;

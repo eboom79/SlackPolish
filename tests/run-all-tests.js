@@ -19,7 +19,7 @@ class TestRunner {
 
     async findTestFiles() {
         const testFiles = [];
-        const testDirs = ['unit', 'integration', 'installer', 'settings', 'ui', 'api', 'cross-platform'];
+        const testDirs = ['unit', 'integration', 'installer', 'settings', 'ui', 'api', 'cross-platform', 'static'];
         
         for (const dir of testDirs) {
             const dirPath = path.join(__dirname, dir);
