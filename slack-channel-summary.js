@@ -456,6 +456,9 @@
             } catch (error) {
                 utils.debug('Error in generateChannelSummary', { error: error.message });
 
+                // Stop animation on error
+                this.stopAISummaryAnimation();
+
                 // Handle API key errors specifically (don't show generic error message)
                 if (error.message.includes('Invalid API key') ||
                     error.message.includes('API quota exceeded') ||
@@ -649,16 +652,18 @@
                 // Format messages for AI processing
                 const messagesText = this.formatMessagesForAI(result.messages);
 
-                // Show loading display without message preview
-                textbox.value = this.formatLoadingDisplay(result, summaryLevel);
+                // Show animated loading display
+                this.startAISummaryAnimation(textbox, result, summaryLevel);
 
                 // Generate AI summary if we have messages
                 if (result.messages.length > 0) {
                     const aiSummary = await this.generateAISummary(messagesText, summaryLevel, result);
 
-                    // Display final result with clean visual structure
+                    // Stop animation and display final result
+                    this.stopAISummaryAnimation();
                     textbox.value = this.formatFinalSummary(result, summaryLevel, aiSummary);
                 } else {
+                    this.stopAISummaryAnimation();
                     textbox.value = this.formatNoMessagesFound(result);
                 }
 
@@ -669,6 +674,45 @@
             } catch (error) {
                 utils.debug('Error in processAndDisplaySummary', { error: error.message });
                 throw error;
+            }
+        },
+
+        // Start simple animation for AI summary generation
+        startAISummaryAnimation: function(textbox, result, summaryLevel) {
+            const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+            let frameIndex = 0;
+
+            const channelName = result.channelName || 'Unknown Channel';
+            const messageCount = result.messages.length;
+            const timestamp = new Date().toLocaleString();
+
+            // Store animation interval for cleanup
+            this.aiSummaryInterval = setInterval(() => {
+                const spinner = frames[frameIndex];
+
+                textbox.value = `╔══════════════════════════════════════════════════════════════╗
+║                    📊 CHANNEL SUMMARY REPORT                 ║
+╚══════════════════════════════════════════════════════════════╝
+
+🏷️  CHANNEL: ${channelName}
+📊  MESSAGES FOUND: ${messageCount}
+📅  GENERATED: ${timestamp}
+
+┌─────────────────────────────────────────────────────────────┐
+│                ${spinner} GENERATING AI SUMMARY...                  │
+│          Please wait while we analyze the messages         │
+│                   Summary Level: ${summaryLevel.toUpperCase()}                    │
+└─────────────────────────────────────────────────────────────┘`;
+
+                frameIndex = (frameIndex + 1) % frames.length;
+            }, 100); // Update every 100ms for smooth spinner animation
+        },
+
+        // Stop AI summary animation
+        stopAISummaryAnimation: function() {
+            if (this.aiSummaryInterval) {
+                clearInterval(this.aiSummaryInterval);
+                this.aiSummaryInterval = null;
             }
         },
 
