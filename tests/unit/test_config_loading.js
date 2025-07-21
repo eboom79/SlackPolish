@@ -95,6 +95,10 @@ class ConfigLoadingTests {
         assertExists(config.OPENAI_MAX_TOKENS, 'OPENAI_MAX_TOKENS should exist');
         assertExists(config.EXECUTIVE_SUMMARY_MAX_TOKENS, 'EXECUTIVE_SUMMARY_MAX_TOKENS should exist');
         assertExists(config.COMPREHENSIVE_SUMMARY_MAX_TOKENS, 'COMPREHENSIVE_SUMMARY_MAX_TOKENS should exist');
+
+        // Test temperature configuration
+        assertExists(config.OPENAI_TEMPERATURE, 'OPENAI_TEMPERATURE should exist');
+        assertExists(config.CHANNEL_SUMMARY_TEMPERATURE, 'CHANNEL_SUMMARY_TEMPERATURE should exist');
     }
 
     testTokenConfiguration() {
@@ -111,9 +115,12 @@ class ConfigLoadingTests {
         assert(typeof config.COMPREHENSIVE_SUMMARY_MAX_TOKENS === 'number', 'COMPREHENSIVE_SUMMARY_MAX_TOKENS should be a number');
         assert(config.COMPREHENSIVE_SUMMARY_MAX_TOKENS > 0, 'COMPREHENSIVE_SUMMARY_MAX_TOKENS should be positive');
 
-        // Test temperature is valid
+        // Test temperatures are valid
         assert(typeof config.OPENAI_TEMPERATURE === 'number', 'OPENAI_TEMPERATURE should be a number');
         assert(config.OPENAI_TEMPERATURE >= 0 && config.OPENAI_TEMPERATURE <= 1, 'OPENAI_TEMPERATURE should be between 0 and 1');
+
+        assert(typeof config.CHANNEL_SUMMARY_TEMPERATURE === 'number', 'CHANNEL_SUMMARY_TEMPERATURE should be a number');
+        assert(config.CHANNEL_SUMMARY_TEMPERATURE >= 0 && config.CHANNEL_SUMMARY_TEMPERATURE <= 1, 'CHANNEL_SUMMARY_TEMPERATURE should be between 0 and 1');
     }
 
     testLanguageConfiguration() {

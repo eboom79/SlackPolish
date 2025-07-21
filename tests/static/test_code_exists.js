@@ -110,6 +110,7 @@ class StaticCodeAnalysisTests {
             'OPENAI_MODEL',
             'OPENAI_MAX_TOKENS',
             'OPENAI_TEMPERATURE',
+            'CHANNEL_SUMMARY_TEMPERATURE',
             'SUPPORTED_LANGUAGES',
             'AVAILABLE_STYLES',
             'AVAILABLE_HOTKEYS',
@@ -202,7 +203,8 @@ class StaticCodeAnalysisTests {
                 'RESET_API_KEY',
                 'OPENAI_MODEL',
                 'OPENAI_MAX_TOKENS',
-                'OPENAI_TEMPERATURE'
+                'OPENAI_TEMPERATURE',
+                'CHANNEL_SUMMARY_TEMPERATURE'
             ];
             
             requiredProps.forEach(prop => {
@@ -217,6 +219,7 @@ class StaticCodeAnalysisTests {
             assert(typeof config.RESET_API_KEY === 'boolean', 'RESET_API_KEY must be boolean');
             assert(typeof config.OPENAI_MAX_TOKENS === 'number', 'OPENAI_MAX_TOKENS must be number');
             assert(typeof config.OPENAI_TEMPERATURE === 'number', 'OPENAI_TEMPERATURE must be number');
+            assert(typeof config.CHANNEL_SUMMARY_TEMPERATURE === 'number', 'CHANNEL_SUMMARY_TEMPERATURE must be number');
             
             console.log('✅ Config file syntax and structure valid');
             return config;

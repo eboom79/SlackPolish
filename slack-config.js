@@ -61,12 +61,14 @@ window.SLACKPOLISH_CONFIG = {
                                      //
                                      // Recommended: 500 for most text improvements (good balance of cost/quality)
 
-    OPENAI_TEMPERATURE: 0.7,         // Creativity level (0.0 = deterministic, 1.0 = creative)
+    OPENAI_TEMPERATURE: 0.7,         // Creativity level for text improvement (0.0 = deterministic, 1.0 = creative)
                                      //
                                      // Trade-offs:
                                      // • Lower (0.0-0.3): More consistent, predictable, formal responses
                                      // • Medium (0.4-0.7): Balanced creativity and consistency (recommended)
                                      // • Higher (0.8-1.0): More creative, varied, but potentially inconsistent
+
+ 
 
     // ========================================
     // CHANNEL SUMMARY TOKEN LIMITS
@@ -95,7 +97,13 @@ window.SLACKPOLISH_CONFIG = {
                                              // Quality: Balanced detail level between executive and comprehensive
                                              // Used when: Summary level is not specified or for medium-length channels
 
-
+    CHANNEL_SUMMARY_TEMPERATURE: 0.3, // Temperature for channel summaries (lower = more consistent)
+                                     //
+                                     // Channel summaries benefit from lower temperature for:
+                                     // • More factual, consistent summaries
+                                     // • Less creative interpretation, more objective reporting
+                                     // • Better consistency across multiple summary generations
+                                     // Recommended: 0.1-0.4 for factual summaries
 
     // ========================================
     // AVAILABLE HOTKEYS
