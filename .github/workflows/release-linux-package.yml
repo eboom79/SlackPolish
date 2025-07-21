@@ -1,0 +1,227 @@
+name: Create Linux Release Package
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  create-linux-package:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Get release version
+      id: get_version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Release version: $VERSION"
+        
+    - name: Create Linux package directory
+      run: |
+        mkdir -p SlackPolish-Linux-${{ steps.get_version.outputs.version }}
+        
+    - name: Copy essential files to package
+      run: |
+        # Core SlackPolish files
+        cp slack-text-improver.js SlackPolish-Linux-${{ steps.get_version.outputs.version }}/
+        cp slack-settings.js SlackPolish-Linux-${{ steps.get_version.outputs.version }}/
+        cp slack-channel-summary.js SlackPolish-Linux-${{ steps.get_version.outputs.version }}/
+        cp slack-config.js SlackPolish-Linux-${{ steps.get_version.outputs.version }}/
+        cp logo-data.js SlackPolish-Linux-${{ steps.get_version.outputs.version }}/
+        cp version.json SlackPolish-Linux-${{ steps.get_version.outputs.version }}/
+        
+        # Installer and uninstaller
+        cp installers/install-slack-LINUX-X64.py SlackPolish-Linux-${{ steps.get_version.outputs.version }}/
+        cp installers/uninstall-slack-LINUX-X64.py SlackPolish-Linux-${{ steps.get_version.outputs.version }}/
+        
+        # License and basic documentation
+        cp LICENSE SlackPolish-Linux-${{ steps.get_version.outputs.version }}/
+        
+        # Create a simplified README for end users
+        cat > SlackPolish-Linux-${{ steps.get_version.outputs.version }}/README.md << 'EOF'
+        # SlackPolish - Linux Installation Package
+        
+        SlackPolish enhances your Slack experience with AI-powered text improvement, translation, and channel summarization features.
+        
+        ## Quick Installation
+        
+        1. **Install the package:**
+           ```bash
+           sudo python3 install-slack-LINUX-X64.py
+           ```
+        
+        2. **Restart Slack**
+        
+        3. **Configure your settings:**
+           - Press `F12` to open the settings menu
+           - Add your OpenAI API key
+           - Configure your preferences
+        
+        ## Usage
+        
+        - **Text Improvement:** Press `Ctrl+Shift` in any message field
+        - **Settings Menu:** Press `F12`
+        - **Channel Summary:** Press `F10`
+        
+        ## Uninstallation
+        
+        ```bash
+        sudo python3 uninstall-slack-LINUX-X64.py
+        ```
+        
+        ## Requirements
+        
+        - Linux x64 system
+        - Slack desktop application
+        - Python 3.6+
+        - Node.js and npm (for asar tool)
+        - OpenAI API key
+        
+        ## Support
+        
+        For issues and documentation, visit: https://github.com/redis-enterprise/SlackPolish
+        
+        ---
+        
+        **Version:** ${{ steps.get_version.outputs.version }}  
+        **Platform:** Linux x64  
+        **License:** See LICENSE file
+        EOF
+        
+    - name: Create installation script
+      run: |
+        cat > SlackPolish-Linux-${{ steps.get_version.outputs.version }}/install.sh << 'EOF'
+        #!/bin/bash
+        
+        echo "🐧 SlackPolish Linux Installer"
+        echo "=============================="
+        echo ""
+        
+        # Check if running as root
+        if [ "$EUID" -ne 0 ]; then
+            echo "❌ Please run as root (use sudo)"
+            echo "Usage: sudo ./install.sh"
+            exit 1
+        fi
+        
+        # Check if Python 3 is available
+        if ! command -v python3 &> /dev/null; then
+            echo "❌ Python 3 is required but not installed"
+            echo "Install with: sudo apt install python3 (Ubuntu/Debian)"
+            echo "             sudo yum install python3 (CentOS/RHEL)"
+            exit 1
+        fi
+        
+        echo "✅ Running SlackPolish installer..."
+        python3 install-slack-LINUX-X64.py "$@"
+        EOF
+        
+        chmod +x SlackPolish-Linux-${{ steps.get_version.outputs.version }}/install.sh
+        
+    - name: Create uninstallation script
+      run: |
+        cat > SlackPolish-Linux-${{ steps.get_version.outputs.version }}/uninstall.sh << 'EOF'
+        #!/bin/bash
+        
+        echo "🗑️  SlackPolish Linux Uninstaller"
+        echo "================================="
+        echo ""
+        
+        # Check if running as root
+        if [ "$EUID" -ne 0 ]; then
+            echo "❌ Please run as root (use sudo)"
+            echo "Usage: sudo ./uninstall.sh"
+            exit 1
+        fi
+        
+        echo "✅ Running SlackPolish uninstaller..."
+        python3 uninstall-slack-LINUX-X64.py "$@"
+        EOF
+        
+        chmod +x SlackPolish-Linux-${{ steps.get_version.outputs.version }}/uninstall.sh
+        
+    - name: Create package info file
+      run: |
+        cat > SlackPolish-Linux-${{ steps.get_version.outputs.version }}/PACKAGE-INFO.txt << EOF
+        SlackPolish Linux Package Information
+        ====================================
+        
+        Version: ${{ steps.get_version.outputs.version }}
+        Platform: Linux x64
+        Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        Package Type: Standalone Installation
+        
+        Included Files:
+        - slack-text-improver.js (Main text improvement engine)
+        - slack-settings.js (Settings management)
+        - slack-channel-summary.js (Channel summarization)
+        - slack-config.js (Configuration)
+        - logo-data.js (UI assets)
+        - version.json (Version information)
+        - install-slack-LINUX-X64.py (Python installer)
+        - uninstall-slack-LINUX-X64.py (Python uninstaller)
+        - install.sh (Bash installer wrapper)
+        - uninstall.sh (Bash uninstaller wrapper)
+        - README.md (Installation instructions)
+        - LICENSE (License information)
+        
+        Installation:
+        1. Extract this package
+        2. Run: sudo ./install.sh
+        3. Restart Slack
+        4. Press F12 to configure
+        
+        Repository: https://github.com/redis-enterprise/SlackPolish
+        EOF
+        
+    - name: Create compressed packages
+      run: |
+        # Create tar.gz package
+        tar -czf SlackPolish-Linux-${{ steps.get_version.outputs.version }}.tar.gz SlackPolish-Linux-${{ steps.get_version.outputs.version }}/
+        
+        # Create zip package
+        zip -r SlackPolish-Linux-${{ steps.get_version.outputs.version }}.zip SlackPolish-Linux-${{ steps.get_version.outputs.version }}/
+        
+        # Generate checksums
+        sha256sum SlackPolish-Linux-${{ steps.get_version.outputs.version }}.tar.gz > SlackPolish-Linux-${{ steps.get_version.outputs.version }}-checksums.txt
+        sha256sum SlackPolish-Linux-${{ steps.get_version.outputs.version }}.zip >> SlackPolish-Linux-${{ steps.get_version.outputs.version }}-checksums.txt
+        
+        echo "📦 Package created successfully!"
+        echo "Files:"
+        ls -la SlackPolish-Linux-${{ steps.get_version.outputs.version }}.*
+        echo ""
+        echo "Checksums:"
+        cat SlackPolish-Linux-${{ steps.get_version.outputs.version }}-checksums.txt
+        
+    - name: Upload tar.gz package to release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./SlackPolish-Linux-${{ steps.get_version.outputs.version }}.tar.gz
+        asset_name: SlackPolish-Linux-${{ steps.get_version.outputs.version }}.tar.gz
+        asset_content_type: application/gzip
+        
+    - name: Upload zip package to release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./SlackPolish-Linux-${{ steps.get_version.outputs.version }}.zip
+        asset_name: SlackPolish-Linux-${{ steps.get_version.outputs.version }}.zip
+        asset_content_type: application/zip
+        
+    - name: Upload checksums to release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./SlackPolish-Linux-${{ steps.get_version.outputs.version }}-checksums.txt
+        asset_name: SlackPolish-Linux-${{ steps.get_version.outputs.version }}-checksums.txt
+        asset_content_type: text/plain
