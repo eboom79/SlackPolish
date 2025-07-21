@@ -357,20 +357,22 @@
                 smartContextEnabled: CONFIG.SMART_CONTEXT?.enabled
             });
 
-            let prompt = `Please improve the following text to be more ${CONFIG.STYLE} in ${CONFIG.LANGUAGE}:`;
+            let prompt = `You are helping improve a Slack message.`;
 
             // Add Smart Context if enabled
             if (CONFIG.SMART_CONTEXT && CONFIG.SMART_CONTEXT.enabled) {
                 try {
                     const contextMessages = await this.getSmartContext();
                     if (contextMessages && contextMessages.length > 0) {
-                        prompt += `\n\nRecent conversation context (last ${contextMessages.length} messages):\n`;
+                        prompt += ` Here is the conversation context for reference:
+
+Recent conversation context (last ${contextMessages.length} messages):
+`;
                         contextMessages.forEach((msg, index) => {
                             const user = CONFIG.SMART_CONTEXT.privacyMode ? `User${index + 1}` : (msg.user || 'Unknown');
-                            const text = CONFIG.SMART_CONTEXT.privacyMode ? this.anonymizeText(msg.text) : msg.text;
-                            prompt += `${user}: ${text}\n`;
+                            const msgText = CONFIG.SMART_CONTEXT.privacyMode ? this.anonymizeText(msg.text) : msg.text;
+                            prompt += `${user}: ${msgText}\n`;
                         });
-                        prompt += `\nConsider this conversation context when improving the message.`;
 
                         utils.debug('Added smart context to prompt', {
                             contextMessages: contextMessages.length,
@@ -384,13 +386,18 @@
                 }
             }
 
-            prompt += `\n\n${text}
+            prompt += `
+
+Now, please improve ONLY the following message to be more ${CONFIG.STYLE} in ${CONFIG.LANGUAGE}:
+
+${text}
 
 Requirements:
 - Keep the same meaning and intent
 - Make it sound more ${CONFIG.STYLE}
 - Use ${CONFIG.LANGUAGE} language
-- Return only the improved text, no explanations`;
+- Return only the improved text without quotes or formatting
+- Do NOT summarize or reference the conversation context`;
 
             if (CONFIG.CUSTOM_INSTRUCTIONS) {
                 prompt += `\n- Additional instructions: ${CONFIG.CUSTOM_INSTRUCTIONS}`;
@@ -605,10 +612,10 @@ Requirements:
 
             // Check if the configured hotkey combination is pressed
             const hotkeyMatch =
-                (hotkey.ctrl === ctrlPressed) &&
-                (hotkey.shift === shiftPressed) &&
-                (hotkey.alt === altPressed) &&
-                (hotkey.tab === tabPressed);
+                (hotkey.ctrl && ctrlPressed) &&
+                (hotkey.shift && shiftPressed) &&
+                (!hotkey.alt || !altPressed) &&
+                (!hotkey.tab || !tabPressed);
 
             if (hotkeyMatch) {
                 // Prevent Tab from changing focus if it's part of the hotkey

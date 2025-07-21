@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.1.0",
-    BUILD: 0,
-    BUILD_DATE: "2025-07-20",
-    DESCRIPTION: "Official release: Reset functionality restored + Static analysis tests",
+    VERSION: "1.1.4",
+    BUILD: 4,
+    BUILD_DATE: "2025-07-21",
+    DESCRIPTION: "Remove quotes from improved text output",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
