@@ -1,15 +1,17 @@
 name: Linux Package Builder
 
 on:
+  release:
+    types: [created]
   workflow_dispatch:
     inputs:
       version:
         description: 'Version to package (e.g., v1.1.9)'
         required: true
-        default: 'v1.1.9'
+        default: 'v1.1.10'
 
 permissions:
-  contents: read
+  contents: write
   
 jobs:
   build-linux-package:
@@ -22,7 +24,11 @@ jobs:
     - name: Get version
       id: get_version
       run: |
-        VERSION="${{ github.event.inputs.version }}"
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=${GITHUB_REF#refs/tags/}
+        fi
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "Building package for version: $VERSION"
         
@@ -158,32 +164,30 @@ jobs:
         echo "📦 Package contents:"
         ls -la "$PKG_DIR/"
         
-    - name: Create compressed packages
+    - name: Create compressed package
       run: |
         PKG_DIR="SlackPolish-Linux-${{ steps.get_version.outputs.version }}"
-        
-        # Create tar.gz
+
+        # Create tar.gz (standard Linux package format)
         tar -czf "${PKG_DIR}.tar.gz" "$PKG_DIR/"
+
+        echo "📦 Package created:"
+        ls -la "${PKG_DIR}.tar.gz"
+        echo "Size: $(du -h "${PKG_DIR}.tar.gz" | cut -f1)"
         
-        # Create zip
-        zip -r "${PKG_DIR}.zip" "$PKG_DIR/"
-        
-        # Generate checksums
-        sha256sum "${PKG_DIR}.tar.gz" > "${PKG_DIR}-checksums.txt"
-        sha256sum "${PKG_DIR}.zip" >> "${PKG_DIR}-checksums.txt"
-        
-        echo "📦 Packages created:"
-        ls -la "${PKG_DIR}".{tar.gz,zip}
-        echo ""
-        echo "🔐 Checksums:"
-        cat "${PKG_DIR}-checksums.txt"
-        
-    - name: Upload packages
+    - name: Upload Linux package as artifact
       uses: actions/upload-artifact@v4
+      if: github.event_name == 'workflow_dispatch'
       with:
         name: SlackPolish-Linux-${{ steps.get_version.outputs.version }}
-        path: |
-          SlackPolish-Linux-${{ steps.get_version.outputs.version }}.tar.gz
-          SlackPolish-Linux-${{ steps.get_version.outputs.version }}.zip
-          SlackPolish-Linux-${{ steps.get_version.outputs.version }}-checksums.txt
+        path: SlackPolish-Linux-${{ steps.get_version.outputs.version }}.tar.gz
         retention-days: 30
+
+    - name: Upload package to release (for release triggers)
+      uses: softprops/action-gh-release@v1
+      if: github.event_name == 'release'
+      with:
+        tag_name: ${{ steps.get_version.outputs.version }}
+        files: SlackPolish-Linux-${{ steps.get_version.outputs.version }}.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
