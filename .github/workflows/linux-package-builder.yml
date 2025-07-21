@@ -1,0 +1,189 @@
+name: Linux Package Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to package (e.g., v1.1.9)'
+        required: true
+        default: 'v1.1.9'
+
+permissions:
+  contents: read
+  
+jobs:
+  build-linux-package:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Get version
+      id: get_version
+      run: |
+        VERSION="${{ github.event.inputs.version }}"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building package for version: $VERSION"
+        
+    - name: Verify required files exist
+      run: |
+        echo "Checking for required files..."
+        for file in slack-text-improver.js slack-settings.js slack-channel-summary.js slack-config.js logo-data.js version.json; do
+          if [ -f "$file" ]; then
+            echo "✅ Found: $file"
+          else
+            echo "❌ Missing: $file"
+            exit 1
+          fi
+        done
+        
+    - name: Create package directory
+      run: |
+        PKG_DIR="SlackPolish-Linux-${{ steps.get_version.outputs.version }}"
+        mkdir -p "$PKG_DIR"
+        echo "Created directory: $PKG_DIR"
+        
+    - name: Copy core files
+      run: |
+        PKG_DIR="SlackPolish-Linux-${{ steps.get_version.outputs.version }}"
+        
+        # Copy core SlackPolish files
+        cp slack-text-improver.js "$PKG_DIR/"
+        cp slack-settings.js "$PKG_DIR/"
+        cp slack-channel-summary.js "$PKG_DIR/"
+        cp slack-config.js "$PKG_DIR/"
+        cp logo-data.js "$PKG_DIR/"
+        cp version.json "$PKG_DIR/"
+        
+        # Copy installers
+        cp installers/install-slack-LINUX-X64.py "$PKG_DIR/"
+        cp installers/uninstall-slack-LINUX-X64.py "$PKG_DIR/"
+        
+        # Copy license
+        cp LICENSE "$PKG_DIR/"
+        
+        echo "✅ Core files copied"
+        
+    - name: Create user documentation
+      run: |
+        PKG_DIR="SlackPolish-Linux-${{ steps.get_version.outputs.version }}"
+        
+        cat > "$PKG_DIR/README.md" << 'EOF'
+        # SlackPolish - Linux Installation Package
+        
+        SlackPolish enhances your Slack experience with AI-powered text improvement, translation, and channel summarization.
+        
+        ## Quick Installation
+        
+        ```bash
+        sudo python3 install-slack-LINUX-X64.py
+        ```
+        
+        ## Usage
+        
+        - **Text Improvement:** Press `Ctrl+Shift` in any message field
+        - **Settings Menu:** Press `F12`
+        - **Channel Summary:** Press `F10`
+        
+        ## Requirements
+        
+        - Linux x64 system
+        - Slack desktop application
+        - Python 3.6+
+        - Node.js and npm (for asar tool)
+        - OpenAI API key
+        
+        ## Support
+        
+        Visit: https://github.com/eboom79/SlackPolish
+        EOF
+        
+        echo "✅ README created"
+        
+    - name: Create convenience scripts
+      run: |
+        PKG_DIR="SlackPolish-Linux-${{ steps.get_version.outputs.version }}"
+        
+        # Install script
+        cat > "$PKG_DIR/install.sh" << 'EOF'
+        #!/bin/bash
+        echo "🐧 SlackPolish Linux Installer"
+        if [ "$EUID" -ne 0 ]; then
+            echo "❌ Please run as root: sudo ./install.sh"
+            exit 1
+        fi
+        python3 install-slack-LINUX-X64.py "$@"
+        EOF
+        
+        # Uninstall script
+        cat > "$PKG_DIR/uninstall.sh" << 'EOF'
+        #!/bin/bash
+        echo "🗑️ SlackPolish Linux Uninstaller"
+        if [ "$EUID" -ne 0 ]; then
+            echo "❌ Please run as root: sudo ./uninstall.sh"
+            exit 1
+        fi
+        python3 uninstall-slack-LINUX-X64.py "$@"
+        EOF
+        
+        chmod +x "$PKG_DIR/install.sh"
+        chmod +x "$PKG_DIR/uninstall.sh"
+        
+        echo "✅ Convenience scripts created"
+        
+    - name: Create package info
+      run: |
+        PKG_DIR="SlackPolish-Linux-${{ steps.get_version.outputs.version }}"
+        
+        cat > "$PKG_DIR/PACKAGE-INFO.txt" << EOF
+        SlackPolish Linux Package
+        ========================
+        
+        Version: ${{ steps.get_version.outputs.version }}
+        Platform: Linux x64
+        Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        
+        Installation: sudo ./install.sh
+        Uninstallation: sudo ./uninstall.sh
+        
+        Repository: https://github.com/eboom79/SlackPolish
+        EOF
+        
+        echo "✅ Package info created"
+        
+    - name: List package contents
+      run: |
+        PKG_DIR="SlackPolish-Linux-${{ steps.get_version.outputs.version }}"
+        echo "📦 Package contents:"
+        ls -la "$PKG_DIR/"
+        
+    - name: Create compressed packages
+      run: |
+        PKG_DIR="SlackPolish-Linux-${{ steps.get_version.outputs.version }}"
+        
+        # Create tar.gz
+        tar -czf "${PKG_DIR}.tar.gz" "$PKG_DIR/"
+        
+        # Create zip
+        zip -r "${PKG_DIR}.zip" "$PKG_DIR/"
+        
+        # Generate checksums
+        sha256sum "${PKG_DIR}.tar.gz" > "${PKG_DIR}-checksums.txt"
+        sha256sum "${PKG_DIR}.zip" >> "${PKG_DIR}-checksums.txt"
+        
+        echo "📦 Packages created:"
+        ls -la "${PKG_DIR}".{tar.gz,zip}
+        echo ""
+        echo "🔐 Checksums:"
+        cat "${PKG_DIR}-checksums.txt"
+        
+    - name: Upload packages
+      uses: actions/upload-artifact@v4
+      with:
+        name: SlackPolish-Linux-${{ steps.get_version.outputs.version }}
+        path: |
+          SlackPolish-Linux-${{ steps.get_version.outputs.version }}.tar.gz
+          SlackPolish-Linux-${{ steps.get_version.outputs.version }}.zip
+          SlackPolish-Linux-${{ steps.get_version.outputs.version }}-checksums.txt
+        retention-days: 30
