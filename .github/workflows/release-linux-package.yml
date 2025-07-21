@@ -3,6 +3,15 @@ name: Create Linux Release Package
 on:
   release:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to package (e.g., v1.1.9)'
+        required: true
+        default: 'v1.1.9'
+
+permissions:
+  contents: write
 
 jobs:
   create-linux-package:
@@ -15,7 +24,11 @@ jobs:
     - name: Get release version
       id: get_version
       run: |
-        VERSION=${GITHUB_REF#refs/tags/}
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=${GITHUB_REF#refs/tags/}
+        fi
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "Release version: $VERSION"
         
@@ -196,32 +209,24 @@ jobs:
         echo "Checksums:"
         cat SlackPolish-Linux-${{ steps.get_version.outputs.version }}-checksums.txt
         
-    - name: Upload tar.gz package to release
-      uses: actions/upload-release-asset@v1
+    - name: Upload packages to release
+      uses: softprops/action-gh-release@v1
+      if: github.event_name == 'release'
+      with:
+        tag_name: ${{ steps.get_version.outputs.version }}
+        files: |
+          SlackPolish-Linux-${{ steps.get_version.outputs.version }}.tar.gz
+          SlackPolish-Linux-${{ steps.get_version.outputs.version }}.zip
+          SlackPolish-Linux-${{ steps.get_version.outputs.version }}-checksums.txt
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload packages (manual trigger)
+      uses: actions/upload-artifact@v3
+      if: github.event_name == 'workflow_dispatch'
       with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./SlackPolish-Linux-${{ steps.get_version.outputs.version }}.tar.gz
-        asset_name: SlackPolish-Linux-${{ steps.get_version.outputs.version }}.tar.gz
-        asset_content_type: application/gzip
-        
-    - name: Upload zip package to release
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./SlackPolish-Linux-${{ steps.get_version.outputs.version }}.zip
-        asset_name: SlackPolish-Linux-${{ steps.get_version.outputs.version }}.zip
-        asset_content_type: application/zip
-        
-    - name: Upload checksums to release
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./SlackPolish-Linux-${{ steps.get_version.outputs.version }}-checksums.txt
-        asset_name: SlackPolish-Linux-${{ steps.get_version.outputs.version }}-checksums.txt
-        asset_content_type: text/plain
+        name: SlackPolish-Linux-${{ steps.get_version.outputs.version }}
+        path: |
+          SlackPolish-Linux-${{ steps.get_version.outputs.version }}.tar.gz
+          SlackPolish-Linux-${{ steps.get_version.outputs.version }}.zip
+          SlackPolish-Linux-${{ steps.get_version.outputs.version }}-checksums.txt
