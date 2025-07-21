@@ -66,7 +66,7 @@ runTest('Context Anonymization', () => {
 // Test 4: Context Formatting
 runTest('Context Formatting', () => {
     assert(scriptContent.includes('Recent conversation context'), 'Context formatting text not found');
-    assert(scriptContent.includes('Consider this conversation context'), 'Context instruction not found');
+    assert(scriptContent.includes('Here is the conversation context for reference'), 'Context instruction not found');
     assert(scriptContent.includes('contextMessages.length'), 'Context message count handling not found');
 });
 

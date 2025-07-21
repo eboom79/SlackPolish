@@ -65,9 +65,33 @@ elif [ $# -gt 2 ]; then
 fi
 
 # ===================================================
-# STAGE 1: INCREMENT VERSION
+# STAGE 1: KILL CURRENT SLACK
 # ===================================================
-print_stage "1" "INCREMENT VERSION"
+print_stage "1" "KILL CURRENT SLACK"
+
+print_info "Terminating existing Slack processes..."
+pkill -f slack 2>/dev/null || true
+
+# Wait a moment for processes to fully terminate
+sleep 2
+
+# Verify Slack is closed
+if pgrep -f slack > /dev/null; then
+    print_warning "Some Slack processes still running, forcing termination..."
+    pkill -9 -f slack 2>/dev/null || true
+    sleep 1
+fi
+
+if ! pgrep -f slack > /dev/null; then
+    print_success "Slack processes terminated successfully"
+else
+    print_warning "Some Slack processes may still be running"
+fi
+
+# ===================================================
+# STAGE 2: INCREMENT VERSION
+# ===================================================
+print_stage "2" "INCREMENT VERSION"
 
 if [ -n "$VERSION_ARG" ] && [ -n "$DESCRIPTION_ARG" ]; then
     print_info "Setting version to $VERSION_ARG with description: $DESCRIPTION_ARG"
@@ -95,9 +119,9 @@ CURRENT_VERSION=$(python3 -c "import json; print(json.load(open('version.json'))
 print_info "Current version: $CURRENT_VERSION"
 
 # ===================================================
-# STAGE 2: INSTALL WITH SUDO
+# STAGE 3: INSTALL WITH SUDO
 # ===================================================
-print_stage "2" "INSTALL WITH SUDO"
+print_stage "3" "INSTALL WITH SUDO"
 
 print_info "Installing SlackPolish v$CURRENT_VERSION..."
 sudo python3 installers/install-slack-LINUX-X64.py
@@ -110,38 +134,14 @@ else
 fi
 
 # ===================================================
-# STAGE 3: KILL CURRENT SLACK
-# ===================================================
-print_stage "3" "KILL CURRENT SLACK"
-
-print_info "Terminating existing Slack processes..."
-pkill -f slack 2>/dev/null || true
-
-# Wait a moment for processes to fully terminate
-sleep 2
-
-# Verify Slack is closed
-if pgrep -f slack > /dev/null; then
-    print_warning "Some Slack processes still running, forcing termination..."
-    pkill -9 -f slack 2>/dev/null || true
-    sleep 1
-fi
-
-if ! pgrep -f slack > /dev/null; then
-    print_success "Slack processes terminated successfully"
-else
-    print_warning "Some Slack processes may still be running"
-fi
-
-# ===================================================
 # STAGE 4: LAUNCH NEW SLACK
 # ===================================================
 print_stage "4" "LAUNCH NEW SLACK"
 
 print_info "Starting Slack with SlackPolish v$CURRENT_VERSION..."
 
-# Start Slack in background
-slack &
+# Start Slack in background and detach from terminal
+nohup slack > /dev/null 2>&1 &
 SLACK_PID=$!
 
 # Wait a moment for Slack to start

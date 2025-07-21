@@ -1,8 +1,8 @@
 {
     "major": 1,
     "minor": 1,
-    "build": 4,
-    "version_string": "1.1.4",
-    "description": "Remove quotes from improved text output",
+    "build": 9,
+    "version_string": "1.1.9",
+    "description": "Test settings reset while preserving API key",
     "date": "2025-07-21"
 }

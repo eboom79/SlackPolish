@@ -88,22 +88,32 @@ class ConfigLoadingTests {
         // Test main structure (API key is correctly stored in localStorage, not config file)
         assertExists(config.RESET_SAVED_SETTINGS, 'RESET_SAVED_SETTINGS should exist');
         assertExists(config.RESET_API_KEY, 'RESET_API_KEY should exist');
-        assertExists(config.DEFAULT_SETTINGS, 'DEFAULT_SETTINGS should exist');
         assertExists(config.SUPPORTED_LANGUAGES, 'SUPPORTED_LANGUAGES should exist');
         assertExists(config.AVAILABLE_STYLES, 'AVAILABLE_STYLES should exist');
+
+        // Test token configuration
+        assertExists(config.OPENAI_MAX_TOKENS, 'OPENAI_MAX_TOKENS should exist');
+        assertExists(config.EXECUTIVE_SUMMARY_MAX_TOKENS, 'EXECUTIVE_SUMMARY_MAX_TOKENS should exist');
+        assertExists(config.COMPREHENSIVE_SUMMARY_MAX_TOKENS, 'COMPREHENSIVE_SUMMARY_MAX_TOKENS should exist');
     }
 
-    testDefaultSettings() {
+    testTokenConfiguration() {
         const config = this.loadConfig();
-        const defaults = config.DEFAULT_SETTINGS;
-        
-        assertExists(defaults.language, 'Default language should exist');
-        assertExists(defaults.style, 'Default style should exist');
-        assertExists(defaults.improveHotkey, 'Default hotkey should exist');
-        assertExists(defaults.personalPolish, 'Default personal polish should exist');
-        
-        assertType(defaults.personalPolish, 'string', 'Personal polish should be string');
-        assertEqual(defaults.personalPolish, '', 'Personal polish should default to empty string');
+
+        // Test token limits are numbers and reasonable values
+        assert(typeof config.OPENAI_MAX_TOKENS === 'number', 'OPENAI_MAX_TOKENS should be a number');
+        assert(config.OPENAI_MAX_TOKENS > 0, 'OPENAI_MAX_TOKENS should be positive');
+        assert(config.OPENAI_MAX_TOKENS <= 4096, 'OPENAI_MAX_TOKENS should not exceed model limit');
+
+        assert(typeof config.EXECUTIVE_SUMMARY_MAX_TOKENS === 'number', 'EXECUTIVE_SUMMARY_MAX_TOKENS should be a number');
+        assert(config.EXECUTIVE_SUMMARY_MAX_TOKENS > 0, 'EXECUTIVE_SUMMARY_MAX_TOKENS should be positive');
+
+        assert(typeof config.COMPREHENSIVE_SUMMARY_MAX_TOKENS === 'number', 'COMPREHENSIVE_SUMMARY_MAX_TOKENS should be a number');
+        assert(config.COMPREHENSIVE_SUMMARY_MAX_TOKENS > 0, 'COMPREHENSIVE_SUMMARY_MAX_TOKENS should be positive');
+
+        // Test temperature is valid
+        assert(typeof config.OPENAI_TEMPERATURE === 'number', 'OPENAI_TEMPERATURE should be a number');
+        assert(config.OPENAI_TEMPERATURE >= 0 && config.OPENAI_TEMPERATURE <= 1, 'OPENAI_TEMPERATURE should be between 0 and 1');
     }
 
     testLanguageConfiguration() {
@@ -178,7 +188,7 @@ class ConfigLoadingTests {
         
         this.runTest('Config file exists', () => this.testConfigFileExists());
         this.runTest('Config structure validation', () => this.testConfigStructure());
-        this.runTest('Default settings validation', () => this.testDefaultSettings());
+        this.runTest('Token configuration validation', () => this.testTokenConfiguration());
         this.runTest('Language configuration', () => this.testLanguageConfiguration());
         this.runTest('Style configuration', () => this.testStyleConfiguration());
         this.runTest('Reset flags validation', () => this.testResetFlags());

@@ -106,16 +106,14 @@ class StaticCodeAnalysisTests {
         // Extract config parameters (simple regex approach)
         const configParams = [
             'RESET_SAVED_SETTINGS',
-            'RESET_API_KEY', 
+            'RESET_API_KEY',
             'OPENAI_MODEL',
             'OPENAI_MAX_TOKENS',
             'OPENAI_TEMPERATURE',
-            'DEFAULT_SETTINGS',
             'SUPPORTED_LANGUAGES',
             'AVAILABLE_STYLES',
             'AVAILABLE_HOTKEYS',
-            'TEXT_INPUT_SELECTORS',
-            'PROMPTS'
+            'TEXT_INPUT_SELECTORS'
         ];
         
         const usageReport = [];
@@ -198,12 +196,13 @@ class StaticCodeAnalysisTests {
             // Test required properties exist
             const requiredProps = [
                 'VERSION',
-                'BUILD', 
+                'BUILD',
                 'BUILD_DATE',
                 'RESET_SAVED_SETTINGS',
                 'RESET_API_KEY',
                 'OPENAI_MODEL',
-                'DEFAULT_SETTINGS'
+                'OPENAI_MAX_TOKENS',
+                'OPENAI_TEMPERATURE'
             ];
             
             requiredProps.forEach(prop => {
@@ -216,7 +215,8 @@ class StaticCodeAnalysisTests {
             assert(typeof config.BUILD === 'number', 'BUILD must be number');
             assert(typeof config.RESET_SAVED_SETTINGS === 'boolean', 'RESET_SAVED_SETTINGS must be boolean');
             assert(typeof config.RESET_API_KEY === 'boolean', 'RESET_API_KEY must be boolean');
-            assert(typeof config.DEFAULT_SETTINGS === 'object', 'DEFAULT_SETTINGS must be object');
+            assert(typeof config.OPENAI_MAX_TOKENS === 'number', 'OPENAI_MAX_TOKENS must be number');
+            assert(typeof config.OPENAI_TEMPERATURE === 'number', 'OPENAI_TEMPERATURE must be number');
             
             console.log('✅ Config file syntax and structure valid');
             return config;

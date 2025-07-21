@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.1.4",
-    BUILD: 4,
+    VERSION: "1.1.9",
+    BUILD: 9,
     BUILD_DATE: "2025-07-21",
-    DESCRIPTION: "Remove quotes from improved text output",
+    DESCRIPTION: "Test settings reset while preserving API key",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
@@ -17,49 +17,85 @@ window.SLACKPOLISH_CONFIG = {
     // Set to true to force reset all saved settings to defaults
     // Useful for fixing corrupted localStorage or deploying breaking changes
     // NOTE: Reset only happens ONCE per RESET_VERSION - increment version to force new reset
-    RESET_SAVED_SETTINGS: false,
-    RESET_SAVED_SETTINGS_VERSION: 'install-1752747170',
+    RESET_SAVED_SETTINGS: true,
+    RESET_SAVED_SETTINGS_VERSION: 'test-settings-reset-preserve-api-v1.1.8',
 
     // Set to true to force reset only the saved API key (keeps other settings)
     // Useful when API key is corrupted but other settings are fine
     // NOTE: Reset only happens ONCE per RESET_VERSION - increment version to force new reset
     RESET_API_KEY: false,
-    RESET_API_KEY_VERSION: 'install-1752747170',
+    RESET_API_KEY_VERSION: 'test-api-reset-v1.1.8',
 
     // ========================================
     // OpenAI API Configuration
     // ========================================
     // NOTE: API key is stored in localStorage, not here for security
-    OPENAI_MODEL: 'gpt-4-turbo',     // High-quality model for better summaries (was: gpt-3.5-turbo)
-    OPENAI_MAX_TOKENS: 500,         // Maximum tokens for text improvement responses
-    OPENAI_TEMPERATURE: 0.7,        // Creativity level (0.0 = deterministic, 1.0 = creative)
+    //
+    // COST ESTIMATION (as of 2025, prices may change):
+    // gpt-4-turbo: $10.00 per 1M input tokens, $30.00 per 1M output tokens
+    //
+    // Typical usage costs:
+    // • Text improvement (500 tokens): ~$0.015 per improvement
+    // • Executive summary (2000 tokens): ~$0.06 per summary
+    // • Comprehensive summary (4000 tokens): ~$0.12 per summary
+    //
+    // Monthly estimates for moderate usage:
+    // • 50 text improvements: ~$0.75
+    // • 10 executive summaries: ~$0.60
+    // • 5 comprehensive summaries: ~$0.60
+    // Total: ~$2.00/month for moderate usage
+
+    // Model Selection
+    OPENAI_MODEL: 'gpt-4-turbo',     // High-quality model for better text improvement and summaries
+                                     // Alternative: 'gpt-3.5-turbo' (cheaper but lower quality)
+
+    // Text Improvement Settings
+    OPENAI_MAX_TOKENS: 500,          // Maximum tokens for text improvement responses
+                                     //
+                                     // What are tokens? Roughly 4 characters or 0.75 words
+                                     // Example: 500 tokens ≈ 375 words or ~2-3 paragraphs
+                                     //
+                                     // Trade-offs:
+                                     // • Lower values (200-500): Cheaper cost, shorter responses, may cut off longer improvements
+                                     // • Higher values (800-1500): Higher cost, longer responses, better for complex text
+                                     //
+                                     // Recommended: 500 for most text improvements (good balance of cost/quality)
+
+    OPENAI_TEMPERATURE: 0.7,         // Creativity level (0.0 = deterministic, 1.0 = creative)
+                                     //
+                                     // Trade-offs:
+                                     // • Lower (0.0-0.3): More consistent, predictable, formal responses
+                                     // • Medium (0.4-0.7): Balanced creativity and consistency (recommended)
+                                     // • Higher (0.8-1.0): More creative, varied, but potentially inconsistent
 
     // ========================================
     // CHANNEL SUMMARY TOKEN LIMITS
     // ========================================
-    // Token limits respecting model constraints (max 4096 completion tokens)
-    EXECUTIVE_SUMMARY_MAX_TOKENS: 2000,      // Executive Summary: concise but complete
-    COMPREHENSIVE_SUMMARY_MAX_TOKENS: 4000,  // Comprehensive Summary: detailed analysis
-    DEFAULT_SUMMARY_MAX_TOKENS: 3000,        // Default/fallback for summaries
+    // Token limits for different summary types
+    // Note: gpt-4-turbo supports up to 4096 completion tokens
 
-    // ========================================
-    // DEFAULT SETTINGS
-    // ========================================
-    DEFAULT_SETTINGS: {
-        language: 'ENGLISH',        // Default language
-        style: 'CASUAL',           // Default style
-        improveHotkey: 'Ctrl+Shift', // Default hotkey
-        personalPolish: '',         // Default personal polish (empty)
-        smartContext: {
-            enabled: true,          // Enable smart context by default
-            maxMessages: 5,         // Maximum messages to include in context
-            privacyMode: false,     // Anonymize sender names if true
-            minMessageLength: 3,    // Minimum message length to include
-            maxContextAge: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
-            includeThreadContext: true // Include thread parent messages
-        },
-        debugMode: false            // Show debug logs and visual indicators
-    },
+    EXECUTIVE_SUMMARY_MAX_TOKENS: 2000,      // Executive Summary: structured bullet points
+                                             //
+                                             // What to expect: ~1500 words, 3-4 pages of summary
+                                             // Cost impact: Medium cost, good for regular use
+                                             // Quality: Concise but complete overview of key topics
+                                             // Best for: Daily/weekly channel reviews
+
+    COMPREHENSIVE_SUMMARY_MAX_TOKENS: 4000,  // Comprehensive Summary: detailed analysis
+                                             //
+                                             // What to expect: ~3000 words, 6-8 pages of detailed analysis
+                                             // Cost impact: Higher cost, use sparingly for important channels
+                                             // Quality: In-depth analysis with participants, context, and timeline
+                                             // Best for: Important meetings, project reviews, incident analysis
+
+    DEFAULT_SUMMARY_MAX_TOKENS: 3000,        // Default/fallback for summaries
+                                             //
+                                             // What to expect: ~2250 words, 4-5 pages of balanced summary
+                                             // Cost impact: Moderate cost, good middle ground
+                                             // Quality: Balanced detail level between executive and comprehensive
+                                             // Used when: Summary level is not specified or for medium-length channels
+
+
 
     // ========================================
     // AVAILABLE HOTKEYS
@@ -123,30 +159,7 @@ window.SLACKPOLISH_CONFIG = {
         '[contenteditable="true"]'
     ],
 
-    // ========================================
-    // DETAILED PROMPTS
-    // ========================================
-    PROMPTS: {
-        // Style prompts - provide specific instructions for each improvement type
-        STYLES: {
-            PROFESSIONAL: 'Please rewrite the following text in a professional, business-appropriate tone while maintaining the original meaning and key information',
-            CASUAL: 'Please rewrite the following text in a casual, friendly tone while keeping the main message clear',
-            CONCISE: 'Please rewrite the following text to be more concise and to the point while preserving all important information',
-            GRAMMAR: 'Please correct any grammar, spelling, and punctuation errors in the following text while maintaining the original tone and meaning'
-        },
 
-        // Language prompts - specify target language for responses
-        LANGUAGES: {
-            ENGLISH: 'Respond in English',
-            SPANISH: 'Respond in Spanish',
-            FRENCH: 'Respond in French',
-            GERMAN: 'Respond in German',
-            HEBREW: 'Respond in Hebrew',
-            CHINESE: 'Respond in Chinese (Simplified)',
-            HINDI: 'Respond in Hindi',
-            BULGARIAN: 'Respond in Bulgarian'
-        }
-    },
 
     // ========================================
     // CHANNEL SUMMARY SETTINGS

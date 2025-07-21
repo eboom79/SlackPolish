@@ -41,14 +41,22 @@
                     const lastResetVersion = localStorage.getItem('slackpolish-last-settings-reset-version');
 
                     if (resetVersion !== lastResetVersion) {
-                        utils.log(`🚨 RESET_SAVED_SETTINGS flag detected (version: ${resetVersion}) - clearing all saved settings including API key`);
+                        utils.log(`🚨 RESET_SAVED_SETTINGS flag detected (version: ${resetVersion}) - clearing saved settings`);
                         localStorage.removeItem('slackpolish_settings');
-                        localStorage.removeItem('slackpolish_openai_api_key');
+                        localStorage.removeItem('slackpolish_hide_summary_confirmation');
+
+                        // Only clear API key if RESET_API_KEY is also true
+                        if (config.RESET_API_KEY === true) {
+                            utils.log(`🔑 Also clearing API key because RESET_API_KEY is true`);
+                            localStorage.removeItem('slackpolish_openai_api_key');
+                        } else {
+                            utils.log(`🔑 Preserving API key because RESET_API_KEY is false`);
+                        }
 
                         // Mark this reset version as completed
                         localStorage.setItem('slackpolish-last-settings-reset-version', resetVersion);
 
-                        utils.log('✅ All settings reset to defaults due to RESET_SAVED_SETTINGS flag');
+                        utils.log('✅ Settings reset to defaults due to RESET_SAVED_SETTINGS flag');
                         utils.log('💡 This reset happened once for this installation - managed by installer');
                     } else {
                         utils.log(`⏭️ RESET_SAVED_SETTINGS already performed for version ${resetVersion} - skipping`);
@@ -514,8 +522,8 @@ Requirements:
                         content: prompt
                     }
                 ],
-                max_tokens: 500,
-                temperature: 0.7
+                max_tokens: window.SLACKPOLISH_CONFIG?.OPENAI_MAX_TOKENS || 500,
+                temperature: window.SLACKPOLISH_CONFIG?.OPENAI_TEMPERATURE || 0.7
             };
 
             utils.debug('API request body', requestBody);
@@ -2161,8 +2169,8 @@ Requirements:
                     const requestBody = {
                         model: model,
                         messages: [{ role: 'user', content: prompt }],
-                        max_tokens: options.maxTokens || 500,
-                        temperature: options.temperature || 0.7
+                        max_tokens: options.maxTokens || window.SLACKPOLISH_CONFIG?.OPENAI_MAX_TOKENS || 500,
+                        temperature: options.temperature || window.SLACKPOLISH_CONFIG?.OPENAI_TEMPERATURE || 0.7
                     };
 
                     const response = await fetch('https://api.openai.com/v1/chat/completions', {
