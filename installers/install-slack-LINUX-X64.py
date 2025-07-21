@@ -589,8 +589,9 @@ def main():
     print_header("🎉 Installation completed successfully!")
     print("Next steps:")
     print("1. Restart Slack")
-    print("2. Configure your OpenAI API key in SlackPolish settings")
+    print("2. Press F12 to open settings menu and configure your preferences")
     print("3. Press Ctrl+Shift in any message field to test text improvement")
+    print("4. Press F10 for channel summary")
     
     return 0
 

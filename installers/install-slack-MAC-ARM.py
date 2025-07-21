@@ -465,10 +465,10 @@ def main():
     
     print_header("🎉 Installation completed successfully!")
     print("Next steps:")
-    print("1. Edit slack-config.js and add your OpenAI API key")
-    print("2. Restart Slack")
-    print("3. Press Ctrl+Shift in any message field to test")
-    print("4. Press F12 to open settings")
+    print("1. Restart Slack")
+    print("2. Press F12 to open settings menu and configure your preferences")
+    print("3. Press Ctrl+Shift in any message field to test text improvement")
+    print("4. Press F10 for channel summary")
     
     return 0
 

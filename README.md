@@ -13,15 +13,15 @@ Transform your messages instantly with professional polish, casual tone, grammar
 - [🚀 Features](#-features)
 - [� Project Structure](#-project-structure)
 - [📋 Pre-Installation Requirements](#-pre-installation-requirements)
-- [🛠️ Installation Instructions](#️-installation-instructions)
-
+- [🛠️ Installation Instructions (Linux Only)](#️-installation-instructions-linux-only)
+- [🚫 Platform Support Status](#-platform-support-status)
 - [🗑️ Uninstallation](#️-uninstallation)
 - [🖥️ System Compatibility](#️-system-compatibility)
 - [📝 Changelog](#-changelog)
 
 ## 🎯 Product Overview
 
-**SlackPolish** is an internal Redis Enterprise team tool that seamlessly integrates with Slack Desktop to improve written communication using OpenAI's advanced language models. This productivity enhancement tool works across **Linux, Windows, and macOS** platforms for Redis Enterprise team members.
+**SlackPolish** is an internal Redis Enterprise team tool that seamlessly integrates with Slack Desktop to improve written communication using OpenAI's advanced language models. This productivity enhancement tool is currently **Linux-focused** and optimized for Redis Enterprise team members using Linux environments.
 
 ### **How It Works:**
 
@@ -93,12 +93,6 @@ Configuration file containing OpenAI settings, language/style options, detailed 
 ### **🎨 `logo-data.js`**
 Base64-encoded SlackPolish logo data for clean code organization. Custom logo appears in loading indicators, settings menu, channel summary, and API key popups.
 
-### **🛠️ Platform-Specific Installers** (`installers/` directory)
-- **`installers/install-slack-LINUX-X64.py`** - ✅ **TESTED** - Linux x64 installer optimized for Ubuntu, Debian, CentOS, and other distributions
-- **`installers/install-slack-MAC-ARM.py`** - ⚠️ **UNTESTED** - macOS Apple Silicon (M1/M2/M3) installer with ARM optimization (use at your own risk)
-- **`installers/install-slack-WINDOWS-X64.py`** - ⚠️ **UNTESTED** - Windows x64 installer for Windows 10/11 systems (use at your own risk)
-
-
 
 ## � Pre-Installation Requirements
 
@@ -111,9 +105,19 @@ Base64-encoded SlackPolish logo data for clean code organization. Custom logo ap
    - **Note**: You'll be prompted to enter this on first use - no need to configure it during installation
 5. ✅ **Administrator Privileges** - Needed to modify Slack installation files
 
-### **Platform-Specific Requirements:**
 
-#### **🐧 Linux (Ubuntu/Debian/CentOS/etc.)**
+
+
+## 🛠️ Installation Instructions (Linux Only)
+
+
+
+
+
+### **🐧 Linux Requirements**
+
+**For Linux x64 systems (Ubuntu, Debian, CentOS, etc.):**
+
 ```bash
 # Install Python 3 (if not already installed)
 sudo apt update && sudo apt install python3 python3-pip
@@ -126,69 +130,20 @@ python3 --version
 npm --version
 ```
 
-#### **🍎 macOS**
+### **Step 1: Download SlackPolish**
 ```bash
-# Install Python 3 (if not already installed)
-brew install python3
+# Navigate to your desired directory
+cd /path/to/your/projects/
 
-# Install Node.js and npm
-brew install node
-
-# Verify installations
-python3 --version
-npm --version
-```
-
-#### **🪟 Windows**
-1. **Python 3:** Download from [python.org](https://www.python.org/downloads/)
-2. **Node.js:** Download from [nodejs.org](https://nodejs.org/)
-3. **Verify installations:**
-```cmd
-python --version
-npm --version
-```
-
-## 🛠️ Installation Instructions
-
-### **Step 1: Download and Prepare**
-```bash
-# Navigate to the project directory
-cd /path/to/SlackPolish/
-
-# Or download the latest version
-git clone <repository-url>
+# Clone the repository
+git clone https://github.com/eboom79/SlackPolish.git
 cd SlackPolish
 ```
 
-### **Step 2: Install by Operating System**
-
-#### **🐧 Linux Installation**
-
-**For Linux x64 systems (Ubuntu, Debian, CentOS, etc.):**
+### **Step 2: Install SlackPolish**
 ```bash
 sudo python3 installers/install-slack-LINUX-X64.py
 ```
-
-
-
-#### **🍎 macOS Installation**
-
-**For macOS Apple Silicon (M1/M2/M3) and newer Slack versions:**
-```bash
-sudo python3 installers/install-slack-MAC-ARM.py
-```
-
-
-
-#### **🪟 Windows Installation**
-
-**For Windows x64 systems (Windows 10/11) - Run Command Prompt as Administrator:**
-```cmd
-python installers/install-slack-WINDOWS-X64.py
-```
-
-
-
 
 
 ### **Step 3: Verify Installation**
@@ -209,6 +164,17 @@ python installers/install-slack-WINDOWS-X64.py
 5. **Start using SlackPolish** - No further configuration needed!
 
 **💡 Tip**: You can always update your API key later by pressing **F12** → Settings Menu
+
+## 🚫 Platform Support Status
+
+### **✅ Supported Platforms**
+- **🐧 Linux x64** - Fully tested and supported (Ubuntu, Debian, CentOS, etc.)
+
+### **❌ Currently Unsupported Platforms**
+- **🍎 macOS** - Not supported at this time
+- **🪟 Windows** - Not supported at this time
+
+**Note**: SlackPolish is currently focused on Linux environments. macOS and Windows support may be added in future releases based on user demand.
 
 ### **�🔧 Troubleshooting Installation**
 

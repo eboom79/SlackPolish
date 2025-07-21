@@ -17,7 +17,7 @@ window.SLACKPOLISH_CONFIG = {
     // Set to true to force reset all saved settings to defaults
     // Useful for fixing corrupted localStorage or deploying breaking changes
     // NOTE: Reset only happens ONCE per RESET_VERSION - increment version to force new reset
-    RESET_SAVED_SETTINGS: true,
+    RESET_SAVED_SETTINGS: false,
     RESET_SAVED_SETTINGS_VERSION: 'test-settings-reset-preserve-api-v1.1.8',
 
     // Set to true to force reset only the saved API key (keeps other settings)

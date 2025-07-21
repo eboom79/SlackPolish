@@ -9,19 +9,10 @@ recommendations for implementing them to enhance SlackPolish functionality.
 🔥 HIGH PRIORITY - Add to Settings Menu
 =======================================
 
-1. 🧠 Smart Context Max Messages
-   - Current: Hardcoded to 5 messages
-   - Config: smartContext.maxMessages = 5 (unused)
-   - Implementation: Add dropdown in settings menu
-   - Options: 3, 5, 10, 15 messages
-   - Impact: Let users control context size
 
-2. 🤖 OpenAI Temperature Control
-   - Current: Not configurable
-   - Config: OPENAI_TEMPERATURE = 0.7 (unused)
-   - Implementation: Add slider in developer mode
-   - Range: 0.1 (deterministic) to 1.0 (creative)
-   - Impact: Control AI creativity level
+
+⚡ MEDIUM PRIORITY - Implement in Code Logic
+===========================================
 
 3. 🎯 OpenAI Max Tokens Control
    - Current: Not configurable
@@ -29,9 +20,6 @@ recommendations for implementing them to enhance SlackPolish functionality.
    - Implementation: Add slider in developer mode
    - Range: 100-1000 tokens
    - Impact: Control response length
-
-⚡ MEDIUM PRIORITY - Implement in Code Logic
-===========================================
 
 4. 📏 Smart Context Message Length Filter
    - Current: No filtering by message length
@@ -54,20 +42,24 @@ recommendations for implementing them to enhance SlackPolish functionality.
    - Logic: Fetch thread parent for better context understanding
    - Impact: Better context in threaded conversations
 
+   ⚡ Low PRIORITY 
+===========================================
+1. 🧠 Smart Context Max Messages
+   - Current: Hardcoded to 5 messages
+   - Config: smartContext.maxMessages = 5 (unused)
+   - Implementation: Add dropdown in settings menu
+   - Options: 3, 5, 10, 15 messages
+   - Impact: Let users control context size
+
+   2. 🤖 OpenAI Temperature Control
+   - Current: Not configurable
+   - Config: OPENAI_TEMPERATURE = 0.7 (unused)
+   - Implementation: Add slider in developer mode
+   - Range: 0.1 (deterministic) to 1.0 (creative)
+   - Impact: Control AI creativity level
+
 🚀 FUTURE FEATURES - Major Implementations
 ==========================================
-
-7. 📊 Channel Summary Feature (Complete Implementation)
-   - Current: Fully configured but not implemented
-   - Config: Entire CHANNEL_SUMMARY section (unused)
-   - Components needed:
-     * F10 hotkey handler
-     * Summary window UI
-     * Time range selection (24h, 7d, 30d, entire channel)
-     * Summary level selection (Executive, Comprehensive)
-     * Message fetching and processing
-     * OpenAI summarization
-   - Impact: Major new feature for channel analysis
 
 8. 🎨 Advanced Smart Context Settings Panel
    - Current: Basic enabled/privacy mode only
