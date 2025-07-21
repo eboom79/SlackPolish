@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.1.9",
-    BUILD: 9,
-    BUILD_DATE: "2025-07-21",
-    DESCRIPTION: "Test settings reset while preserving API key",
+    VERSION: "1.1.10",
+    BUILD: 10,
+    BUILD_DATE: "2025-07-22",
+    DESCRIPTION: "Code changes",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)

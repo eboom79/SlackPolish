@@ -1,8 +1,8 @@
 {
     "major": 1,
     "minor": 1,
-    "build": 9,
-    "version_string": "1.1.9",
-    "description": "Test settings reset while preserving API key",
-    "date": "2025-07-21"
+    "build": 10,
+    "version_string": "1.1.10",
+    "description": "Code changes",
+    "date": "2025-07-22"
 }
