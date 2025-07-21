@@ -86,8 +86,6 @@ Independent settings management module. Handles F12 settings menu, user preferen
 ### **📊 `slack-channel-summary.js`**
 Channel summarization module. Handles F10 hotkey, AI-powered channel analysis, time range selection (24h/7d/30d/entire), summary levels (Executive/Comprehensive), and professional UI interface.
 
-### **🔧 `slack-core.js`**
-Shared utilities and common functionality. Provides debug system integration, storage management, and utility functions used across all modules.
 
 ### **⚙️ `slack-config.js`**
 Configuration file containing OpenAI settings, language/style options, detailed prompts, version information, and default preferences. Central configuration for all modules.
@@ -108,7 +106,9 @@ Base64-encoded SlackPolish logo data for clean code organization. Custom logo ap
 1. ✅ **Slack Desktop App** - Must be installed and working
 2. ✅ **Python 3** - Version 3.6 or higher
 3. ✅ **Node.js & npm** - For the `asar` tool (Slack app modification)
-4. ✅ **OpenAI API Key** - Required for text improvement functionality
+4. ✅ **OpenAI API Key** - Required for AI text improvement and channel summary features
+   - Get your API key from: [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+   - **Note**: You'll be prompted to enter this on first use - no need to configure it during installation
 5. ✅ **Administrator Privileges** - Needed to modify Slack installation files
 
 ### **Platform-Specific Requirements:**
@@ -160,32 +160,13 @@ git clone <repository-url>
 cd SlackPolish
 ```
 
-### **Step 2: Configure API Key**
-Edit `slack-config.js` and replace the placeholder with your OpenAI API key:
-```javascript
-OPENAI_API_KEY: 'your-actual-openai-api-key-here'
-```
-
-### **Step 3: Install by Operating System**
+### **Step 2: Install by Operating System**
 
 #### **🐧 Linux Installation**
 
 **For Linux x64 systems (Ubuntu, Debian, CentOS, etc.):**
 ```bash
-# Use the Linux-specific installer (recommended)
 sudo python3 installers/install-slack-LINUX-X64.py
-
-# With verbose output for troubleshooting
-sudo python3 install-slack-LINUX-X64.py -v
-
-# Reset saved settings (if needed)
-sudo python3 installers/install-slack-LINUX-X64.py -s true
-
-# Reset API key only (if needed)
-sudo python3 installers/install-slack-LINUX-X64.py -k true
-
-# Force installation if validation fails
-sudo python3 installers/install-slack-LINUX-X64.py --force
 ```
 
 
@@ -194,23 +175,7 @@ sudo python3 installers/install-slack-LINUX-X64.py --force
 
 **For macOS Apple Silicon (M1/M2/M3) and newer Slack versions:**
 ```bash
-# Use the Mac ARM installer (recommended)
 sudo python3 installers/install-slack-MAC-ARM.py
-
-# With verbose output for troubleshooting
-sudo python3 install-slack-MAC-ARM.py -v
-
-# Reset saved settings (if needed)
-sudo python3 install-slack-MAC-ARM.py -s true
-
-# Reset API key only (if needed)
-sudo python3 install-slack-MAC-ARM.py -k true
-
-# Force installation if validation fails
-sudo python3 install-slack-MAC-ARM.py --force
-
-# Manual Slack path specification
-sudo python3 install-slack-MAC-ARM.py --slack-path "/Applications/Slack.app"
 ```
 
 
@@ -219,65 +184,33 @@ sudo python3 install-slack-MAC-ARM.py --slack-path "/Applications/Slack.app"
 
 **For Windows x64 systems (Windows 10/11) - Run Command Prompt as Administrator:**
 ```cmd
-# Use the Windows-specific installer (recommended)
 python installers/install-slack-WINDOWS-X64.py
-
-# With verbose output for troubleshooting
-python install-slack-WINDOWS-X64.py -v
-
-# Reset saved settings (if needed)
-python install-slack-WINDOWS-X64.py -s true
-
-# Reset API key only (if needed)
-python install-slack-WINDOWS-X64.py -k true
-
-# Force installation if validation fails
-python install-slack-WINDOWS-X64.py --force
-
-# Manual Slack path specification
-python install-slack-WINDOWS-X64.py --slack-path "C:\Program Files\Slack\resources"
 ```
 
 
 
-### **🔧 Installation Options**
 
-The installer supports command-line flags to reset specific settings:
 
-- **`-s true/false`** or **`--reset-settings true/false`**: Reset all saved settings (language, style, hotkey, personal polish)
-- **`-k true/false`** or **`--reset-api-key true/false`**: Reset only the saved API key
-
-**Examples:**
-```bash
-# Linux X64 - View all available options
-python3 install-slack-LINUX-X64.py --help
-
-# Linux X64 - Install normally (keeps existing settings)
-sudo python3 install-slack-LINUX-X64.py
-
-# Linux X64 - Reset settings but keep API key
-sudo python3 install-slack-LINUX-X64.py -s true -k false
-
-# Linux X64 - Reset API key but keep other settings
-sudo python3 install-slack-LINUX-X64.py -s false -k true
-
-# Mac ARM - Install normally
-sudo python3 install-slack-MAC-ARM.py
-
-# Windows X64 - Install normally (run as Administrator)
-python install-slack-WINDOWS-X64.py
-```
-
-**Note:** Reset flags are one-time operations. Each installation creates a unique version marker, so settings are only reset once per installation, not on every Slack restart.
-
-### **Step 4: Verify Installation**
+### **Step 3: Verify Installation**
 1. **Start Slack Desktop App**
 2. **Open any message input field**
 3. **Press Ctrl+Shift** - Should show "🤖 Improving text..." indicator
 4. **Press F12** - Should open settings menu with version information
 5. **Press F10** - Should open Channel Summary window with time range options
 
-### **🔧 Troubleshooting Installation**
+### **� First Use - API Key Setup**
+
+**On your first use of SlackPolish**, you'll be prompted to enter your OpenAI API key:
+
+1. **Press Ctrl+Shift** in any message field (or F10 for channel summary)
+2. **API Key Popup** will appear automatically if no key is configured
+3. **Enter your OpenAI API key** (starts with `sk-...`)
+4. **Click "Save & Retry"** - Your key is securely stored locally
+5. **Start using SlackPolish** - No further configuration needed!
+
+**💡 Tip**: You can always update your API key later by pressing **F12** → Settings Menu
+
+### **�🔧 Troubleshooting Installation**
 
 #### **If `asar` tool is missing:**
 ```bash
