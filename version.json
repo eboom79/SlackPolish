@@ -1,8 +1,8 @@
 {
     "major": 1,
-    "minor": 1,
-    "build": 41,
-    "version_string": "1.1.41",
-    "description": "Fix main channel summary - add missing channel message fetching",
+    "minor": 2,
+    "build": 0,
+    "version_string": "1.2.0",
+    "description": "Major Feature: Thread Detection and Summarization System",
     "date": "2025-07-22"
 }

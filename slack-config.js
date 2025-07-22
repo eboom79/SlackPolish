@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.1.41",
-    BUILD: 41,
+    VERSION: "1.2.0",
+    BUILD: 42,
     BUILD_DATE: "2025-07-22",
-    DESCRIPTION: "Fix main channel summary - add missing channel message fetching",
+    DESCRIPTION: "Major Feature: Thread Detection and Summarization System",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
