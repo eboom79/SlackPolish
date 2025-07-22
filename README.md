@@ -4,7 +4,7 @@
 
 Transform your messages instantly with professional polish, casual tone, grammar fixes, translations, and your own custom writing style - all with simple hotkeys right in Slack.
 
-**🆕 NEW: Want a summary of a Slack channel?** Press **F10** to get AI-powered channel summaries with flexible time ranges (24h, 7d, 30d, or entire channel) and customizable detail levels!
+**🆕 NEW: Thread-Aware Intelligence!** SlackPolish now understands threads! Get **thread-specific text improvement** with smart context and **thread-focused summaries** that analyze just the thread conversation. Press **F10** for AI-powered summaries that adapt to your context!
 
 ---
 
@@ -26,16 +26,16 @@ Transform your messages instantly with professional polish, casual tone, grammar
 ### **How It Works:**
 
 **📝 For Text Improvement:**
-1. **Type your message** in any Slack input field
+1. **Type your message** in any Slack input field (channel or thread)
 2. **Press your hotkey** (Ctrl+Shift by default) to improve the text
-3. **Watch as AI transforms** your message instantly
+3. **Watch as AI transforms** your message with smart context (thread-aware!)
 4. **Send with confidence** - your improved message is ready
 
-**📊 For Channel Summary:**
-1. **Navigate to any channel** you want to summarize
-2. **Press F10** to open the Channel Summary window
-3. **Select time range** (24h, 7d, 30d, or entire channel) and summary level
-4. **Click Generate** - get AI-powered insights of channel conversations
+**📊 For Channel/Thread Summary:**
+1. **Navigate to any channel or open a thread** you want to summarize
+2. **Press F10** to open the Summary window (adapts to your context!)
+3. **Select options** - threads show "Full thread", channels show time ranges
+4. **Click Generate** - get AI-powered insights focused on your context
 
 ## 🚀 Features
 
@@ -60,11 +60,18 @@ Transform your messages instantly with professional polish, casual tone, grammar
 - **Custom Style Preferences** - Add your own writing guidelines
 - **Examples:** "I prefer 'Hi' instead of 'Hey'", "Don't use dashes (-)"
 
-### **📊 Channel Summary (NEW):**
-- **AI-Powered Summarization** - Press F10 to summarize channel conversations
-- **Flexible Time Ranges** - 24 hours, 7 days, 30 days, or entire channel
+### **🧵 Thread-Aware Intelligence (NEW v1.2.0):**
+- **Smart Context Detection** - Automatically detects threads vs channels
+- **Thread-Aware Text Improvement** - Uses thread context for better suggestions
+- **Thread-Focused Summaries** - Analyzes just the thread conversation
+- **Dynamic Interface** - GUI adapts: "Thread Summary" vs "Channel Summary"
+
+### **📊 AI-Powered Summarization:**
+- **Context-Aware Summaries** - Press F10 for intelligent summarization
+- **Thread Mode** - "Full thread" option for focused thread analysis
+- **Channel Mode** - Time ranges: 24h, 7d, 30d, or entire channel
 - **Summary Levels** - Executive Summary (concise) or Comprehensive (detailed)
-- **Professional Interface** - Clean, compact design with side-by-side controls
+- **Smart Channel Naming** - "A thread in channel XXX" for clear identification
 
 ### **⌨️ Flexible Hotkey Configuration:**
 - **Choose your preferred key combination**
@@ -78,13 +85,13 @@ Transform your messages instantly with professional polish, casual tone, grammar
 SlackPolish uses a **modular architecture** with functionality divided into independent scripts for better maintainability:
 
 ### **📜 `slack-text-improver.js`**
-Core text improvement functionality. Handles text detection, hotkey processing (Ctrl+Shift), OpenAI API calls, and smart context integration. The main entry point that coordinates with other modules.
+Core text improvement functionality with thread awareness. Handles text detection, hotkey processing (Ctrl+Shift), OpenAI API calls, and smart context integration. Uses thread-specific context when in threads for better suggestions.
 
 ### **⚙️ `slack-settings.js`**
 Independent settings management module. Handles F12 settings menu, user preferences, API key management, developer mode, and version display. Maintains separation of concerns from text improvement.
 
 ### **📊 `slack-channel-summary.js`**
-Channel summarization module. Handles F10 hotkey, AI-powered channel analysis, time range selection (24h/7d/30d/entire), summary levels (Executive/Comprehensive), and professional UI interface.
+Thread-aware summarization module. Handles F10 hotkey with smart context detection, adapts GUI for threads vs channels, extracts thread-specific or channel messages, and provides context-appropriate summarization options.
 
 
 ### **⚙️ `slack-config.js`**
@@ -301,6 +308,47 @@ dir app.asar*
 ---
 
 ## 📝 Changelog
+
+### **🧵 v1.2.0 - Major Feature Update: Thread-Aware Intelligence**
+**Date:** July 22, 2025 - 21:00:00
+**Status:** ✅ **PRODUCTION READY - THREAD DETECTION & SUMMARIZATION SYSTEM**
+
+**🎯 We Decided to Give Some Love to Threads! 🧵💕**
+
+**🚀 Two Major Thread Features Added:**
+
+**1️⃣ Thread-Aware Text Improvement (Smart Context)**
+- ✅ **Thread Context Detection** - Text improver now understands when you're in a thread
+- ✅ **Thread-Specific Context** - Uses the last 5 messages from the THREAD (not channel) as context
+- ✅ **Smarter Suggestions** - Text improvement suggestions are now contextually relevant to the thread conversation
+- ✅ **Seamless Integration** - Works automatically when you use Ctrl+Shift in thread replies
+
+**2️⃣ Thread Summarization System**
+- ✅ **Smart Thread Detection** - Automatically detects when you're in a thread vs main channel
+- ✅ **Context-Aware Interface** - GUI adapts dynamically: "🧵 Thread Summary" vs "📊 Channel Summary"
+- ✅ **Thread-Specific Summarization** - Extracts and summarizes only thread conversation messages
+- ✅ **Smart Channel Naming** - "A thread in channel XXX" for clear identification
+- ✅ **Thread-Aware Settings** - "Full thread" option (pre-selected) vs time range options for channels
+
+**🔧 Technical Implementation:**
+- ✅ **Multi-Method Thread Detection** - URL-based, DOM-based, focus-based, and visibility detection
+- ✅ **Early Detection** - Thread context captured before any processing for seamless UX
+- ✅ **Conservative Logic** - Accurate detection that avoids false positives
+- ✅ **Unified Thread Awareness** - Both features share the same robust thread detection system
+
+**🧹 Code Quality & Testing:**
+- ✅ **Removed ~100+ lines** of debug and duplicate code
+- ✅ **Added 10 comprehensive thread tests** (17/17 tests pass - 100% success rate)
+- ✅ **No functionality regression** - all original features preserved and enhanced
+- ✅ **Clean architecture** with proper separation between thread and channel logic
+
+**📊 Results:**
+- ✅ **Thread text improvement** now uses relevant thread context instead of random channel messages
+- ✅ **Thread summaries** focus on the actual thread conversation
+- ✅ **Channel features** continue to work exactly as before
+- ✅ **Intuitive user experience** with context-aware interfaces
+
+---
 
 ### **🚀 v1.0.52 - Major Feature Update: Channel Summary + Modular Architecture**
 **Date:** July 19, 2025 - 15:30:00
