@@ -50,8 +50,9 @@ runTest('Smart Context Configuration', () => {
 runTest('Smart Context Message Fetching', () => {
     assert(scriptContent.includes('getSmartContext'), 'getSmartContext method not found');
     assert(scriptContent.includes('window.SlackPolishChannelMessages'), 'Channel messages integration not found');
-    assert(scriptContent.includes('getRecentMessages(5)'), 'Recent messages fetching not found');
+    assert(scriptContent.includes('getChannelContext') || scriptContent.includes('getThreadContext'), 'Context fetching methods not found');
     assert(scriptContent.includes('getRecentMessagesFromDOM'), 'DOM fallback method not found');
+    assert(scriptContent.includes('isUserInThreadInput'), 'Thread detection method not found');
 });
 
 // Test 3: Context Anonymization
@@ -111,6 +112,23 @@ runTest('Context Module Availability Check', () => {
     assert(scriptContent.includes('!window.SlackPolishChannelMessages'), 'Module availability check not found');
     assert(scriptContent.includes('Channel Messages module not available'), 'Module unavailable message not found');
     assert(scriptContent.includes('return []'), 'Empty context return not found');
+});
+
+// Test 11: Thread-Aware Context Features
+runTest('Thread-Aware Context Features', () => {
+    assert(scriptContent.includes('isUserInThreadInput'), 'Thread input detection not found');
+    assert(scriptContent.includes('getThreadContext'), 'Thread context method not found');
+    assert(scriptContent.includes('getChannelContext'), 'Channel context method not found');
+    assert(scriptContent.includes('getCurrentThreadTs'), 'Thread timestamp detection not found');
+    assert(scriptContent.includes('contextType'), 'Context type logging not found');
+});
+
+// Test 12: Thread Context Extraction
+runTest('Thread Context Extraction', () => {
+    assert(scriptContent.includes('conversations.replies'), 'Thread API call not found');
+    assert(scriptContent.includes('getThreadContextFromDOM'), 'Thread DOM fallback not found');
+    assert(scriptContent.includes('threadTs'), 'Thread timestamp handling not found');
+    assert(scriptContent.includes('isThreadReply'), 'Thread reply marking not found');
 });
 
 console.log('\n=====================================');

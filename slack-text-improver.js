@@ -221,7 +221,57 @@
         },
 
         findMessageInput: function() {
-            // Try multiple selectors for Slack message input
+            // Enhanced message input detection with thread support
+            utils.debug('🔍 Starting message input search...');
+
+            // PRIORITY 1: Always use the focused element if it's editable
+            const activeElement = document.activeElement;
+            if (activeElement && (activeElement.contentEditable === 'true' || activeElement.matches('.ql-editor'))) {
+                utils.debug('📝 Found active editable element', {
+                    tagName: activeElement.tagName,
+                    className: activeElement.className,
+                    dataQa: activeElement.getAttribute('data-qa')
+                });
+
+                // Check if this focused element is in a thread or main channel
+                const threadContainer = activeElement.closest('.p-thread_view, .p-threads_view, [data-qa*="thread"]');
+                if (threadContainer) {
+                    utils.debug('🧵 USING FOCUSED THREAD INPUT');
+                } else {
+                    utils.debug('📝 USING FOCUSED MAIN CHANNEL INPUT');
+                }
+
+                // Always return the focused element - user's cursor location is the priority
+                return activeElement;
+            }
+
+            // PRIORITY 2: If no focused element, use smart detection as fallback
+            utils.debug('🔍 No focused element found, using fallback detection...');
+
+            // If we're in a thread context, look for thread-specific inputs
+            if (this.isInThread()) {
+                utils.debug('🧵 IN THREAD CONTEXT - Looking for thread-specific inputs...');
+
+                const threadSelectors = [
+                    '[data-qa="thread_message_input"]',
+                    '[data-qa="thread-message-input"]',
+                    '.p-thread_view .ql-editor',
+                    '.p-threads_view .ql-editor',
+                    '[data-qa*="thread"] .ql-editor',
+                    '[data-qa*="thread"] [contenteditable="true"]'
+                ];
+
+                for (const selector of threadSelectors) {
+                    const element = document.querySelector(selector);
+                    if (element && element.isContentEditable) {
+                        utils.debug('✅ FOUND THREAD INPUT (fallback)', { selector });
+                        return element;
+                    }
+                }
+            }
+
+            // PRIORITY 3: Regular channel input search (final fallback)
+            utils.debug('📝 SEARCHING FOR CHANNEL INPUT (final fallback)');
             const selectors = [
                 '[data-qa="message_input"]',
                 '.ql-editor[data-qa="message_input"]',
@@ -233,15 +283,68 @@
             for (const selector of selectors) {
                 const element = document.querySelector(selector);
                 if (element && element.isContentEditable) {
+                    utils.debug('✅ FOUND CHANNEL INPUT (fallback)', { selector });
                     return element;
                 }
             }
+
+            utils.debug('❌ NO MESSAGE INPUT FOUND');
             return null;
         },
 
         getTextFromElement: function(element) {
             if (!element) return '';
             return element.innerText || element.textContent || '';
+        },
+
+        isInThread: function() {
+            // Check multiple indicators that we're in a thread view
+            const threadIndicators = [
+                // URL-based detection
+                window.location.href.includes('/thread/'),
+
+                // DOM-based detection - look for any thread-related elements
+                !!document.querySelector('[data-qa*="thread"]'),
+                !!document.querySelector('.p-threads_view'),
+                !!document.querySelector('[data-qa="thread_view"]'),
+                !!document.querySelector('.p-thread_view'),
+
+                // Check if active element is in a thread container
+                !!document.activeElement?.closest('.p-thread_view, .p-threads_view, [data-qa*="thread"]'),
+
+                // Check for thread-specific elements with broader search
+                !!document.querySelector('[data-qa="thread_message_input"]'),
+                !!document.querySelector('[data-qa="thread-message-input"]'),
+                !!document.querySelector('.p-thread_view .ql-editor'),
+                !!document.querySelector('.p-threads_view .ql-editor'),
+
+                // Check if we have multiple .ql-editor elements (main + thread)
+                document.querySelectorAll('.ql-editor').length > 1
+            ];
+
+            const isThread = threadIndicators.some(indicator => indicator);
+
+            // Enhanced debug info
+            const debugInfo = {
+                urlContainsThread: threadIndicators[0],
+                hasThreadDataQa: threadIndicators[1],
+                hasPThreadsView: threadIndicators[2],
+                hasThreadView: threadIndicators[3],
+                hasPThreadView: threadIndicators[4],
+                activeInThreadContainer: threadIndicators[5],
+                hasThreadMessageInput: threadIndicators[6],
+                hasThreadMessageInputAlt: threadIndicators[7],
+                hasThreadViewEditor: threadIndicators[8],
+                hasThreadsViewEditor: threadIndicators[9],
+                multipleEditors: threadIndicators[10],
+                finalResult: isThread,
+                totalQlEditors: document.querySelectorAll('.ql-editor').length,
+                allDataQaElements: Array.from(document.querySelectorAll('[data-qa*="thread"]')).map(el => el.getAttribute('data-qa'))
+            };
+
+            utils.debug('🔍 Thread detection:', debugInfo);
+
+            return isThread;
         },
 
         setTextInElement: function(element, text) {
@@ -425,24 +528,24 @@ Requirements:
 
                 utils.debug('Fetching smart context messages');
 
-                // Try API-based approach first, fallback to DOM if it fails
+                // Check if user is currently focused in a thread
+                const isInThreadInput = this.isUserInThreadInput();
                 let result = null;
-                try {
-                    result = await window.SlackPolishChannelMessages.getRecentMessages(5);
-                } catch (apiError) {
-                    utils.debug('API-based message fetching failed, trying DOM fallback', {
-                        error: apiError.message
-                    });
 
-                    // Fallback to DOM-based extraction
+                if (isInThreadInput) {
+                    utils.debug('User is in thread input - fetching thread context');
                     try {
-                        result = await window.SlackPolishChannelMessages.getRecentMessagesFromDOM(5);
-                    } catch (domError) {
-                        utils.debug('DOM fallback also failed', {
-                            error: domError.message
+                        result = await this.getThreadContext(5);
+                    } catch (threadError) {
+                        utils.debug('Thread context fetching failed, falling back to channel context', {
+                            error: threadError.message
                         });
-                        return [];
+                        // Fall back to regular channel context if thread context fails
+                        result = await this.getChannelContext(5);
                     }
+                } else {
+                    utils.debug('User is in main channel - fetching channel context');
+                    result = await this.getChannelContext(5);
                 }
 
                 if (!result || !result.messages || result.messages.length === 0) {
@@ -456,15 +559,18 @@ Requirements:
                     .map(msg => ({
                         user: msg.user || 'Unknown',
                         text: msg.text.trim(),
-                        timestamp: msg.timestamp
+                        timestamp: msg.timestamp,
+                        isThreadReply: msg.isThreadReply || false
                     }))
                     .slice(-5); // Ensure we only get last 5
 
                 utils.debug('Smart context messages prepared', {
                     totalMessages: result.messages.length,
                     contextMessages: contextMessages.length,
+                    contextType: isInThreadInput ? 'thread' : 'channel',
                     channelId: result.channelId,
                     channelName: result.channelName,
+                    threadTs: result.threadTs || null,
                     method: result.method || 'unknown'
                 });
 
@@ -476,6 +582,169 @@ Requirements:
                 });
                 return [];
             }
+        },
+
+        isUserInThreadInput() {
+            // Check if the currently focused element is in a thread
+            const activeElement = document.activeElement;
+            if (!activeElement || !activeElement.isContentEditable) {
+                return false;
+            }
+
+            // Check if the focused element is inside a thread container
+            const threadContainer = activeElement.closest('.p-thread_view, .p-threads_view, [data-qa*="thread"]');
+            const isInThread = !!threadContainer;
+
+            utils.debug('Checking if user is in thread input', {
+                hasActiveElement: !!activeElement,
+                isContentEditable: activeElement?.isContentEditable,
+                hasThreadContainer: !!threadContainer,
+                isInThread
+            });
+
+            return isInThread;
+        },
+
+        async getChannelContext(count = 5) {
+            // Get context from main channel (existing behavior)
+            let result = null;
+            try {
+                result = await window.SlackPolishChannelMessages.getRecentMessages(count);
+            } catch (apiError) {
+                utils.debug('API-based channel message fetching failed, trying DOM fallback', {
+                    error: apiError.message
+                });
+
+                // Fallback to DOM-based extraction
+                try {
+                    result = await window.SlackPolishChannelMessages.getRecentMessagesFromDOM(count);
+                } catch (domError) {
+                    utils.debug('DOM fallback also failed', {
+                        error: domError.message
+                    });
+                    throw domError;
+                }
+            }
+            return result;
+        },
+
+        async getThreadContext(count = 5) {
+            // Get context from thread conversation
+            utils.debug('Fetching thread context');
+
+            // Extract thread timestamp from URL or DOM
+            const threadTs = this.getCurrentThreadTs();
+            if (!threadTs) {
+                throw new Error('Could not determine thread timestamp');
+            }
+
+            const channelId = window.SlackPolishChannelMessages.getCurrentChannelId();
+            if (!channelId) {
+                throw new Error('Could not determine channel ID');
+            }
+
+            utils.debug('Thread context parameters', { threadTs, channelId });
+
+            // Try to get thread messages via API first
+            try {
+                const threadResponse = await window.SlackPolishChannelMessages.callSlackAPI('conversations.replies', {
+                    channel: channelId,
+                    ts: threadTs,
+                    limit: count + 1 // +1 because first message is the parent
+                });
+
+                if (threadResponse.ok && threadResponse.messages) {
+                    const messages = threadResponse.messages.map(msg =>
+                        window.SlackPolishChannelMessages.processSlackMessage(msg)
+                    );
+
+                    return {
+                        channelId,
+                        channelName: window.SlackPolishChannelMessages.getCurrentChannelName(),
+                        threadTs,
+                        messages,
+                        totalReturned: messages.length,
+                        method: 'API-Thread',
+                        fetchedAt: new Date().toISOString()
+                    };
+                }
+            } catch (apiError) {
+                utils.debug('Thread API call failed, trying DOM fallback', {
+                    error: apiError.message
+                });
+            }
+
+            // Fallback to DOM-based thread extraction
+            return this.getThreadContextFromDOM(count, threadTs, channelId);
+        },
+
+        getCurrentThreadTs() {
+            // Method 1: Extract from URL
+            const urlMatch = window.location.href.match(/\/thread\/p(\d+)/);
+            if (urlMatch && urlMatch[1]) {
+                // Convert p-format timestamp to regular timestamp
+                const pTimestamp = urlMatch[1];
+                const timestamp = pTimestamp.substring(0, 10) + '.' + pTimestamp.substring(10);
+                utils.debug('Thread timestamp from URL', { pTimestamp, timestamp });
+                return timestamp;
+            }
+
+            // Method 2: Look for thread timestamp in DOM
+            const threadContainer = document.querySelector('.p-thread_view, .p-threads_view, [data-qa*="thread"]');
+            if (threadContainer) {
+                // Look for timestamp attributes in thread container
+                const timestampElement = threadContainer.querySelector('[data-ts]');
+                if (timestampElement) {
+                    const timestamp = timestampElement.getAttribute('data-ts');
+                    utils.debug('Thread timestamp from DOM', { timestamp });
+                    return timestamp;
+                }
+            }
+
+            utils.debug('Could not determine thread timestamp');
+            return null;
+        },
+
+        async getThreadContextFromDOM(count, threadTs, channelId) {
+            // Extract thread messages from DOM as fallback
+            utils.debug('Extracting thread context from DOM');
+
+            const threadContainer = document.querySelector('.p-thread_view, .p-threads_view, [data-qa*="thread"]');
+            if (!threadContainer) {
+                throw new Error('Thread container not found in DOM');
+            }
+
+            const messages = [];
+            const messageElements = threadContainer.querySelectorAll('[data-qa="virtual_list_item"], .c-message_kit__message, [role="listitem"]');
+
+            for (const element of messageElements) {
+                try {
+                    const messageData = window.SlackPolishChannelMessages.extractMessageData(element);
+                    if (messageData && messageData.text) {
+                        messages.push({
+                            ...messageData,
+                            isThreadReply: true
+                        });
+                    }
+                } catch (error) {
+                    utils.debug('Error extracting thread message from DOM element', {
+                        error: error.message
+                    });
+                }
+            }
+
+            // Take the most recent messages up to count
+            const recentMessages = messages.slice(-count);
+
+            return {
+                channelId,
+                channelName: window.SlackPolishChannelMessages.getCurrentChannelName(),
+                threadTs,
+                messages: recentMessages,
+                totalReturned: recentMessages.length,
+                method: 'DOM-Thread',
+                fetchedAt: new Date().toISOString()
+            };
         },
 
         anonymizeText(text) {
