@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.1.11",
-    BUILD: 11,
+    VERSION: "1.1.41",
+    BUILD: 41,
     BUILD_DATE: "2025-07-22",
-    DESCRIPTION: "Code changes",
+    DESCRIPTION: "Fix main channel summary - add missing channel message fetching",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)

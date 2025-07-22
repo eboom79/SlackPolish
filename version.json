@@ -1,8 +1,8 @@
 {
     "major": 1,
     "minor": 1,
-    "build": 11,
-    "version_string": "1.1.11",
-    "description": "Code changes",
+    "build": 41,
+    "version_string": "1.1.41",
+    "description": "Fix main channel summary - add missing channel message fetching",
     "date": "2025-07-22"
 }

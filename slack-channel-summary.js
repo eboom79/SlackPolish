@@ -102,11 +102,19 @@
                 return;
             }
 
+            // DETECT THREAD CONTEXT EARLY - BEFORE CREATING GUI
+            const threadContext = this.detectThreadContext();
+            utils.debug('🔍 EARLY THREAD DETECTION FOR GUI', threadContext);
+
             const summaryWindow = document.createElement('div');
             summaryWindow.id = 'slackpolish-channel-summary-window';
 
-            summaryWindow.innerHTML = this.createChannelSummaryHTML();
+            // Pass thread context to HTML creation
+            summaryWindow.innerHTML = this.createChannelSummaryHTML(threadContext);
             document.body.appendChild(summaryWindow);
+
+            // Store thread context on the window for later use
+            summaryWindow._threadContext = threadContext;
 
             // Add logo to summary window
             const logoContainer = summaryWindow.querySelector('#channel-summary-logo');
@@ -118,8 +126,54 @@
             this.setupSummaryEventListeners(summaryWindow);
         },
 
+        // Detect thread context early for GUI customization
+        detectThreadContext: function() {
+            const currentUrl = window.location.href;
+
+            // Method 1: URL-based detection (most reliable)
+            const urlHasThread = currentUrl.includes('/thread/');
+
+            // Method 2: Check if currently focused element is in a thread
+            const activeElement = document.activeElement;
+            const isInThreadInput = activeElement && (
+                activeElement.closest('[data-qa*="thread"]') ||
+                activeElement.closest('.p-thread') ||
+                activeElement.closest('.c-thread')
+            );
+
+            // Method 3: Check for visible thread containers (not just present in DOM)
+            const visibleThreadContainer = document.querySelector('[data-qa="threads_view"]:not([style*="display: none"])') ||
+                                         document.querySelector('.p-threads_view:not([style*="display: none"])') ||
+                                         document.querySelector('[data-qa="thread_view"]:not([style*="display: none"])');
+
+            // Method 4: Check if thread input is currently focused/visible
+            const threadInput = document.querySelector('[data-qa="thread_message_input"]:not([style*="display: none"])') ||
+                              document.querySelector('.p-thread_input:not([style*="display: none"])');
+
+            // More conservative detection - require URL or active focus in thread
+            const isInThread = urlHasThread || isInThreadInput || (!!visibleThreadContainer && !!threadInput);
+
+            return {
+                isInThread: isInThread,
+                url: currentUrl,
+                urlHasThread: urlHasThread,
+                hasVisibleThreadContainer: !!visibleThreadContainer,
+                hasThreadInput: !!threadInput,
+                isInThreadInput: isInThreadInput,
+                activeElementInfo: activeElement ? {
+                    tagName: activeElement.tagName,
+                    className: activeElement.className,
+                    dataQa: activeElement.getAttribute('data-qa')
+                } : null
+            };
+        },
+
         // Create the channel summary HTML
-        createChannelSummaryHTML: function() {
+        createChannelSummaryHTML: function(threadContext = null) {
+            // Determine if we're in a thread and customize accordingly
+            const isInThread = threadContext && threadContext.isInThread;
+            const headerTitle = isInThread ? 'SlackPolish Thread Summary' : 'SlackPolish Channel Summary';
+            const headerSubtitle = isInThread ? 'AI-powered thread summarization' : 'AI-powered channel summarization';
             return `
                 <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10001; display: flex; align-items: center; justify-content: center;">
                     <div style="background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); font-family: Arial, sans-serif; width: 700px; max-height: 90vh; overflow-y: auto;">
@@ -129,8 +183,8 @@
                             <div style="background: white; border-radius: 8px; padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-right: 16px; display: flex; align-items: center; justify-content: center;" id="channel-summary-logo">
                             </div>
                             <div style="flex: 1;">
-                                <div style="font-weight: bold; font-size: 18px; color: #2c3e50; margin-bottom: 4px;">SlackPolish Channel Summary</div>
-                                <div style="font-size: 13px; color: #6c757d;">AI-powered channel summarization</div>
+                                <div style="font-weight: bold; font-size: 18px; color: #2c3e50; margin-bottom: 4px;">${headerTitle}</div>
+                                <div style="font-size: 13px; color: #6c757d;">${headerSubtitle}</div>
                             </div>
                         </div>
 
@@ -139,10 +193,13 @@
                             <div style="flex: 1;">
                                 <label style="display: block; margin-bottom: 4px; font-weight: bold; font-size: 13px;">📅 Time Range:</label>
                                 <select id="time-range-select" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; box-sizing: border-box; background: white;">
-                                    <option value="1">24 hours</option>
-                                    <option value="7" selected>7 days</option>
-                                    <option value="30">30 days</option>
-                                    <option value="all">Entire channel</option>
+                                    ${isInThread ?
+                                        '<option value="thread" selected>Full thread</option>' :
+                                        `<option value="1">24 hours</option>
+                                         <option value="7" selected>7 days</option>
+                                         <option value="30">30 days</option>
+                                         <option value="all">Entire channel</option>`
+                                    }
                                 </select>
                             </div>
                             <div style="flex: 1;">
@@ -231,11 +288,19 @@
         // Load saved settings and apply them to the dropdowns
         loadSavedSettings: function(timeRangeSelect, summaryLevelSelect) {
             try {
-                // Load saved time range (default: "7" for 7 days)
-                const savedTimeRange = localStorage.getItem('slackpolish_channel_summary_time_range') || '7';
-                if (timeRangeSelect) {
-                    timeRangeSelect.value = savedTimeRange;
-                    utils.log(`Loaded saved time range: ${savedTimeRange}`);
+                // Check if this is a thread (only has "thread" option)
+                const isThreadSelect = timeRangeSelect && timeRangeSelect.options.length === 1 && timeRangeSelect.options[0].value === 'thread';
+
+                if (!isThreadSelect) {
+                    // Load saved time range for channel summaries (default: "7" for 7 days)
+                    const savedTimeRange = localStorage.getItem('slackpolish_channel_summary_time_range') || '7';
+                    if (timeRangeSelect) {
+                        timeRangeSelect.value = savedTimeRange;
+                        utils.log(`Loaded saved time range: ${savedTimeRange}`);
+                    }
+                } else {
+                    // For thread summaries, keep "Full thread" selected
+                    utils.log('Thread summary detected - keeping "Full thread" selected');
                 }
 
                 // Load saved summary level (default: "executive")
@@ -399,12 +464,16 @@
 
         // Generate channel summary
         generateChannelSummary: async function(summaryWindow) {
+            // USE STORED THREAD CONTEXT FROM WINDOW CREATION
+            const threadContext = summaryWindow._threadContext || { isInThread: false };
+
             const textbox = summaryWindow.querySelector('#summary-textbox');
             const generateBtn = summaryWindow.querySelector('#generate-summary-btn');
             const timeRange = summaryWindow.querySelector('#time-range-select').value;
             const summaryLevel = summaryWindow.querySelector('#summary-level-select').value;
 
             utils.log('Generate Channel Summary clicked');
+            utils.debug('🔍 THREAD DETECTION CHECK (CAPTURED EARLY)', threadContext);
             utils.debug('Channel summary generation started', { timeRange, summaryLevel });
 
             // Disable button and show loading state
@@ -420,55 +489,48 @@
 
                 utils.debug('Using SlackPolishChannelMessages module for message fetching');
 
-                // Calculate date range based on time range selection
-                const dateRange = this.calculateDateRange(timeRange);
-                utils.debug('Calculated date range', dateRange);
-
-                // Fetch messages using the same method as Smart Context
+                // USE CAPTURED THREAD CONTEXT
                 let result = null;
-                let messageCount = this.getMessageCountForTimeRange(timeRange);
 
-                try {
-                    // Try API-based approach first (same as Smart Context)
-                    if (timeRange === 'all') {
-                        result = await window.SlackPolishChannelMessages.getAllChannelMessages(true);
-                    } else if (dateRange.startDate && dateRange.endDate) {
-                        result = await window.SlackPolishChannelMessages.getMessagesInRange(
-                            dateRange.startDate,
-                            dateRange.endDate,
-                            true // include threads
-                        );
-                    } else {
-                        result = await window.SlackPolishChannelMessages.getRecentMessages(messageCount);
-                    }
-                } catch (apiError) {
-                    utils.debug('API-based message fetching failed, trying DOM fallback', {
-                        error: apiError.message
-                    });
+                if (threadContext.isInThread) {
+                    utils.debug('🧵 THREAD DETECTED - Extracting thread messages from DOM');
 
-                    // Fallback to DOM-based extraction (same as Smart Context)
                     try {
-                        result = await window.SlackPolishChannelMessages.getRecentMessagesFromDOM(messageCount);
-
-                        // Filter messages by date range if needed
-                        if (timeRange !== 'all' && dateRange.startDate && dateRange.endDate) {
-                            const startTime = new Date(dateRange.startDate).getTime();
-                            const endTime = new Date(dateRange.endDate).getTime();
-
-                            result.messages = result.messages.filter(msg => {
-                                if (!msg.timestamp) return false;
-                                const msgTime = new Date(msg.timestamp).getTime();
-                                return msgTime >= startTime && msgTime <= endTime;
-                            });
-                            result.totalReturned = result.messages.length;
-                            result.method = result.method + '-Filtered';
-                        }
-                    } catch (domError) {
-                        utils.debug('DOM fallback also failed', {
-                            error: domError.message
+                        // Extract thread messages directly from DOM
+                        const threadMessages = this.getThreadMessagesFromDOM();
+                        utils.debug('🧵 Thread messages extracted from DOM', {
+                            messageCount: threadMessages.length
                         });
-                        throw new Error('Failed to fetch messages using both API and DOM methods. Please try again.');
+
+                        if (threadMessages.length > 0) {
+                            // Create thread result object
+                            const channelInfo = this.getCurrentChannelInfo();
+                            const threadResult = {
+                                messages: threadMessages,
+                                totalReturned: threadMessages.length,
+                                method: 'DOM-Thread',
+                                fetchedAt: new Date().toISOString(),
+                                channelId: channelInfo.id,
+                                channelName: `A thread in channel ${channelInfo.name}`
+                            };
+
+                            // Process thread summary
+                            await this.processAndDisplaySummary(threadResult, summaryLevel, textbox, generateBtn);
+                            return;
+                        } else {
+                            utils.debug('🧵 No thread messages found in DOM');
+                            textbox.value = `❌ Thread Summary Error\n\nNo thread messages found in DOM\n\nFalling back to channel summary...`;
+                            // Continue with regular channel summary as fallback
+                        }
+                    } catch (error) {
+                        utils.debug('🧵 Thread message extraction failed', { error: error.message });
+                        textbox.value = `❌ Thread Summary Error\n\nFailed to extract thread messages: ${error.message}\n\nFalling back to channel summary...`;
+                        // Continue with regular channel summary as fallback
                     }
+                } else {
+                    utils.debug('📝 MAIN CHANNEL DETECTED - Continuing with regular summary');
+                    // Fetch channel messages for regular channel summary
+                    result = await this.getChannelSummaryMessages(timeRange);
                 }
 
                 // Ensure we have the channel name in the result
@@ -563,6 +625,257 @@
             return { startDate, endDate };
         },
 
+        // Check if user's cursor is in a thread input (simplified and robust)
+        isUserInThreadInput: function() {
+            try {
+                utils.log('🔍 CHANNEL SUMMARY: isUserInThreadInput() called');
+
+                // Check if the currently focused element is in a thread
+                const activeElement = document.activeElement;
+                utils.log('🔍 CHANNEL SUMMARY: Checking active element');
+
+                if (!activeElement) {
+                    utils.log('❌ CHANNEL SUMMARY: No active element found');
+                    return false;
+                }
+
+                if (!activeElement.isContentEditable) {
+                    utils.log('❌ CHANNEL SUMMARY: Active element is not editable');
+                    return false;
+                }
+
+                // Check if the focused element is inside a thread container
+                utils.log('🔍 CHANNEL SUMMARY: Checking for thread container');
+                const threadContainer = activeElement.closest('.p-thread_view, .p-threads_view, [data-qa*="thread"]');
+                const isInThread = !!threadContainer;
+
+                utils.log(`🎯 CHANNEL SUMMARY: Final result - isInThread: ${isInThread}`);
+                utils.debug('CHANNEL SUMMARY: Thread detection details', {
+                    hasActiveElement: true,
+                    isContentEditable: true,
+                    hasThreadContainer: !!threadContainer,
+                    isInThread
+                });
+
+                return isInThread;
+            } catch (error) {
+                utils.log('❌ CHANNEL SUMMARY: Error in isUserInThreadInput');
+                utils.debug('CHANNEL SUMMARY: isUserInThreadInput error', {
+                    error: error.message
+                });
+                return false;
+            }
+        },
+
+        // Get messages for channel summary (existing behavior)
+        async getChannelSummaryMessages(timeRange) {
+            const dateRange = this.calculateDateRange(timeRange);
+            utils.debug('Fetching channel summary messages', { timeRange, dateRange });
+
+            let result = null;
+            let messageCount = this.getMessageCountForTimeRange(timeRange);
+
+            try {
+                // Try API-based approach first
+                if (timeRange === 'all') {
+                    result = await window.SlackPolishChannelMessages.getAllChannelMessages(true);
+                } else if (dateRange.startDate && dateRange.endDate) {
+                    result = await window.SlackPolishChannelMessages.getMessagesInRange(
+                        dateRange.startDate,
+                        dateRange.endDate,
+                        true // include threads
+                    );
+                } else {
+                    result = await window.SlackPolishChannelMessages.getRecentMessages(messageCount);
+                }
+            } catch (apiError) {
+                utils.debug('API-based channel message fetching failed, trying DOM fallback', {
+                    error: apiError.message
+                });
+
+                // Fallback to DOM-based extraction
+                try {
+                    result = await window.SlackPolishChannelMessages.getRecentMessagesFromDOM(messageCount);
+
+                    // Filter messages by date range if needed
+                    if (timeRange !== 'all' && dateRange.startDate && dateRange.endDate) {
+                        const startTime = new Date(dateRange.startDate).getTime();
+                        const endTime = new Date(dateRange.endDate).getTime();
+
+                        result.messages = result.messages.filter(msg => {
+                            if (!msg.timestamp) return false;
+                            const msgTime = new Date(msg.timestamp).getTime();
+                            return msgTime >= startTime && msgTime <= endTime;
+                        });
+                        result.totalReturned = result.messages.length;
+                        result.method = result.method + '-Filtered';
+                    }
+                } catch (domError) {
+                    utils.debug('DOM fallback also failed', {
+                        error: domError.message
+                    });
+                    throw new Error('Failed to fetch channel messages using both API and DOM methods. Please try again.');
+                }
+            }
+
+            return result;
+        },
+
+        // Get messages for thread summary (new functionality)
+        async getThreadSummaryMessages(timeRange) {
+            utils.debug('Fetching thread summary messages', { timeRange });
+
+            // Extract thread timestamp from URL or DOM
+            const threadTs = this.getCurrentThreadTs();
+            if (!threadTs) {
+                throw new Error('Could not determine thread timestamp for summary');
+            }
+
+            const channelId = window.SlackPolishChannelMessages.getCurrentChannelId();
+            if (!channelId) {
+                throw new Error('Could not determine channel ID for thread summary');
+            }
+
+            utils.debug('Thread summary parameters', { threadTs, channelId });
+
+            // For thread summaries, we want all thread messages regardless of time range
+            // The thread itself defines the scope, not the time range
+            try {
+                const threadResponse = await window.SlackPolishChannelMessages.callSlackAPI('conversations.replies', {
+                    channel: channelId,
+                    ts: threadTs,
+                    limit: 1000 // Get all thread messages
+                });
+
+                if (threadResponse.ok && threadResponse.messages) {
+                    let messages = threadResponse.messages.map(msg =>
+                        window.SlackPolishChannelMessages.processSlackMessage(msg)
+                    );
+
+                    // Apply time range filtering if specified (but usually we want all thread messages)
+                    if (timeRange !== 'all') {
+                        const dateRange = this.calculateDateRange(timeRange);
+                        if (dateRange.startDate && dateRange.endDate) {
+                            const startTime = new Date(dateRange.startDate).getTime();
+                            const endTime = new Date(dateRange.endDate).getTime();
+
+                            messages = messages.filter(msg => {
+                                if (!msg.timestamp) return true; // Keep messages without timestamp
+                                const msgTime = new Date(msg.timestamp).getTime();
+                                return msgTime >= startTime && msgTime <= endTime;
+                            });
+                        }
+                    }
+
+                    const channelName = window.SlackPolishChannelMessages.getCurrentChannelName();
+
+                    return {
+                        channelId,
+                        channelName,
+                        threadTs,
+                        messages,
+                        totalReturned: messages.length,
+                        method: 'API-Thread-Summary',
+                        fetchedAt: new Date().toISOString(),
+                        isThreadSummary: true
+                    };
+                }
+            } catch (apiError) {
+                utils.debug('Thread API call failed, trying DOM fallback', {
+                    error: apiError.message
+                });
+            }
+
+            // Fallback to DOM-based thread extraction
+            return this.getThreadSummaryFromDOM(timeRange, threadTs, channelId);
+        },
+
+        // Get thread timestamp (reuse from Smart Context logic)
+        getCurrentThreadTs: function() {
+            // Method 1: Extract from URL
+            const urlMatch = window.location.href.match(/\/thread\/p(\d+)/);
+            if (urlMatch && urlMatch[1]) {
+                // Convert p-format timestamp to regular timestamp
+                const pTimestamp = urlMatch[1];
+                const timestamp = pTimestamp.substring(0, 10) + '.' + pTimestamp.substring(10);
+                utils.debug('Thread timestamp from URL for summary', { pTimestamp, timestamp });
+                return timestamp;
+            }
+
+            // Method 2: Look for thread timestamp in DOM
+            const threadContainer = document.querySelector('.p-thread_view, .p-threads_view, [data-qa*="thread"]');
+            if (threadContainer) {
+                // Look for timestamp attributes in thread container
+                const timestampElement = threadContainer.querySelector('[data-ts]');
+                if (timestampElement) {
+                    const timestamp = timestampElement.getAttribute('data-ts');
+                    utils.debug('Thread timestamp from DOM for summary', { timestamp });
+                    return timestamp;
+                }
+            }
+
+            utils.debug('Could not determine thread timestamp for summary');
+            return null;
+        },
+
+        // DOM fallback for thread summary
+        async getThreadSummaryFromDOM(timeRange, threadTs, channelId) {
+            utils.debug('Extracting thread summary from DOM');
+
+            const threadContainer = document.querySelector('.p-thread_view, .p-threads_view, [data-qa*="thread"]');
+            if (!threadContainer) {
+                throw new Error('Thread container not found in DOM for summary');
+            }
+
+            const messages = [];
+            const messageElements = threadContainer.querySelectorAll('[data-qa="virtual_list_item"], .c-message_kit__message, [role="listitem"]');
+
+            for (const element of messageElements) {
+                try {
+                    const messageData = window.SlackPolishChannelMessages.extractMessageData(element);
+                    if (messageData && messageData.text) {
+                        messages.push({
+                            ...messageData,
+                            isThreadReply: true
+                        });
+                    }
+                } catch (error) {
+                    utils.debug('Error extracting thread message from DOM element for summary', {
+                        error: error.message
+                    });
+                }
+            }
+
+            // Apply time range filtering if needed
+            let filteredMessages = messages;
+            if (timeRange !== 'all') {
+                const dateRange = this.calculateDateRange(timeRange);
+                if (dateRange.startDate && dateRange.endDate) {
+                    const startTime = new Date(dateRange.startDate).getTime();
+                    const endTime = new Date(dateRange.endDate).getTime();
+
+                    filteredMessages = messages.filter(msg => {
+                        if (!msg.timestamp) return true;
+                        const msgTime = new Date(msg.timestamp).getTime();
+                        return msgTime >= startTime && msgTime <= endTime;
+                    });
+                }
+            }
+
+            const channelName = window.SlackPolishChannelMessages.getCurrentChannelName();
+
+            return {
+                channelId,
+                channelName,
+                threadTs,
+                messages: filteredMessages,
+                totalReturned: filteredMessages.length,
+                method: 'DOM-Thread-Summary',
+                fetchedAt: new Date().toISOString(),
+                isThreadSummary: true
+            };
+        },
+
         // Get appropriate message count for time range
         getMessageCountForTimeRange: function(timeRange) {
             switch (timeRange) {
@@ -582,6 +895,62 @@
             }
         },
 
+
+
+        // Get thread messages from DOM
+        getThreadMessagesFromDOM: function() {
+            utils.debug('🧵 Extracting thread messages from DOM');
+
+            // Try multiple selectors to find thread messages
+            const threadSelectors = [
+                '[data-qa="threads_view"] .c-message_kit__message',
+                '.p-threads_view .c-message_kit__message',
+                '[data-qa="thread_view"] .c-message_kit__message',
+                '.p-thread_view .c-message_kit__message',
+                '[data-qa*="thread"] .c-message_kit__message',
+                '.c-thread .c-message_kit__message'
+            ];
+
+            let messageElements = [];
+
+            // Try each selector until we find messages
+            for (const selector of threadSelectors) {
+                messageElements = document.querySelectorAll(selector);
+                if (messageElements.length > 0) {
+                    utils.debug('🧵 Found thread messages with selector', {
+                        selector: selector,
+                        count: messageElements.length
+                    });
+                    break;
+                }
+            }
+
+            // If no thread-specific messages found, try general message selectors in thread context
+            if (messageElements.length === 0) {
+                messageElements = document.querySelectorAll('.c-message_kit__message');
+                utils.debug('🧵 Using general message selector', { count: messageElements.length });
+            }
+
+            const messages = [];
+
+            messageElements.forEach((element, index) => {
+                try {
+                    const message = window.SlackPolishChannelMessages.extractMessageData(element);
+                    if (message && message.text && message.text.trim()) {
+                        messages.push(message);
+                    }
+                } catch (error) {
+                    utils.debug('🧵 Error extracting thread message', { error: error.message, index });
+                }
+            });
+
+            utils.debug('🧵 Thread messages extracted from DOM', {
+                messageCount: messages.length
+            });
+
+            return messages;
+        },
+
         // Get max tokens for summary level using config values
         getMaxTokensForSummaryLevel: function(summaryLevel) {
             const config = window.SLACKPOLISH_CONFIG;
@@ -599,7 +968,6 @@
         // Get current channel information
         getCurrentChannelInfo: function() {
             try {
-                utils.log('🔍 Starting channel name detection...');
                 utils.debug('🔍 Starting channel detection...');
 
                 // Try multiple selectors for channel name
@@ -647,24 +1015,7 @@
                     'section h1'
                 ];
 
-                utils.log(`🔍 Trying ${selectors.length} DOM selectors for channel name...`);
-                utils.debug('🔍 Trying DOM selectors for channel name...', { totalSelectors: selectors.length });
-
-                // First, let's inspect what header elements are actually available
-                const headerElements = document.querySelectorAll('header, [data-qa*="header"], [class*="header"], h1, h2, h3');
-                const headerSample = Array.from(headerElements).slice(0, 5).map(el => ({
-                    tag: el.tagName,
-                    class: el.className.substring(0, 50),
-                    dataQa: el.getAttribute('data-qa'),
-                    text: el.textContent?.trim().substring(0, 30)
-                }));
-
-                utils.log(`🔍 Found ${headerElements.length} header elements in DOM`);
-                utils.log('🔍 Header elements sample: ' + JSON.stringify(headerSample, null, 2));
-                utils.debug('🔍 Available header elements in DOM', {
-                    count: headerElements.length,
-                    sample: headerSample
-                });
+                utils.debug('🔍 Starting channel name detection...', { totalSelectors: selectors.length });
 
                 for (let i = 0; i < selectors.length; i++) {
                     const selector = selectors[i];
@@ -672,10 +1023,6 @@
                         const element = document.querySelector(selector);
                         const hasText = element ? !!element.textContent?.trim() : false;
                         const text = element ? element.textContent?.trim().substring(0, 50) : null;
-
-                        if (element && hasText) {
-                            utils.log(`✅ FOUND channel name: "${text}" using selector: ${selector}`);
-                        }
 
                         utils.debug(`🔍 Selector ${i + 1}/${selectors.length}: ${selector}`, {
                             found: !!element,
@@ -685,7 +1032,6 @@
 
                         if (element && element.textContent?.trim()) {
                             channelName = element.textContent.trim();
-                            utils.log(`✅ SUCCESS: Channel name detected as "${channelName}"`);
                             utils.debug('✅ Found channel name using selector', { selector, channelName });
                             break;
                         }
@@ -696,16 +1042,13 @@
 
                 // If still no name found, try to extract from URL
                 if (channelName === 'Unknown Channel') {
-                    utils.log('❌ No DOM selector worked, trying URL extraction...');
                     utils.debug('🔍 No DOM selector worked, trying URL extraction...');
                     const currentUrl = window.location.href;
-                    utils.log(`🔍 Current URL: ${currentUrl}`);
                     utils.debug('🔍 Current URL', { url: currentUrl });
 
                     const urlMatch = currentUrl.match(/\/client\/[^\/]+\/([^\/\?]+)/);
                     if (urlMatch && urlMatch[1]) {
                         const channelId = urlMatch[1];
-                        utils.log(`🔍 Extracted channel ID from URL: ${channelId}`);
                         utils.debug('🔍 Extracted channel ID from URL', { channelId });
 
                         // If it looks like a channel ID, format it nicely
@@ -716,10 +1059,8 @@
                         } else {
                             channelName = channelId;
                         }
-                        utils.log(`✅ SUCCESS: Using URL-based channel name: "${channelName}"`);
                         utils.debug('✅ Using URL-based channel name', { channelName, channelId });
                     } else {
-                        utils.log('❌ Could not extract channel ID from URL');
                         utils.debug('❌ Could not extract channel ID from URL');
                     }
                 }
@@ -794,16 +1135,21 @@
             const channelName = result.channelName || 'Unknown Channel';
             const messageCount = result.messages.length;
             const timestamp = new Date().toLocaleString();
+            const isThreadSummary = result.isThreadSummary || false;
+
+            // Format title and location based on context
+            const reportTitle = isThreadSummary ? '🧵 THREAD SUMMARY REPORT' : '📊 CHANNEL SUMMARY REPORT';
+            const locationLabel = isThreadSummary ? `🧵  THREAD IN: ${channelName}` : `🏷️  CHANNEL: ${channelName}`;
 
             // Store animation interval for cleanup
             this.aiSummaryInterval = setInterval(() => {
                 const spinner = frames[frameIndex];
 
                 textbox.value = `╔══════════════════════════════════════════════════════════════╗
-║                    📊 CHANNEL SUMMARY REPORT                 ║
+║                    ${reportTitle}                 ║
 ╚══════════════════════════════════════════════════════════════╝
 
-🏷️  CHANNEL: ${channelName}
+${locationLabel}
 📊  MESSAGES FOUND: ${messageCount}
 📅  GENERATED: ${timestamp}
 
@@ -849,6 +1195,7 @@
         formatFinalSummary: function(result, summaryLevel, aiSummary) {
             const channelName = result.channelName || 'Unknown Channel';
             const messageCount = result.messages.length;
+            const isThreadSummary = result.isThreadSummary || false;
 
             // Get contributors count
             const contributors = new Set();
@@ -873,11 +1220,16 @@
                 }
             }
 
+            // Format title and location based on context
+            const reportTitle = isThreadSummary ? '🧵 THREAD SUMMARY REPORT' : '📊 CHANNEL SUMMARY REPORT';
+            const locationLabel = isThreadSummary ? `🧵  THREAD IN: ${channelName}` : `🏷️  CHANNEL: ${channelName}`;
+            const footerText = isThreadSummary ? 'SlackPolish Thread Summary' : 'SlackPolish Channel Summary';
+
             return `╔══════════════════════════════════════════════════════════════╗
-║                    📊 CHANNEL SUMMARY REPORT                 ║
+║                    ${reportTitle}                 ║
 ╚══════════════════════════════════════════════════════════════╝
 
-🏷️  CHANNEL: ${channelName}
+${locationLabel}
 📊  MESSAGES ANALYZED: ${messageCount}
 👥  CONTRIBUTORS: ${contributors.size}
 📅  DATE RANGE: ${dateRange}
@@ -894,7 +1246,7 @@ ${aiSummary}
 ║                      📋 SUMMARY COMPLETE                     ║
 ╚══════════════════════════════════════════════════════════════╝
 
-Generated by SlackPolish Channel Summary • ${new Date().toLocaleString()}`;
+Generated by ${footerText} • ${new Date().toLocaleString()}`;
         },
 
         // Format no messages found display

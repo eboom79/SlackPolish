@@ -95,16 +95,16 @@ print_stage "2" "INCREMENT VERSION"
 
 if [ -n "$VERSION_ARG" ] && [ -n "$DESCRIPTION_ARG" ]; then
     print_info "Setting version to $VERSION_ARG with description: $DESCRIPTION_ARG"
-    python3 increment-version.py "$VERSION_ARG" "$DESCRIPTION_ARG"
+    sudo python3 increment-version.py "$VERSION_ARG" "$DESCRIPTION_ARG"
 elif [ -n "$VERSION_ARG" ]; then
     print_info "Setting version to $VERSION_ARG"
-    python3 increment-version.py "$VERSION_ARG"
+    sudo python3 increment-version.py "$VERSION_ARG"
 elif [ -n "$DESCRIPTION_ARG" ]; then
     print_info "Incrementing build with description: $DESCRIPTION_ARG"
-    python3 increment-version.py "$DESCRIPTION_ARG"
+    sudo python3 increment-version.py "$DESCRIPTION_ARG"
 else
     print_info "Incrementing build number"
-    python3 increment-version.py
+    sudo python3 increment-version.py
 fi
 
 if [ $? -eq 0 ]; then
