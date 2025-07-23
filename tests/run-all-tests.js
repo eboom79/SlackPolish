@@ -17,10 +17,18 @@ class TestRunner {
         this.testResults = [];
     }
 
-    async findTestFiles() {
+    async findTestFiles(excludeChaos = false, excludeVectors = false) {
         const testFiles = [];
-        const testDirs = ['unit', 'integration', 'installer', 'settings', 'ui', 'api', 'cross-platform', 'static'];
-        
+        let testDirs = ['unit', 'integration', 'installer', 'settings', 'ui', 'api', 'cross-platform', 'static'];
+
+        // Add optional test directories based on filters
+        if (!excludeVectors) {
+            testDirs.push('vector');
+        }
+        if (!excludeChaos) {
+            testDirs.push('chaos');
+        }
+
         for (const dir of testDirs) {
             const dirPath = path.join(__dirname, dir);
             if (fs.existsSync(dirPath)) {
@@ -32,7 +40,7 @@ class TestRunner {
                 }
             }
         }
-        
+
         return testFiles;
     }
 
@@ -90,7 +98,7 @@ class TestRunner {
         console.log('=====================================\n');
 
         const testFiles = await this.findTestFiles();
-        
+
         if (testFiles.length === 0) {
             console.log('❌ No test files found!');
             process.exit(1);
@@ -110,7 +118,53 @@ class TestRunner {
 
         // Print summary
         this.printSummary();
-        
+
+        // Exit with appropriate code
+        process.exit(this.failedTests > 0 ? 1 : 0);
+    }
+
+    async runFilteredTests(excludeChaos = false, excludeVectors = false) {
+        let testTypeDescription = 'Filtered Test Suite';
+        if (excludeChaos && excludeVectors) {
+            testTypeDescription = 'Static Analysis Tests Only';
+        } else if (excludeChaos) {
+            testTypeDescription = 'Static Analysis + Test Vector Tests';
+        } else if (excludeVectors) {
+            testTypeDescription = 'Static Analysis + Chaos Tests';
+        }
+
+        console.log(`🚀 SlackPolish ${testTypeDescription}`);
+        console.log('=====================================\n');
+
+        const testFiles = await this.findTestFiles(excludeChaos, excludeVectors);
+
+        if (testFiles.length === 0) {
+            console.log('❌ No test files found!');
+            process.exit(1);
+        }
+
+        console.log(`📋 Found ${testFiles.length} test files:`);
+        testFiles.forEach(file => {
+            console.log(`   - ${path.basename(file)}`);
+        });
+
+        if (excludeChaos) {
+            console.log('   🚫 Chaos tests excluded');
+        }
+        if (excludeVectors) {
+            console.log('   🚫 Vector tests excluded');
+        }
+
+        console.log('\n🏃 Running tests...\n');
+
+        // Run filtered tests
+        for (const testFile of testFiles) {
+            await this.runTest(testFile);
+        }
+
+        // Print summary
+        this.printSummary();
+
         // Exit with appropriate code
         process.exit(this.failedTests > 0 ? 1 : 0);
     }
@@ -160,18 +214,32 @@ async function main() {
     const args = process.argv.slice(2);
     const runner = new TestRunner();
 
-    if (args.length === 0) {
-        // Run all tests
-        await runner.runAllTests();
-    } else if (args[0] === '--test' && args[1]) {
-        // Run specific test
-        await runner.runSpecificTest(args[1]);
-    } else if (args[0] === '--help') {
+    // Parse command line arguments
+    const excludeChaos = args.includes('--exclude-chaos');
+    const excludeVectors = args.includes('--exclude-vectors');
+    const testNameIndex = args.indexOf('--test');
+    const helpRequested = args.includes('--help');
+
+    if (helpRequested) {
         console.log('SlackPolish Test Runner');
         console.log('Usage:');
-        console.log('  node run-all-tests.js              # Run all tests');
-        console.log('  node run-all-tests.js --test NAME  # Run specific test');
-        console.log('  node run-all-tests.js --help       # Show this help');
+        console.log('  node run-all-tests.js                    # Run all tests');
+        console.log('  node run-all-tests.js --test NAME        # Run specific test');
+        console.log('  node run-all-tests.js --exclude-chaos    # Exclude chaos tests');
+        console.log('  node run-all-tests.js --exclude-vectors  # Exclude vector tests');
+        console.log('  node run-all-tests.js --help             # Show this help');
+        return;
+    }
+
+    if (testNameIndex !== -1 && args[testNameIndex + 1]) {
+        // Run specific test
+        await runner.runSpecificTest(args[testNameIndex + 1]);
+    } else if (excludeChaos || excludeVectors) {
+        // Run filtered tests
+        await runner.runFilteredTests(excludeChaos, excludeVectors);
+    } else if (args.length === 0) {
+        // Run all tests
+        await runner.runAllTests();
     } else {
         console.log('❌ Invalid arguments. Use --help for usage information.');
         process.exit(1);
