@@ -1,0 +1,54 @@
+Internal Use License
+
+Copyright (c) 2025 Redis Enterprise
+
+This software is developed for internal use by Redis Enterprise team members only.
+
+INTERNAL USE ONLY - NOT FOR PUBLIC DISTRIBUTION
+
+This software and associated documentation files (the "Software") are provided
+for internal use by Redis Enterprise employees and authorized personnel only.
+
+RESTRICTIONS:
+- This software is for internal Redis Enterprise use only
+- Distribution outside of Redis Enterprise is prohibited
+- Modification and internal sharing within Redis Enterprise is permitted
+- External distribution, sale, or public release is not authorized
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## Third-Party Licenses and Acknowledgments
+
+### OpenAI API
+This software integrates with OpenAI's API services. Use of OpenAI's API is subject to OpenAI's Terms of Service and Usage Policies. Please ensure compliance with OpenAI's guidelines when using this software.
+
+### Slack Desktop Application
+This software modifies the Slack Desktop application for enhanced functionality. Use of this software should comply with Slack's Terms of Service. This software is not affiliated with, endorsed by, or sponsored by Slack Technologies, Inc.
+
+### Node.js and npm packages
+This software uses various Node.js packages and tools. Each package is subject to its own license terms. Please refer to individual package documentation for specific license information.
+
+## Disclaimer
+
+This software is provided for educational and productivity purposes. Users are responsible for:
+- Ensuring compliance with their organization's IT policies
+- Backing up their Slack installation before use
+- Understanding the risks of modifying desktop applications
+- Complying with all applicable terms of service
+
+The authors and contributors of this software are not responsible for any damage, data loss, or policy violations that may result from the use of this software.
+
+## Usage Guidelines
+
+- This software is intended for personal and professional productivity enhancement
+- Users must provide their own OpenAI API key and are responsible for API usage costs
+- Respect privacy and confidentiality when processing text through AI services
+- Use responsibly and in accordance with your organization's policies

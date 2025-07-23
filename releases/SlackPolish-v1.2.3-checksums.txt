@@ -1,0 +1,2 @@
+7293de7caf78b216aa151deda025499b548c20e4c024dc5aa230bf962448efd8  SlackPolish-v1.2.3-Linux-x64.tar.gz
+fc7ce48991064782ae306a20fbb9dab3de64817711ae9f3d538bf68c34cee641  SlackPolish-v1.2.3-Linux-x64.zip
