@@ -213,8 +213,9 @@ function runAllTests() {
     }, 6000);
 }
 
-// Export test functions for manual use
-window.testHotkeyImprovements = {
+// Export test functions for manual use (browser only)
+if (typeof window !== 'undefined') {
+    window.testHotkeyImprovements = {
     runAll: runAllTests,
     testDebouncing: testDebouncedSettingsUpdates,
     testRateLimit: testRateLimiting,
@@ -222,11 +223,17 @@ window.testHotkeyImprovements = {
     testSetupIds: testSetupIdTracking,
     testErrorHandling: testErrorHandling,
     testMemoryLeaks: testMemoryLeakPrevention
-};
+    };
 
-// Auto-run tests if this script is loaded directly
-if (typeof window !== 'undefined' && window.location) {
-    console.log('🎯 Test functions available at: window.testHotkeyImprovements');
-    console.log('📝 Run window.testHotkeyImprovements.runAll() to start all tests');
-    console.log('🔧 Or run individual tests like window.testHotkeyImprovements.testDebouncing()');
+    // Auto-run tests if this script is loaded directly
+    if (window.location) {
+        console.log('🎯 Test functions available at: window.testHotkeyImprovements');
+        console.log('📝 Run window.testHotkeyImprovements.runAll() to start all tests');
+        console.log('🔧 Or run individual tests like window.testHotkeyImprovements.testDebouncing()');
+    }
+} else {
+    // Node.js environment - this file is for browser testing only
+    console.log('ℹ️ This test file is designed for browser environments only.');
+    console.log('🔧 For Node.js testing, use: test_hotkey_improvements_no_api.js');
+    process.exit(0); // Exit successfully since this is expected behavior
 }
