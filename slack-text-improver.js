@@ -849,42 +849,66 @@ Requirements:
 
     // Event handlers
     function setupEventListeners() {
-        utils.log(`Setting up ${CONFIG.HOTKEY} event listener`);
+        const setupId = Date.now(); // Unique ID for this setup call
+        utils.log(`Setting up ${CONFIG.HOTKEY} event listener (setup-id: ${setupId})`);
 
-        // Clean up existing listeners if any
-        if (currentKeydownListener) {
-            document.removeEventListener('keydown', currentKeydownListener);
+        // Enhanced cleanup with defensive programming
+        try {
+            if (currentKeydownListener) {
+                document.removeEventListener('keydown', currentKeydownListener);
+                utils.debug('Removed previous keydown listener', { setupId });
+            }
+            if (currentKeyupListener) {
+                document.removeEventListener('keyup', currentKeyupListener);
+                utils.debug('Removed previous keyup listener', { setupId });
+            }
+        } catch (error) {
+            utils.log(`Warning: Error during event listener cleanup: ${error.message}`);
+            utils.debug('Event listener cleanup error', {
+                error: error.message,
+                setupId,
+                hadKeydownListener: !!currentKeydownListener,
+                hadKeyupListener: !!currentKeyupListener
+            });
         }
-        if (currentKeyupListener) {
-            document.removeEventListener('keyup', currentKeyupListener);
-        }
+
+        // Clear references to prevent memory leaks
+        currentKeydownListener = null;
+        currentKeyupListener = null;
 
         const hotkey = parseHotkey(CONFIG.HOTKEY);
+        utils.debug('Parsed hotkey configuration', {
+            hotkey: CONFIG.HOTKEY,
+            parsed: hotkey,
+            setupId
+        });
 
         let ctrlPressed = false;
         let shiftPressed = false;
         let altPressed = false;
         let tabPressed = false;
         let triggerTimeout = null;
+        let lastTriggerTime = 0;
+        const MIN_TRIGGER_INTERVAL = 500; // Minimum 500ms between triggers
 
-        // Dynamic keydown handler
+        // Dynamic keydown handler with enhanced logging and safeguards
         currentKeydownListener = function(event) {
-            // Track key states
+            // Track key states with enhanced logging
             if (event.key === 'Control') {
                 ctrlPressed = true;
-                utils.log('Ctrl pressed');
+                utils.debug('Ctrl pressed', { setupId });
             }
             if (event.key === 'Shift') {
                 shiftPressed = true;
-                utils.log('Shift pressed');
+                utils.debug('Shift pressed', { setupId });
             }
             if (event.key === 'Alt') {
                 altPressed = true;
-                utils.log('Alt pressed');
+                utils.debug('Alt pressed', { setupId });
             }
             if (event.key === 'Tab') {
                 tabPressed = true;
-                utils.log('Tab pressed');
+                utils.debug('Tab pressed', { setupId });
             }
 
             // Check if the configured hotkey combination is pressed
@@ -894,48 +918,83 @@ Requirements:
                 (!hotkey.alt || !altPressed) &&
                 (!hotkey.tab || !tabPressed);
 
+            // Enhanced debug logging for hotkey detection
+            if (hotkeyMatch || (ctrlPressed || shiftPressed || altPressed || tabPressed)) {
+                utils.debug('Hotkey state check', {
+                    event: event.key,
+                    current: { ctrlPressed, shiftPressed, altPressed, tabPressed },
+                    required: hotkey,
+                    match: hotkeyMatch,
+                    setupId
+                });
+            }
+
             if (hotkeyMatch) {
+                const now = Date.now();
+
                 // Prevent Tab from changing focus if it's part of the hotkey
                 if (hotkey.tab) {
                     event.preventDefault();
                 }
 
-                utils.log(`${CONFIG.HOTKEY} combination pressed - triggering text improvement immediately`);
+                // Rate limiting to prevent rapid multiple triggers
+                if (now - lastTriggerTime < MIN_TRIGGER_INTERVAL) {
+                    utils.debug('Hotkey trigger rate limited', {
+                        timeSinceLastTrigger: now - lastTriggerTime,
+                        minInterval: MIN_TRIGGER_INTERVAL,
+                        setupId
+                    });
+                    return;
+                }
 
-                // Clear any existing timeout
+                utils.log(`${CONFIG.HOTKEY} combination pressed - triggering text improvement (setup-id: ${setupId})`);
+
+                // Clear any existing timeout to prevent multiple triggers
                 if (triggerTimeout) {
                     clearTimeout(triggerTimeout);
                     triggerTimeout = null;
+                    utils.debug('Cleared existing trigger timeout', { setupId });
                 }
 
-                // Trigger immediately - no need to wait for keys to be held
+                // Trigger with short delay to debounce multiple rapid key presses
                 triggerTimeout = setTimeout(async () => {
-                    utils.log(`${CONFIG.HOTKEY} triggered - starting text improvement`);
-                    await triggerTextImprovement();
-                    triggerTimeout = null;
+                    try {
+                        lastTriggerTime = Date.now();
+                        utils.log(`${CONFIG.HOTKEY} triggered - starting text improvement (setup-id: ${setupId})`);
+                        await triggerTextImprovement();
+                    } catch (error) {
+                        utils.log(`Error in hotkey trigger: ${error.message}`);
+                        utils.debug('Hotkey trigger error', {
+                            error: error.message,
+                            stack: error.stack,
+                            setupId
+                        });
+                    } finally {
+                        triggerTimeout = null;
+                    }
                 }, 50); // Very short delay just to debounce multiple rapid key presses
             }
         };
 
         document.addEventListener('keydown', currentKeydownListener);
 
-        // Dynamic keyup handler
+        // Dynamic keyup handler with enhanced logging
         currentKeyupListener = function(event) {
             if (event.key === 'Control') {
                 ctrlPressed = false;
-                utils.log('Ctrl released');
+                utils.debug('Ctrl released', { setupId });
             }
             if (event.key === 'Shift') {
                 shiftPressed = false;
-                utils.log('Shift released');
+                utils.debug('Shift released', { setupId });
             }
             if (event.key === 'Alt') {
                 altPressed = false;
-                utils.log('Alt released');
+                utils.debug('Alt released', { setupId });
             }
             if (event.key === 'Tab') {
                 tabPressed = false;
-                utils.log('Tab released');
+                utils.debug('Tab released', { setupId });
             }
 
             // Clear timeout if any required key is released
@@ -948,48 +1007,87 @@ Requirements:
             if (triggerTimeout && anyRequiredKeyReleased) {
                 clearTimeout(triggerTimeout);
                 triggerTimeout = null;
-                utils.log('Trigger timeout cleared');
+                utils.debug('Trigger timeout cleared due to key release', {
+                    releasedKey: event.key,
+                    setupId
+                });
             }
         };
 
         document.addEventListener('keyup', currentKeyupListener);
 
+        // Log successful setup completion
+        utils.log(`Event listeners registered successfully for ${CONFIG.HOTKEY} (setup-id: ${setupId})`);
+        utils.debug('Event listener setup completed', {
+            hotkey: CONFIG.HOTKEY,
+            parsedHotkey: hotkey,
+            setupId,
+            hasKeydownListener: !!currentKeydownListener,
+            hasKeyupListener: !!currentKeyupListener,
+            minTriggerInterval: MIN_TRIGGER_INTERVAL
+        });
+
         async function triggerTextImprovement() {
+            const triggerCallId = Date.now();
+            const callStack = new Error().stack;
+
             utils.debug('triggerTextImprovement() called', {
+                triggerCallId,
                 isProcessing: textImprover.isProcessing,
-                debugMode: CONFIG.DEBUG_MODE
+                debugMode: CONFIG.DEBUG_MODE,
+                setupId,
+                callStack: callStack?.split('\n').slice(0, 5).join('\n') // First 5 lines of stack trace
             });
 
+            // Enhanced processing check with better logging
             if (textImprover.isProcessing) {
-                utils.debug('Already processing, aborting', { isProcessing: true });
+                utils.log('Text improvement already in progress - aborting new request');
+                utils.debug('Already processing, aborting', {
+                    isProcessing: true,
+                    triggerCallId,
+                    setupId
+                });
                 utils.showNotification('Already processing text...', 'error');
                 return;
             }
 
             const messageInput = utils.findMessageInput();
             if (!messageInput) {
-                utils.debug('Message input not found', { messageInput: null });
+                utils.log('No message input found - cannot proceed with text improvement');
+                utils.debug('Message input not found', {
+                    messageInput: null,
+                    triggerCallId,
+                    setupId,
+                    activeElement: document.activeElement?.tagName,
+                    activeElementClass: document.activeElement?.className
+                });
                 utils.showNotification('No message input found', 'error');
-                utils.log('Message input not found');
                 return;
             }
 
-            utils.log(`Found message input: ${messageInput.tagName}`);
             utils.debug('Message input found', {
                 tagName: messageInput.tagName,
                 className: messageInput.className,
-                id: messageInput.id
+                id: messageInput.id,
+                triggerCallId,
+                setupId
             });
 
             const originalText = utils.getTextFromElement(messageInput);
-            utils.log(`Original text: "${originalText}"`);
+            utils.log(`Processing text improvement for: "${originalText}" (trigger-id: ${triggerCallId})`);
 
             if (!originalText.trim()) {
-                utils.debug('No text to improve', { originalText });
+                utils.log('No text to improve - input is empty or whitespace only');
+                utils.debug('No text to improve', {
+                    originalText,
+                    triggerCallId,
+                    setupId
+                });
                 utils.showNotification('No text to improve', 'error');
                 return;
             }
 
+            utils.log(`Starting text improvement process (trigger-id: ${triggerCallId})`);
             const improvedText = await textImprover.improveText(originalText);
 
             if (improvedText) {
@@ -999,26 +1097,26 @@ Requirements:
                     finalText = improvedText + ' :slack_polish:';
                 }
 
-                // EMERGENCY DEBUG: Log what we're about to paste
-                console.log('🚨 DEBUG: About to paste to Slack:', {
+                utils.log(`Text improvement completed successfully (trigger-id: ${triggerCallId})`);
+                utils.debug('Setting improved text', {
                     originalText: originalText,
                     improvedText: improvedText,
                     finalText: finalText,
                     finalTextLength: finalText.length,
-                    finalTextPreview: finalText.substring(0, 200) + (finalText.length > 200 ? '...' : ''),
-                    emojiSignatureEnabled: CONFIG.ADD_EMOJI_SIGNATURE || false
+                    emojiSignatureEnabled: CONFIG.ADD_EMOJI_SIGNATURE,
+                    lengthChange: finalText.length - originalText.length,
+                    triggerCallId,
+                    setupId
                 });
 
-                utils.debug('Setting improved text', {
-                    originalText,
-                    improvedText,
-                    finalText,
-                    emojiSignatureEnabled: CONFIG.ADD_EMOJI_SIGNATURE || false,
-                    lengthChange: finalText.length - originalText.length
-                });
                 utils.setTextInElement(messageInput, finalText);
             } else {
-                utils.debug('No improved text received', { improvedText });
+                utils.log(`Text improvement failed - no improved text received (trigger-id: ${triggerCallId})`);
+                utils.debug('No improved text received', {
+                    improvedText,
+                    triggerCallId,
+                    setupId
+                });
             }
         }
     }
@@ -2711,46 +2809,114 @@ Requirements:
 
     // Set up storage event listener for real-time settings updates
     function setupSettingsListener() {
+        // Debouncing variables to prevent multiple rapid re-registrations
+        let settingsUpdateTimeout = null;
+        let settingsUpdateCount = 0;
+
+        // Unified settings update handler with debouncing
+        function handleSettingsUpdate(source, eventKey = null) {
+            settingsUpdateCount++;
+            const updateId = settingsUpdateCount;
+
+            utils.debug('Settings update triggered', {
+                source,
+                eventKey,
+                updateId,
+                currentHotkey: CONFIG.HOTKEY,
+                currentDebugMode: CONFIG.DEBUG_MODE
+            });
+
+            // Cancel any pending update to prevent multiple rapid calls
+            if (settingsUpdateTimeout) {
+                clearTimeout(settingsUpdateTimeout);
+                utils.debug('Cancelled previous settings update', { updateId: updateId - 1 });
+            }
+
+            // Schedule update after brief delay to allow multiple events to settle
+            settingsUpdateTimeout = setTimeout(() => {
+                try {
+                    utils.log(`Processing settings update (source: ${source}, id: ${updateId})`);
+
+                    // Store old values for comparison
+                    const oldHotkey = CONFIG.HOTKEY;
+                    const oldDebugMode = CONFIG.DEBUG_MODE;
+                    const oldSmartContext = CONFIG.SMART_CONTEXT?.enabled;
+
+                    // Load new settings
+                    loadSettings();
+
+                    // Track what changed
+                    const changes = {
+                        hotkey: oldHotkey !== CONFIG.HOTKEY,
+                        debugMode: oldDebugMode !== CONFIG.DEBUG_MODE,
+                        smartContext: oldSmartContext !== CONFIG.SMART_CONTEXT?.enabled
+                    };
+
+                    utils.debug('Settings comparison', {
+                        oldHotkey,
+                        newHotkey: CONFIG.HOTKEY,
+                        oldDebugMode,
+                        newDebugMode: CONFIG.DEBUG_MODE,
+                        oldSmartContext,
+                        newSmartContext: CONFIG.SMART_CONTEXT?.enabled,
+                        changes
+                    });
+
+                    // Only re-setup event listeners if hotkey actually changed
+                    if (changes.hotkey) {
+                        utils.log(`Hotkey changed from "${oldHotkey}" to "${CONFIG.HOTKEY}" - re-setting up listeners (source: ${source})`);
+                        setupEventListeners();
+                    } else {
+                        utils.debug('Hotkey unchanged, skipping event listener re-setup', {
+                            hotkey: CONFIG.HOTKEY
+                        });
+                    }
+
+                    // Update global debug system if debug mode changed
+                    if (changes.debugMode && window.SlackPolishDebug) {
+                        window.SlackPolishDebug.setEnabled(CONFIG.DEBUG_MODE);
+                        utils.log(`Debug mode ${CONFIG.DEBUG_MODE ? 'enabled' : 'disabled'} (source: ${source})`);
+                    }
+
+                    // Log Smart Context changes
+                    if (changes.smartContext) {
+                        utils.log(`Smart Context ${CONFIG.SMART_CONTEXT?.enabled ? 'enabled' : 'disabled'} (source: ${source})`);
+                    }
+
+                    utils.log(`Settings update completed successfully (source: ${source}, id: ${updateId})`);
+
+                } catch (error) {
+                    utils.log(`Error processing settings update: ${error.message}`);
+                    utils.debug('Settings update error details', {
+                        error: error.message,
+                        stack: error.stack,
+                        source,
+                        updateId
+                    });
+                } finally {
+                    settingsUpdateTimeout = null;
+                }
+            }, 150); // 150ms debounce delay to handle rapid multiple events
+        }
+
         // Listen for localStorage changes from the settings script
         window.addEventListener('storage', function(e) {
             if (e.key === 'slackpolish_settings' || e.key === 'slackpolish_openai_api_key') {
-                utils.log('Settings changed in storage, reloading...');
-                const oldHotkey = CONFIG.HOTKEY;
-                const oldDebugMode = CONFIG.DEBUG_MODE;
-                loadSettings();
-
-                // If hotkey changed, re-setup event listeners
-                if (oldHotkey !== CONFIG.HOTKEY) {
-                    utils.log(`Hotkey changed from ${oldHotkey} to ${CONFIG.HOTKEY}, re-setting up listeners`);
-                    setupEventListeners();
-                }
-
-                // If debug mode changed, update global debug system
-                if (oldDebugMode !== CONFIG.DEBUG_MODE && window.SlackPolishDebug) {
-                    window.SlackPolishDebug.setEnabled(CONFIG.DEBUG_MODE);
-                    utils.log(`Debug mode ${CONFIG.DEBUG_MODE ? 'enabled' : 'disabled'}`);
-                }
-
-                utils.log('Settings reloaded successfully');
+                handleSettingsUpdate('storage', e.key);
             }
         });
 
         // Also listen for custom events (for same-tab updates)
         window.addEventListener('slackpolish-settings-updated', function() {
-            utils.log('Settings updated via custom event, reloading...');
-            const oldHotkey = CONFIG.HOTKEY;
-            loadSettings();
-
-            // If hotkey changed, re-setup event listeners
-            if (oldHotkey !== CONFIG.HOTKEY) {
-                utils.log(`Hotkey changed from ${oldHotkey} to ${CONFIG.HOTKEY}, re-setting up listeners`);
-                setupEventListeners();
-            }
-
-            utils.log('Settings reloaded successfully');
+            handleSettingsUpdate('custom-event');
         });
 
-        utils.log('Real-time settings listener initialized');
+        utils.log('Real-time settings listener initialized with debouncing');
+        utils.debug('Settings listener configuration', {
+            debounceDelay: 150,
+            monitoredKeys: ['slackpolish_settings', 'slackpolish_openai_api_key'],
+            customEvent: 'slackpolish-settings-updated'
+        });
     }
 
     // Start the application

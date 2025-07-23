@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SlackPolish Hotkey Improvements Test - v1.2.1</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-button {
+            background: #2eb67d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-button:hover {
+            background: #2a9d6b;
+        }
+        .log-container {
+            background: #1a1d29;
+            color: #e8e8e8;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .mock-slack-input {
+            width: 100%;
+            min-height: 100px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            font-size: 14px;
+            resize: vertical;
+        }
+        .mock-slack-input:focus {
+            border-color: #2eb67d;
+            outline: none;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.info { background: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <h1>🧪 SlackPolish Hotkey Improvements Test</h1>
+    <p><strong>Version:</strong> 1.2.1 | <strong>Purpose:</strong> Test debouncing, rate limiting, enhanced logging, and error handling improvements</p>
+    
+    <div class="test-container">
+        <h2>📋 Test Environment</h2>
+        <div id="status" class="status info">Loading SlackPolish...</div>
+
+        <div class="status info">
+            <strong>⚠️ API Key Required:</strong> This test requires an OpenAI API key stored in localStorage.
+            The key is never stored in code or committed to GitHub for security.
+            <br><br>
+            <button class="test-button" onclick="promptForApiKey()">🔑 Set API Key</button>
+            <button class="test-button" onclick="checkApiKey()">🔍 Check API Key Status</button>
+        </div>
+
+        <h3>Mock Slack Input (try typing and using Ctrl+Shift):</h3>
+        <div contenteditable="true" class="mock-slack-input ql-editor" data-qa="message_input">
+            Type some text here and press Ctrl+Shift to test the hotkey system...
+        </div>
+    </div>
+    
+    <div class="test-container">
+        <h2>🎯 Test Controls</h2>
+        <button class="test-button" onclick="runDebounceTest()">Test Debouncing</button>
+        <button class="test-button" onclick="runRateLimitTest()">Test Rate Limiting</button>
+        <button class="test-button" onclick="runLoggingTest()">Test Enhanced Logging</button>
+        <button class="test-button" onclick="runSetupIdTest()">Test Setup ID Tracking</button>
+        <button class="test-button" onclick="runErrorHandlingTest()">Test Error Handling</button>
+        <button class="test-button" onclick="runAllTests()">🚀 Run All Tests</button>
+        <button class="test-button" onclick="clearLogs()">🗑️ Clear Logs</button>
+    </div>
+    
+    <div class="test-container">
+        <h2>📝 Test Results</h2>
+        <div id="logs" class="log-container">
+            Waiting for tests to run...
+        </div>
+    </div>
+
+    <!-- Load SlackPolish Config -->
+    <script src="slack-config.js"></script>
+    
+    <!-- Load SlackPolish Main Script -->
+    <script src="slack-text-improver.js"></script>
+    
+    <!-- Test Script -->
+    <script>
+        let logContainer = document.getElementById('logs');
+        let statusContainer = document.getElementById('status');
+        
+        // Override console.log to capture logs
+        const originalLog = console.log;
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            
+            const logEntry = document.createElement('div');
+            logEntry.style.marginBottom = '5px';
+            logEntry.style.borderLeft = '3px solid #2eb67d';
+            logEntry.style.paddingLeft = '10px';
+            
+            const timestamp = new Date().toLocaleTimeString();
+            logEntry.innerHTML = `<span style="color: #666;">[${timestamp}]</span> ${args.join(' ')}`;
+            
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        };
+        
+        function updateStatus(message, type = 'info') {
+            statusContainer.textContent = message;
+            statusContainer.className = `status ${type}`;
+        }
+        
+        function clearLogs() {
+            logContainer.innerHTML = 'Logs cleared...';
+        }
+
+        // API Key Management Functions (GitHub-safe)
+        function promptForApiKey() {
+            const apiKey = prompt('Enter your OpenAI API Key (starts with sk-):\n\nNote: This is stored locally in your browser and never sent to GitHub.');
+
+            if (apiKey && apiKey.trim()) {
+                if (apiKey.startsWith('sk-')) {
+                    localStorage.setItem('slackpolish_openai_api_key', apiKey.trim());
+                    console.log('🔑 API key saved to localStorage');
+                    updateStatus('✅ API key saved successfully', 'success');
+                } else {
+                    alert('Invalid API key format. OpenAI API keys start with "sk-"');
+                    updateStatus('❌ Invalid API key format', 'error');
+                }
+            }
+        }
+
+        function checkApiKey() {
+            const apiKey = localStorage.getItem('slackpolish_openai_api_key');
+
+            if (apiKey) {
+                const maskedKey = apiKey.substring(0, 7) + '...' + apiKey.substring(apiKey.length - 4);
+                console.log(`🔑 API key found: ${maskedKey}`);
+                updateStatus(`✅ API key configured: ${maskedKey}`, 'success');
+            } else {
+                console.log('❌ No API key found in localStorage');
+                updateStatus('❌ No API key configured', 'error');
+            }
+        }
+        
+        // Wait for SlackPolish to load
+        setTimeout(() => {
+            if (typeof window.SLACKPOLISH_CONFIG !== 'undefined') {
+                updateStatus('✅ SlackPolish loaded successfully', 'success');
+                console.log('🎉 SlackPolish loaded with config:', window.SLACKPOLISH_CONFIG.VERSION);
+            } else {
+                updateStatus('❌ SlackPolish failed to load', 'error');
+            }
+        }, 1000);
+        
+        // Test functions
+        function runDebounceTest() {
+            console.log('🧪 Starting Debounce Test...');
+            
+            // Simulate rapid settings changes
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    const event = new StorageEvent('storage', {
+                        key: 'slackpolish_settings',
+                        newValue: JSON.stringify({
+                            improveHotkey: i % 2 === 0 ? 'Ctrl+Shift' : 'Ctrl+Alt',
+                            language: 'English',
+                            style: 'professional'
+                        })
+                    });
+                    window.dispatchEvent(event);
+                    console.log(`📤 Rapid settings change ${i + 1} fired`);
+                }, i * 20);
+            }
+            
+            setTimeout(() => {
+                console.log('✅ Debounce test completed - check for debouncing messages');
+            }, 500);
+        }
+        
+        function runRateLimitTest() {
+            console.log('🧪 Starting Rate Limit Test...');
+            
+            // Focus the input
+            const input = document.querySelector('.mock-slack-input');
+            input.focus();
+            
+            // Simulate rapid Ctrl+Shift presses
+            for (let i = 0; i < 3; i++) {
+                setTimeout(() => {
+                    console.log(`🎹 Simulating hotkey press ${i + 1}...`);
+                    
+                    // Press Ctrl
+                    document.dispatchEvent(new KeyboardEvent('keydown', {
+                        key: 'Control',
+                        ctrlKey: true,
+                        bubbles: true
+                    }));
+                    
+                    // Press Shift
+                    setTimeout(() => {
+                        document.dispatchEvent(new KeyboardEvent('keydown', {
+                            key: 'Shift',
+                            ctrlKey: true,
+                            shiftKey: true,
+                            bubbles: true
+                        }));
+                    }, 10);
+                    
+                    // Release keys
+                    setTimeout(() => {
+                        document.dispatchEvent(new KeyboardEvent('keyup', {
+                            key: 'Control',
+                            ctrlKey: false,
+                            shiftKey: true,
+                            bubbles: true
+                        }));
+                        document.dispatchEvent(new KeyboardEvent('keyup', {
+                            key: 'Shift',
+                            ctrlKey: false,
+                            shiftKey: false,
+                            bubbles: true
+                        }));
+                    }, 50);
+                    
+                }, i * 100); // Faster than 500ms rate limit
+            }
+            
+            setTimeout(() => {
+                console.log('✅ Rate limit test completed - check for rate limiting messages');
+            }, 1000);
+        }
+        
+        function runLoggingTest() {
+            console.log('🧪 Starting Enhanced Logging Test...');
+            
+            // Enable debug mode
+            if (window.SlackPolishDebug) {
+                window.SlackPolishDebug.setEnabled(true);
+                console.log('🐛 Debug mode enabled for enhanced logging');
+            }
+            
+            // Trigger settings change
+            const event = new StorageEvent('storage', {
+                key: 'slackpolish_settings',
+                newValue: JSON.stringify({
+                    improveHotkey: 'Ctrl+Alt',
+                    language: 'Spanish',
+                    style: 'casual',
+                    debugMode: true
+                })
+            });
+            window.dispatchEvent(event);
+            
+            setTimeout(() => {
+                console.log('✅ Enhanced logging test completed - check debug window for detailed logs');
+            }, 300);
+        }
+        
+        function runSetupIdTest() {
+            console.log('🧪 Starting Setup ID Test...');
+            
+            const hotkeys = ['Ctrl+Shift', 'Ctrl+Alt', 'Ctrl+Tab'];
+            
+            hotkeys.forEach((hotkey, index) => {
+                setTimeout(() => {
+                    console.log(`🎯 Changing hotkey to: ${hotkey}`);
+                    
+                    const event = new StorageEvent('storage', {
+                        key: 'slackpolish_settings',
+                        newValue: JSON.stringify({
+                            improveHotkey: hotkey,
+                            language: 'English',
+                            style: 'professional'
+                        })
+                    });
+                    window.dispatchEvent(event);
+                }, index * 300);
+            });
+            
+            setTimeout(() => {
+                console.log('✅ Setup ID test completed - check for unique setup IDs in logs');
+            }, 1200);
+        }
+        
+        function runErrorHandlingTest() {
+            console.log('🧪 Starting Error Handling Test...');
+            
+            // Test invalid JSON
+            const invalidEvent = new StorageEvent('storage', {
+                key: 'slackpolish_settings',
+                newValue: 'invalid json{'
+            });
+            window.dispatchEvent(invalidEvent);
+            
+            setTimeout(() => {
+                // Test null value
+                const nullEvent = new StorageEvent('storage', {
+                    key: 'slackpolish_settings',
+                    newValue: null
+                });
+                window.dispatchEvent(nullEvent);
+            }, 100);
+            
+            setTimeout(() => {
+                console.log('✅ Error handling test completed - check for graceful error handling');
+            }, 300);
+        }
+        
+        function runAllTests() {
+            console.log('🚀 Running all hotkey improvement tests...');
+            
+            runDebounceTest();
+            setTimeout(() => runRateLimitTest(), 1000);
+            setTimeout(() => runLoggingTest(), 2500);
+            setTimeout(() => runSetupIdTest(), 3000);
+            setTimeout(() => runErrorHandlingTest(), 5000);
+            
+            setTimeout(() => {
+                console.log('🎉 All tests completed!');
+                console.log('📊 Review the logs above for test results');
+            }, 6000);
+        }
+        
+        // Add keyboard event listener for manual testing
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.shiftKey) {
+                console.log('🎹 Manual Ctrl+Shift detected in test page');
+            }
+        });
+    </script>
+</body>
+</html>

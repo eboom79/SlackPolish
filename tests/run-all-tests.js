@@ -41,6 +41,18 @@ class TestRunner {
             }
         }
 
+        // Add standalone test files in the tests root directory
+        const rootTestFiles = [
+            'test_hotkey_improvements_no_api.js',  // No API key required - safe for CI/CD
+            'test-hotkey-improvements.js'          // Requires API key - manual testing only
+        ];
+        for (const file of rootTestFiles) {
+            const filePath = path.join(__dirname, file);
+            if (fs.existsSync(filePath)) {
+                testFiles.push(filePath);
+            }
+        }
+
         return testFiles;
     }
 

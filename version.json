@@ -1,8 +1,8 @@
 {
     "major": 1,
     "minor": 2,
-    "build": 0,
-    "version_string": "1.2.0",
-    "description": "Major Feature: Thread Detection and Summarization System",
-    "date": "2025-07-22"
+    "build": 2,
+    "version_string": "1.2.2",
+    "description": "Hotkey improvements - debouncing, rate limiting, enhanced logging",
+    "date": "2025-07-23"
 }

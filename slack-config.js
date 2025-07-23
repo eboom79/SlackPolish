@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.2.0",
-    BUILD: 42,
-    BUILD_DATE: "2025-07-22",
-    DESCRIPTION: "Major Feature: Thread Detection and Summarization System",
+    VERSION: "1.2.2",
+    BUILD: 2,
+    BUILD_DATE: "2025-07-23",
+    DESCRIPTION: "Hotkey improvements - debouncing, rate limiting, enhanced logging",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
@@ -168,6 +168,62 @@ window.SLACKPOLISH_CONFIG = {
     ],
 
 
+
+    // ========================================
+    // SMART CONTEXT SETTINGS
+    // ========================================
+    // Smart Context analyzes recent conversation messages to provide better text improvements
+    // When enabled, it fetches the last few messages to understand conversation context
+    SMART_CONTEXT: {
+        enabled: false,                       // Enable/disable Smart Context feature
+                                             //
+                                             // When enabled: AI considers recent messages for context-aware improvements
+                                             // When disabled: AI improves text without conversation context
+                                             //
+                                             // Recommendation: Disable if you experience unexpected text replacements
+                                             // or if you prefer AI to focus only on your current message
+
+        privacyMode: false,                  // Enable privacy mode for Smart Context
+                                             //
+                                             // When enabled: User names are anonymized as "User1", "User2", etc.
+                                             // When disabled: Real user names are sent to OpenAI for context
+                                             //
+                                             // Recommendation: Enable for sensitive conversations
+
+        messageCount: 5,                     // Number of recent messages to use for context (1-10)
+                                             //
+                                             // Lower values (1-3): Less context, faster processing, lower cost
+                                             // Higher values (5-10): More context, better understanding, higher cost
+                                             //
+                                             // Recommendation: 3-5 messages for most use cases
+
+        minTextLength: 20,                   // Minimum text length to trigger Smart Context
+                                             //
+                                             // Smart Context only activates when your message is shorter than this
+                                             // This prevents context from interfering with longer, complete messages
+                                             //
+                                             // Examples:
+                                             // • 10: Very short messages only ("Hi", "Yes", "OK")
+                                             // • 20: Short messages and brief responses
+                                             // • 50: Medium-length messages that might benefit from context
+                                             //
+                                             // Recommendation: 20-30 characters to avoid unwanted context usage
+
+        enableForGreetings: false,           // Enable Smart Context for greeting messages
+                                             //
+                                             // When disabled: Messages like "Hi", "Hello", "Good morning" won't use context
+                                             // When enabled: Even greetings will consider conversation context
+                                             //
+                                             // Recommendation: Keep disabled to prevent greeting replacements
+                                             // This setting helps avoid the bug where "Hi" gets replaced with previous conversation
+
+        debugMode: false                     // Enable debug logging for Smart Context
+                                             //
+                                             // When enabled: Detailed logs about context fetching and usage
+                                             // When disabled: Minimal logging
+                                             //
+                                             // Recommendation: Enable only for troubleshooting
+    },
 
     // ========================================
     // CHANNEL SUMMARY SETTINGS
