@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.2.2",
-    BUILD: 2,
+    VERSION: "1.2.3",
+    BUILD: 3,
     BUILD_DATE: "2025-07-23",
-    DESCRIPTION: "Hotkey improvements - debouncing, rate limiting, enhanced logging",
+    DESCRIPTION: "Installer improvements + hotkey bug fixes - comprehensive release",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)

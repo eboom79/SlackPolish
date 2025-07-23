@@ -1,8 +1,8 @@
 {
     "major": 1,
     "minor": 2,
-    "build": 2,
-    "version_string": "1.2.2",
-    "description": "Hotkey improvements - debouncing, rate limiting, enhanced logging",
+    "build": 3,
+    "version_string": "1.2.3",
+    "description": "Installer improvements + hotkey bug fixes - comprehensive release",
     "date": "2025-07-23"
 }
