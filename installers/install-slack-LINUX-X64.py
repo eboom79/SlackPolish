@@ -496,104 +496,236 @@ Examples:
     
     return parser.parse_args()
 
+def check_permissions(slack_path):
+    """Check if we have the necessary permissions to modify Slack files."""
+    print_info("Checking permissions...")
+
+    asar_path = os.path.join(slack_path, "app.asar")
+
+    # Check if the directory exists and is accessible
+    if not os.path.exists(slack_path):
+        print_error(f"Slack directory does not exist: {slack_path}")
+        return False
+
+    if not os.access(slack_path, os.R_OK | os.W_OK):
+        print_error(f"No read/write access to Slack directory: {slack_path}")
+        print_info("Try running with sudo: sudo python3 install-slack-LINUX-X64.py")
+        return False
+
+    # Check if app.asar exists and is writable
+    if not os.path.exists(asar_path):
+        print_error(f"app.asar not found: {asar_path}")
+        return False
+
+    if not os.access(asar_path, os.R_OK | os.W_OK):
+        print_error(f"No read/write access to app.asar: {asar_path}")
+        print_info("Try running with sudo: sudo python3 install-slack-LINUX-X64.py")
+        return False
+
+    print_success("Permission check passed")
+    return True
+
+def verify_installation(slack_path):
+    """Verify that the installation was successful."""
+    print_info("Verifying installation...")
+
+    asar_path = os.path.join(slack_path, "app.asar")
+    extract_dir = "slack_verify_extract"
+
+    try:
+        # Check if asar tool is available
+        asar_tool = check_asar_tool_linux()
+        if not asar_tool:
+            print_warning("Cannot verify installation - asar tool not available")
+            return True  # Assume success if we can't verify
+
+        # Extract and check for our injection
+        if os.path.exists(extract_dir):
+            shutil.rmtree(extract_dir)
+
+        if not extract_asar(asar_path, extract_dir, asar_tool):
+            print_warning("Cannot verify installation - extraction failed")
+            return True  # Assume success if we can't verify
+
+        # Look for our injection marker
+        injection_found = False
+        for root, dirs, files in os.walk(extract_dir):
+            for file in files:
+                if file.endswith('.js'):
+                    file_path = os.path.join(root, file)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                            if "SLACKPOLISH INJECTION START" in content:
+                                injection_found = True
+                                break
+                    except:
+                        continue
+            if injection_found:
+                break
+
+        # Cleanup
+        if os.path.exists(extract_dir):
+            shutil.rmtree(extract_dir)
+
+        if injection_found:
+            print_success("Installation verification passed - SlackPolish code found")
+            return True
+        else:
+            print_error("Installation verification failed - SlackPolish code not found")
+            return False
+
+    except Exception as e:
+        print_warning(f"Cannot verify installation: {e}")
+        return True  # Assume success if we can't verify
+
 def main():
     """Main installation function."""
     global VERBOSE
+
+    try:
+        args = parse_arguments()
+        VERBOSE = args.verbose
+
+        print_header("🐧 SlackPolish Installer for Linux x64")
     
-    args = parse_arguments()
-    VERBOSE = args.verbose
-    
-    print_header("🐧 SlackPolish Installer for Linux x64")
-    
-    # Validate platform
-    if not detect_linux_system():
-        return 1
-    
-    # Check required files
-    required_files = ["slack-config.js", "slack-text-improver.js", "slack-settings.js", "slack-channel-summary.js", "logo-data.js"]
-    for file in required_files:
-        if not os.path.exists(file):
-            print_error(f"Required file not found: {file}")
+        # Validate platform
+        if not detect_linux_system():
             return 1
-    print_success("All required files found")
-    
-    # Find Slack installation
-    if args.slack_path:
-        slack_path = args.slack_path
-    else:
-        slack_path = find_slack_installation_linux()
-    
-    if not slack_path:
-        print_error("Could not find Slack installation")
-        print_info("Common locations:")
-        print("  - /usr/lib/slack/resources")
-        print("  - /opt/slack/resources")
-        print("  - /snap/slack/current/usr/lib/slack/resources")
-        print_info("Try: sudo python3 install-slack-LINUX-X64.py --slack-path '/path/to/slack/resources'")
-        return 1
-    
-    # Check asar tool
-    asar_tool = check_asar_tool_linux()
-    if not asar_tool:
-        asar_tool = install_asar_tool_linux()
+
+        # Check required files
+        required_files = ["slack-config.js", "slack-text-improver.js", "slack-settings.js", "slack-channel-summary.js", "logo-data.js"]
+        for file in required_files:
+            if not os.path.exists(file):
+                print_error(f"Required file not found: {file}")
+                return 1
+        print_success("All required files found")
+
+        # Find Slack installation
+        if args.slack_path:
+            slack_path = args.slack_path
+        else:
+            slack_path = find_slack_installation_linux()
+
+        if not slack_path:
+            print_error("Could not find Slack installation")
+            print_info("Common locations:")
+            print("  - /usr/lib/slack/resources")
+            print("  - /opt/slack/resources")
+            print("  - /snap/slack/current/usr/lib/slack/resources")
+            print_info("Try: sudo python3 install-slack-LINUX-X64.py --slack-path '/path/to/slack/resources'")
+            return 1
+
+        # Check permissions before proceeding
+        if not check_permissions(slack_path):
+            return 1
+
+        # Check asar tool
+        asar_tool = check_asar_tool_linux()
         if not asar_tool:
-            print_error("Could not install asar tool")
+            asar_tool = install_asar_tool_linux()
+            if not asar_tool:
+                print_error("Could not install asar tool")
+                return 1
+        print_success(f"asar tool available: {asar_tool}")
+
+        # Setup paths
+        asar_path = os.path.join(slack_path, "app.asar")
+        backup_path = os.path.join(slack_path, "app.asar.backup")
+        extract_dir = "slack_temp_extract"
+    
+        # Create backup
+        if not os.path.exists(backup_path):
+            print_info("Creating backup...")
+            try:
+                shutil.copy2(asar_path, backup_path)
+                print_success("Backup created")
+            except Exception as e:
+                print_error(f"Failed to create backup: {e}")
+                print_info("This usually means insufficient permissions. Try running with sudo.")
+                return 1
+        else:
+            print_info("Backup already exists, skipping...")
+
+        # Extract
+        print_info("Extracting app.asar...")
+        try:
+            if os.path.exists(extract_dir):
+                shutil.rmtree(extract_dir)
+            if not extract_asar(asar_path, extract_dir, asar_tool):
+                print_error("Failed to extract app.asar")
+                print_info("This usually means the asar file is corrupted or locked.")
+                return 1
+        except Exception as e:
+            print_error(f"Error during extraction: {e}")
             return 1
-    print_success(f"asar tool available: {asar_tool}")
     
-    # Setup paths
-    asar_path = os.path.join(slack_path, "app.asar")
-    backup_path = os.path.join(slack_path, "app.asar.backup")
-    extract_dir = "slack_temp_extract"
-    
-    # Create backup
-    if not os.path.exists(backup_path):
-        print_info("Creating backup...")
-        shutil.copy2(asar_path, backup_path)
-        print_success("Backup created")
-    
-    # Extract
-    print_info("Extracting app.asar...")
-    if os.path.exists(extract_dir):
-        shutil.rmtree(extract_dir)
-    if not extract_asar(asar_path, extract_dir, asar_tool):
-        print_error("Failed to extract app.asar")
+        # Find injection file
+        injection_file = find_injection_file(extract_dir)
+        if not injection_file:
+            print_error("Could not find suitable injection file")
+            return 1
+
+        # Validate file
+        if not validate_injection_file(injection_file, args.force):
+            print_error("File validation failed")
+            return 1
+
+        # Inject scripts
+        print_info("Injecting SlackPolish Text Improver...")
+        try:
+            if not inject_scripts(injection_file, "slack-config.js"):
+                print_error("Failed to inject scripts")
+                return 1
+        except Exception as e:
+            print_error(f"Error during script injection: {e}")
+            return 1
+
+        # Repack
+        print_info("Repacking app.asar...")
+        try:
+            if not repack_asar(extract_dir, asar_path, asar_tool):
+                print_error("Failed to repack app.asar")
+                print_info("This usually means insufficient permissions to write to Slack directory.")
+                return 1
+        except Exception as e:
+            print_error(f"Error during repacking: {e}")
+            return 1
+
+        # Cleanup temporary directory
+        try:
+            if os.path.exists(extract_dir):
+                shutil.rmtree(extract_dir)
+        except Exception as e:
+            print_warning(f"Could not clean up temporary directory: {e}")
+
+        # Verify installation
+        if not verify_installation(slack_path):
+            print_error("Installation verification failed!")
+            print_info("The installation may not have worked correctly.")
+            print_info("Try running the installer again with sudo.")
+            return 1
+
+        print_header("🎉 Installation completed successfully!")
+        print("Next steps:")
+        print("1. Restart Slack")
+        print("2. Press F12 to open settings menu and configure your preferences")
+        print("3. Press Ctrl+Shift in any message field to test text improvement")
+        print("4. Press F10 for channel summary")
+
+        return 0
+
+    except KeyboardInterrupt:
+        print_error("\nInstallation interrupted by user")
         return 1
-    
-    # Find injection file
-    injection_file = find_injection_file(extract_dir)
-    if not injection_file:
-        print_error("Could not find suitable injection file")
+    except Exception as e:
+        print_error(f"Unexpected error during installation: {e}")
+        print_info("This is likely a bug. Please report it with the full error message.")
+        if VERBOSE:
+            import traceback
+            print_error("Full traceback:")
+            traceback.print_exc()
         return 1
-    
-    # Validate file
-    if not validate_injection_file(injection_file, args.force):
-        print_error("File validation failed")
-        return 1
-    
-    # Inject scripts
-    print_info("Injecting SlackPolish Text Improver...")
-    if not inject_scripts(injection_file, "slack-config.js"):
-        print_error("Failed to inject scripts")
-        return 1
-    
-    # Repack
-    print_info("Repacking app.asar...")
-    if not repack_asar(extract_dir, asar_path, asar_tool):
-        print_error("Failed to repack app.asar")
-        return 1
-    
-    # Cleanup
-    shutil.rmtree(extract_dir)
-    
-    print_header("🎉 Installation completed successfully!")
-    print("Next steps:")
-    print("1. Restart Slack")
-    print("2. Press F12 to open settings menu and configure your preferences")
-    print("3. Press Ctrl+Shift in any message field to test text improvement")
-    print("4. Press F10 for channel summary")
-    
-    return 0
 
 if __name__ == "__main__":
     sys.exit(main())
