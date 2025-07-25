@@ -2664,6 +2664,7 @@ Requirements:
                 header.innerHTML = `
                     <span>🐛 SlackPolish Debug Console</span>
                     <div>
+                        <button id="copy-debug" style="background: none; border: 1px solid white; color: white; cursor: pointer; font-size: 12px; margin-right: 8px; padding: 2px 6px; border-radius: 3px;">📋 Copy</button>
                         <button id="clear-debug" style="background: none; border: 1px solid white; color: white; cursor: pointer; font-size: 12px; margin-right: 8px; padding: 2px 6px; border-radius: 3px;">Clear</button>
                         <button id="close-debug" style="background: none; border: none; color: white; cursor: pointer; font-size: 16px;">×</button>
                     </div>
@@ -2694,6 +2695,11 @@ Requirements:
                 header.querySelector('#clear-debug').addEventListener('click', () => {
                     this.logs = [];
                     this.updateDebugWindow();
+                });
+
+                // Add copy functionality
+                header.querySelector('#copy-debug').addEventListener('click', () => {
+                    this.copyLogsToClipboard();
                 });
 
                 // Make draggable
@@ -2778,6 +2784,84 @@ Requirements:
                 });
 
                 header.style.cursor = 'grab';
+            },
+
+            copyLogsToClipboard: function() {
+                if (this.logs.length === 0) {
+                    // Show temporary notification
+                    this.showCopyNotification('No logs to copy', 'warning');
+                    return;
+                }
+
+                // Format logs for copying
+                const formattedLogs = this.logs.map(log => {
+                    let logText = `[${log.timestamp}] ${log.source.toUpperCase()}: ${log.message}`;
+                    if (log.data) {
+                        logText += `\n${log.data}`;
+                    }
+                    return logText;
+                }).join('\n\n');
+
+                // Add header information
+                const header = `SlackPolish Debug Logs (${this.logs.length} entries)\n` +
+                              `Generated: ${new Date().toLocaleString()}\n` +
+                              `${'='.repeat(50)}\n\n`;
+
+                const fullText = header + formattedLogs;
+
+                // Copy to clipboard
+                navigator.clipboard.writeText(fullText).then(() => {
+                    this.showCopyNotification('Debug logs copied to clipboard!', 'success');
+                }).catch(err => {
+                    console.error('Failed to copy logs:', err);
+                    this.showCopyNotification('Failed to copy logs', 'error');
+                });
+            },
+
+            showCopyNotification: function(message, type) {
+                // Create temporary notification
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: ${type === 'success' ? '#2eb67d' : type === 'warning' ? '#ecb22e' : '#e01e5a'};
+                    color: white;
+                    padding: 12px 20px;
+                    border-radius: 6px;
+                    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+                    font-size: 13px;
+                    font-weight: bold;
+                    z-index: 10002;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                    animation: fadeInOut 2s ease-in-out;
+                `;
+
+                // Add CSS animation
+                if (!document.querySelector('#copy-notification-style')) {
+                    const style = document.createElement('style');
+                    style.id = 'copy-notification-style';
+                    style.textContent = `
+                        @keyframes fadeInOut {
+                            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+                            20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                            80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                            100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+
+                notification.textContent = message;
+                document.body.appendChild(notification);
+
+                // Remove after animation
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.remove();
+                    }
+                }, 2000);
             }
         };
     }
