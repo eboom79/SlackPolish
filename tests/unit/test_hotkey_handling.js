@@ -64,51 +64,54 @@ class HotkeyHandlingTests {
         };
     }
 
-    // Simulate hotkey matching logic
+    // Simulate hotkey matching logic (matches the fixed implementation)
     matchesHotkey(event, hotkeyString) {
-        const parts = hotkeyString.split('+');
-        let hasNonModifierKey = false;
+        if (!hotkeyString) return false;
 
-        for (const part of parts) {
-            switch (part.trim()) {
-                case 'Ctrl':
-                    if (!event.ctrlKey) return false;
-                    break;
-                case 'Shift':
-                    if (!event.shiftKey) return false;
-                    break;
-                case 'Alt':
-                    if (!event.altKey) return false;
-                    break;
-                case 'Meta':
-                    if (!event.metaKey) return false;
-                    break;
-                case 'Tab':
-                    if (event.key !== 'Tab') return false;
-                    hasNonModifierKey = true;
-                    break;
-                default:
-                    // For other keys, check if it matches
-                    if (event.key !== part.trim()) return false;
-                    hasNonModifierKey = true;
-            }
+        const parts = hotkeyString.split('+');
+        const hotkey = {
+            ctrl: parts.includes('Ctrl'),
+            shift: parts.includes('Shift'),
+            alt: parts.includes('Alt'),
+            tab: parts.includes('Tab')
+        };
+
+        // Extract non-modifier key
+        const nonModifierKeys = parts.filter(p => !['Ctrl', 'Shift', 'Alt', 'Meta'].includes(p.trim()));
+
+        // For non-modifier keys (like F12, Tab, etc.)
+        if (nonModifierKeys.length > 0) {
+            const expectedKey = nonModifierKeys[0].trim();
+            if (event.key !== expectedKey) return false;
         }
 
-        // For modifier combinations like Ctrl+Shift, the key should be one of the modifiers
-        if (!hasNonModifierKey) {
-            // Check if the pressed key is one of the expected modifiers
+        // Check exact modifier match (same logic as the fixed implementation)
+        const modifierMatch =
+            (hotkey.ctrl === event.ctrlKey) &&
+            (hotkey.shift === event.shiftKey) &&
+            (hotkey.alt === event.altKey);
+
+        // For Tab combinations, also check Tab key
+        if (hotkey.tab) {
+            return modifierMatch && (event.key === 'Tab');
+        }
+
+        // For modifier-only combinations, check that the pressed key is one of the expected modifiers
+        if (nonModifierKeys.length === 0) {
             const expectedModifiers = parts.map(p => p.trim().toLowerCase());
             const pressedKey = event.key.toLowerCase();
 
-            if (expectedModifiers.includes('shift') && pressedKey === 'shift') return true;
-            if (expectedModifiers.includes('ctrl') && (pressedKey === 'control' || pressedKey === 'ctrl')) return true;
-            if (expectedModifiers.includes('alt') && pressedKey === 'alt') return true;
-            if (expectedModifiers.includes('meta') && pressedKey === 'meta') return true;
+            const isExpectedModifier =
+                (expectedModifiers.includes('shift') && pressedKey === 'shift') ||
+                (expectedModifiers.includes('ctrl') && (pressedKey === 'control' || pressedKey === 'ctrl')) ||
+                (expectedModifiers.includes('alt') && pressedKey === 'alt') ||
+                (expectedModifiers.includes('meta') && pressedKey === 'meta');
 
-            return false;
+            return modifierMatch && isExpectedModifier;
         }
 
-        return true;
+        // For single keys (like F12)
+        return modifierMatch;
     }
 
     testCtrlShiftHotkey() {
@@ -151,9 +154,9 @@ class HotkeyHandlingTests {
         // Test Ctrl+Shift when Ctrl+Shift+Alt are pressed
         const event = this.createKeyboardEvent('Shift', true, true, true, false);
         const matches = this.matchesHotkey(event, 'Ctrl+Shift');
-        
-        // This should still match because we have the required modifiers
-        assert(matches, 'Ctrl+Shift should match even with extra Alt modifier');
+
+        // This should NOT match because Alt is pressed when it shouldn't be (exact match required)
+        assert(!matches, 'Ctrl+Shift should NOT match when extra Alt modifier is pressed');
     }
 
     testWrongKey() {

@@ -349,19 +349,264 @@
 
         setTextInElement: function(element, text) {
             if (!element) return;
-            
-            // Clear existing content
+
+            // Handle debug test markers
+            if (text.startsWith('[DEBUG_')) {
+                this.handleDebugInsertion(element, text);
+                return;
+            }
+
+            // Normal insertion (current method)
             element.innerHTML = '';
-            
-            // Set new text
             element.innerText = text;
-            
+
             // Trigger input events to notify Slack
             const events = ['input', 'change', 'keyup'];
             events.forEach(eventType => {
                 const event = new Event(eventType, { bubbles: true });
                 element.dispatchEvent(event);
             });
+        },
+
+        handleDebugInsertion: function(element, markedText) {
+            // Parse debug marker
+            const markerEnd = markedText.indexOf(']');
+            if (markerEnd === -1) {
+                utils.debug('Invalid debug marker format', { markedText });
+                return;
+            }
+
+            const marker = markedText.substring(1, markerEnd); // Remove [ and ]
+            const actualText = markedText.substring(markerEnd + 1);
+
+            utils.debug('Handling debug insertion', {
+                marker: marker,
+                actualText: actualText,
+                elementType: element.tagName,
+                elementClass: element.className
+            });
+
+            // Clear element first
+            element.innerHTML = '';
+            element.focus();
+
+            switch (marker) {
+                case 'DEBUG_LINK_TYPING':
+                    this.simulateTyping(element, actualText, 100); // 100ms delay
+                    break;
+
+                case 'DEBUG_INSTANT_INSERT':
+                    this.instantInsert(element, actualText);
+                    break;
+
+                case 'DEBUG_MULTIPLE_URLS':
+                    this.simulateTyping(element, actualText, 150); // Slower for multiple URLs
+                    break;
+
+                case 'DEBUG_TIMING_FAST':
+                    this.simulateTyping(element, actualText, 50); // Fast typing
+                    break;
+
+                case 'DEBUG_TIMING_SLOW':
+                    this.simulateTyping(element, actualText, 300); // Slow typing
+                    break;
+
+                case 'DEBUG_URL_LINEBREAK':
+                    this.simulateUrlAwareTyping(element, actualText, 100); // URL-aware typing with line breaks
+                    break;
+
+                default:
+                    utils.debug('Unknown debug marker', { marker });
+                    this.instantInsert(element, actualText);
+            }
+        },
+
+        simulateTyping: function(element, text, delay = 100) {
+            utils.debug('Starting typing simulation', {
+                text: text,
+                delay: delay,
+                length: text.length
+            });
+
+            let currentText = '';
+
+            for (let i = 0; i < text.length; i++) {
+                setTimeout(() => {
+                    currentText += text[i];
+                    element.innerText = currentText;
+
+                    // Trigger input event after each character
+                    element.dispatchEvent(new Event('input', { bubbles: true }));
+
+                    utils.debug(`Typed character ${i + 1}/${text.length}`, {
+                        character: text[i],
+                        currentText: currentText
+                    });
+
+                    // Log completion
+                    if (i === text.length - 1) {
+                        utils.debug('Typing simulation completed', {
+                            finalText: currentText,
+                            totalCharacters: text.length
+                        });
+                    }
+                }, i * delay);
+            }
+        },
+
+        instantInsert: function(element, text) {
+            utils.debug('Instant insertion', { text: text });
+
+            element.innerText = text;
+
+            // Trigger events
+            const events = ['input', 'change', 'keyup'];
+            events.forEach(eventType => {
+                const event = new Event(eventType, { bubbles: true });
+                element.dispatchEvent(event);
+            });
+
+            utils.debug('Instant insertion completed', { finalText: element.innerText });
+        },
+
+        simulateUrlAwareTyping: function(element, text, delay = 100) {
+            utils.debug('Starting URL-aware typing simulation', {
+                text: text,
+                delay: delay,
+                length: text.length
+            });
+
+            // Detect URLs and create segments with line breaks
+            const segments = this.createUrlAwareSegments(text);
+
+            utils.debug('Created URL-aware segments', {
+                segments: segments,
+                totalSegments: segments.length
+            });
+
+            // Type each segment
+            this.typeSegments(element, segments, delay, 0);
+        },
+
+        createUrlAwareSegments: function(text) {
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            const segments = [];
+            let lastIndex = 0;
+            let match;
+
+            while ((match = urlRegex.exec(text)) !== null) {
+                const url = match[0];
+                const urlStart = match.index;
+                const urlEnd = urlStart + url.length;
+
+                // Add text before URL (if any)
+                if (urlStart > lastIndex) {
+                    const beforeText = text.substring(lastIndex, urlStart);
+                    segments.push({
+                        type: 'text',
+                        content: beforeText
+                    });
+                }
+
+                // Add the URL
+                segments.push({
+                    type: 'url',
+                    content: url
+                });
+
+                // Add EXTREME 10-second pause after URL for testing
+                segments.push({
+                    type: 'url_pause',
+                    content: '10_SECOND_PAUSE',
+                    pauseDuration: 10000
+                });
+
+                lastIndex = urlEnd;
+            }
+
+            // Add remaining text (if any)
+            if (lastIndex < text.length) {
+                const remainingText = text.substring(lastIndex);
+                segments.push({
+                    type: 'text',
+                    content: remainingText
+                });
+            }
+
+            return segments;
+        },
+
+        typeSegments: function(element, segments, delay, currentIndex) {
+            if (currentIndex >= segments.length) {
+                utils.debug('URL-aware typing completed', {
+                    finalText: element.innerText,
+                    totalSegments: segments.length
+                });
+                return;
+            }
+
+            const segment = segments[currentIndex];
+
+            utils.debug(`Processing segment ${currentIndex + 1}/${segments.length}`, {
+                type: segment.type,
+                content: segment.content
+            });
+
+            if (segment.type === 'url_pause') {
+                // EXTREME 10-second pause after URL for testing
+                utils.debug('Starting 10-second pause after URL', {
+                    pauseDuration: segment.pauseDuration,
+                    currentText: element.innerText
+                });
+
+                // Continue with next segment after 10-second pause
+                setTimeout(() => {
+                    utils.debug('10-second pause completed, continuing with next segment');
+                    this.typeSegments(element, segments, delay, currentIndex + 1);
+                }, segment.pauseDuration);
+
+            } else if (segment.type === 'linebreak') {
+                // Add line break immediately (legacy - shouldn't be used with url_pause)
+                element.innerText += segment.content;
+                element.dispatchEvent(new Event('input', { bubbles: true }));
+
+                utils.debug('Added line break');
+
+                // Continue with next segment after a short pause
+                setTimeout(() => {
+                    this.typeSegments(element, segments, delay, currentIndex + 1);
+                }, delay * 2);
+
+            } else {
+                // Type character by character for text and URLs
+                this.typeSegmentCharacters(element, segment.content, delay, () => {
+                    // Continue with next segment
+                    this.typeSegments(element, segments, delay, currentIndex + 1);
+                });
+            }
+        },
+
+        typeSegmentCharacters: function(element, text, delay, callback) {
+            let currentText = element.innerText;
+
+            for (let i = 0; i < text.length; i++) {
+                setTimeout(() => {
+                    currentText += text[i];
+                    element.innerText = currentText;
+                    element.dispatchEvent(new Event('input', { bubbles: true }));
+
+                    utils.debug(`Typed character: ${text[i]}`, {
+                        position: i + 1,
+                        total: text.length,
+                        currentText: currentText
+                    });
+
+                    // Call callback when done
+                    if (i === text.length - 1) {
+                        setTimeout(callback, delay);
+                    }
+                }, i * delay);
+            }
         }
     };
 
@@ -375,6 +620,12 @@
                 debugMode: CONFIG.DEBUG_MODE,
                 hasApiKey: !!CONFIG.OPENAI_API_KEY
             });
+
+            // DEBUG TEST SYSTEM: Intercept debug commands in debug mode
+            if (CONFIG.DEBUG_MODE && originalText.trim().startsWith('SlackPolish test')) {
+                utils.debug('Debug test command detected', { command: originalText });
+                return this.handleDebugTest(originalText.trim());
+            }
 
             if (!CONFIG.OPENAI_API_KEY) {
                 utils.debug('API key missing', { hasApiKey: false });
@@ -457,6 +708,166 @@
                 hideLoadingIndicator();
                 utils.debug('Text improvement process completed', { isProcessing: this.isProcessing });
             }
+        },
+
+        handleDebugTest(originalText) {
+            // Parse debug command: "SlackPolish test [command] [parameters...]"
+            const parts = originalText.split(' ');
+
+            // If just "SlackPolish test" with no command, show help
+            if (parts.length === 2) {
+                utils.debug('Debug test help requested');
+                utils.showNotification('Debug Test Help - Check debug logs', 'info');
+                return this.getDebugTestHelp();
+            }
+
+            if (parts.length < 3) {
+                utils.debug('Invalid debug test command format', { originalText });
+                utils.showNotification('Invalid test format. Use: SlackPolish test [command] [parameters]', 'error');
+                return 'Invalid test command format. Use "SlackPolish test" for help.';
+            }
+
+            const command = parts[2]; // The command after "SlackPolish test"
+            const parameters = parts.slice(3).join(' '); // Everything after the command
+
+            utils.debug('Parsing debug test command', {
+                command: command,
+                parameters: parameters,
+                fullCommand: originalText
+            });
+
+            switch (command.toLowerCase()) {
+                case 'linktyping':
+                    return this.testLinkTyping(parameters);
+
+                case 'instantinsert':
+                    return this.testInstantInsert(parameters);
+
+                case 'multipleurls':
+                    return this.testMultipleUrls(parameters);
+
+                case 'timing':
+                    return this.testTiming(parameters);
+
+                case 'urllinebreak':
+                    return this.testUrlLineBreak(parameters);
+
+                default:
+                    utils.debug('Unknown debug test command', { command });
+                    utils.showNotification(`Unknown test command: ${command}`, 'error');
+                    return `Unknown test command: ${command}. Available: linkTyping, instantInsert, multipleUrls, timing, urlLineBreak`;
+            }
+        },
+
+        testLinkTyping(text) {
+            if (!text.trim()) {
+                return 'ERROR: No text provided for linkTyping test';
+            }
+
+            utils.debug('DEBUG TEST: linkTyping', { text });
+            utils.showNotification('Debug Test: Link Typing - Check debug logs', 'info');
+
+            // Return special marker for character-by-character typing
+            return `[DEBUG_LINK_TYPING]${text}`;
+        },
+
+        testInstantInsert(text) {
+            if (!text.trim()) {
+                return 'ERROR: No text provided for instantInsert test';
+            }
+
+            utils.debug('DEBUG TEST: instantInsert', { text });
+            utils.showNotification('Debug Test: Instant Insert - Check debug logs', 'info');
+
+            // Return special marker for instant insertion
+            return `[DEBUG_INSTANT_INSERT]${text}`;
+        },
+
+        testMultipleUrls(text) {
+            if (!text.trim()) {
+                return 'ERROR: No text provided for multipleUrls test';
+            }
+
+            utils.debug('DEBUG TEST: multipleUrls', { text });
+            utils.showNotification('Debug Test: Multiple URLs - Check debug logs', 'info');
+
+            // Return special marker for multiple URLs test
+            return `[DEBUG_MULTIPLE_URLS]${text}`;
+        },
+
+        testTiming(parameters) {
+            const parts = parameters.split(' ');
+            if (parts.length < 2) {
+                return 'ERROR: Timing test needs speed and text. Use: timing [fast|slow] [text]';
+            }
+
+            const speed = parts[0];
+            const text = parts.slice(1).join(' ');
+
+            if (!['fast', 'slow'].includes(speed.toLowerCase())) {
+                return 'ERROR: Speed must be "fast" or "slow"';
+            }
+
+            utils.debug('DEBUG TEST: timing', { speed, text });
+            utils.showNotification(`Debug Test: Timing (${speed}) - Check debug logs`, 'info');
+
+            // Return special marker for timing test
+            return `[DEBUG_TIMING_${speed.toUpperCase()}]${text}`;
+        },
+
+        testUrlLineBreak(text) {
+            if (!text.trim()) {
+                return 'ERROR: No text provided for urlLineBreak test';
+            }
+
+            utils.debug('DEBUG TEST: urlLineBreak', { text });
+            utils.showNotification('Debug Test: URL Line Break - Check debug logs', 'info');
+
+            // Return special marker for URL line break test
+            return `[DEBUG_URL_LINEBREAK]${text}`;
+        },
+
+        getDebugTestHelp() {
+            const helpText = `
+🧪 SlackPolish Debug Test Commands
+=====================================
+
+Available test commands (use in debug mode only):
+
+📝 BASIC TESTS:
+• linkTyping [text]     - Simulate character-by-character typing
+  Example: SlackPolish test linkTyping https://www.google.com
+
+• instantInsert [text]  - Use current instant insertion method
+  Example: SlackPolish test instantInsert Check https://google.com
+
+🔗 URL TESTS:
+• urlLineBreak [text]   - Smart URL detection with line breaks after URLs
+  Example: SlackPolish test urlLineBreak Check https://google.com for info
+
+• multipleUrls [text]   - Test multiple URLs in one message
+  Example: SlackPolish test multipleUrls Visit https://google.com and https://amazon.com
+
+⏱️ TIMING TESTS:
+• timing fast [text]    - Fast typing simulation (50ms delay)
+  Example: SlackPolish test timing fast https://google.com
+
+• timing slow [text]    - Slow typing simulation (300ms delay)
+  Example: SlackPolish test timing slow https://google.com
+
+📋 HELP:
+• Just type "SlackPolish test" to see this help menu
+
+=====================================
+💡 TIP: Watch the debug logs for detailed character-by-character progress!
+            `.trim();
+
+            utils.debug('Debug test help displayed', {
+                availableCommands: ['linkTyping', 'instantInsert', 'urlLineBreak', 'multipleUrls', 'timing'],
+                helpTextLength: helpText.length
+            });
+
+            return helpText;
         },
 
         async buildPrompt(text) {
@@ -913,10 +1324,10 @@ Requirements:
 
             // Check if the configured hotkey combination is pressed
             const hotkeyMatch =
-                (hotkey.ctrl && ctrlPressed) &&
-                (hotkey.shift && shiftPressed) &&
-                (!hotkey.alt || !altPressed) &&
-                (!hotkey.tab || !tabPressed);
+                (hotkey.ctrl === ctrlPressed) &&
+                (hotkey.shift === shiftPressed) &&
+                (hotkey.alt === altPressed) &&
+                (hotkey.tab === tabPressed);
 
             // Enhanced debug logging for hotkey detection
             if (hotkeyMatch || (ctrlPressed || shiftPressed || altPressed || tabPressed)) {

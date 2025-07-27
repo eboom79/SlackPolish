@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.2.3",
-    BUILD: 3,
-    BUILD_DATE: "2025-07-23",
-    DESCRIPTION: "Installer improvements + hotkey bug fixes - comprehensive release",
+    VERSION: "1.2.10",
+    BUILD: 10,
+    BUILD_DATE: "2025-07-27",
+    DESCRIPTION: "Fixed Ctrl+V hotkey detection bug",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
