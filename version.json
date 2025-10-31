@@ -1,8 +1,8 @@
 {
     "major": 1,
     "minor": 2,
-    "build": 31,
-    "version_string": "1.2.31",
-    "description": "Extended formatting preservation (numbered lists, clean line breaks) to all text improvement modes",
+    "build": 39,
+    "version_string": "1.2.39",
+    "description": "Fixed selection visibility by applying selection after DOM events with proper delay",
     "date": "2025-10-31"
 }

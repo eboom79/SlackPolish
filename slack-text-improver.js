@@ -295,6 +295,17 @@
         getTextFromElement: function(element) {
             if (!element) return '';
 
+            // Check if there's selected text first
+            const selectionInfo = this.getSelectionInfo(element);
+            if (selectionInfo.hasSelection) {
+                utils.debug('📝 Using selected text for processing', {
+                    selectedText: selectionInfo.selectedText,
+                    selectionLength: selectionInfo.selectedText.length
+                });
+                return selectionInfo.selectedText;
+            }
+
+            // No selection - use full element text (existing behavior)
             // Special handling for Slack's rich text editor to preserve numbering
             if (element.classList.contains('ql-editor')) {
                 return this.extractTextWithNumbering(element);
@@ -310,6 +321,44 @@
             text = text.trim();
 
             return text;
+        },
+
+        getSelectionInfo: function(element) {
+            if (!element) return { hasSelection: false };
+
+            try {
+                const selection = window.getSelection();
+
+                // Check if there's a selection and it's within our target element
+                if (!selection || selection.rangeCount === 0) {
+                    return { hasSelection: false };
+                }
+
+                const range = selection.getRangeAt(0);
+
+                // Check if the selection is within the target element
+                if (!element.contains(range.commonAncestorContainer) &&
+                    range.commonAncestorContainer !== element) {
+                    return { hasSelection: false };
+                }
+
+                const selectedText = range.toString().trim();
+
+                // Only consider it a valid selection if there's actual text
+                if (!selectedText) {
+                    return { hasSelection: false };
+                }
+
+                return {
+                    hasSelection: true,
+                    selectedText: selectedText,
+                    range: range,
+                    selection: selection
+                };
+            } catch (error) {
+                utils.debug('Error getting selection info:', error);
+                return { hasSelection: false };
+            }
         },
 
         extractTextWithNumbering: function(element) {
@@ -497,7 +546,7 @@
             return isThread;
         },
 
-        setTextInElement: function(element, text) {
+        setTextInElement: function(element, text, preservedSelectionInfo = null) {
             if (!element) return;
 
             // Handle debug test markers
@@ -506,6 +555,15 @@
                 return;
             }
 
+            // Check if we should replace selected text only
+            // Use preserved selection info if available, otherwise check current selection
+            const selectionInfo = preservedSelectionInfo || this.getSelectionInfo(element);
+            if (selectionInfo && selectionInfo.hasSelection) {
+                this.replaceSelectedTextWithPreservedInfo(element, text, selectionInfo);
+                return;
+            }
+
+            // No selection - replace entire element content (existing behavior)
             // Special handling for Slack rich text editor to preserve formatting
             if (element.classList.contains('ql-editor')) {
                 utils.debug('Setting text back to Slack with formatting preservation', {
@@ -534,6 +592,369 @@
                 const event = new Event(eventType, { bubbles: true });
                 element.dispatchEvent(event);
             });
+        },
+
+        replaceSelectedText: function(element, improvedText, selectionInfo) {
+            utils.debug('🎯 Replacing selected text (current selection)', {
+                originalSelection: selectionInfo.selectedText,
+                improvedText: improvedText,
+                selectionLength: selectionInfo.selectedText.length,
+                improvedLength: improvedText.length
+            });
+
+            try {
+                const range = selectionInfo.range;
+                const selection = selectionInfo.selection;
+
+                // Delete the selected content
+                range.deleteContents();
+
+                // Create a text node with the improved text
+                const textNode = document.createTextNode(improvedText);
+
+                // Insert the improved text
+                range.insertNode(textNode);
+
+                // Create a new range to select the inserted text
+                const newRange = document.createRange();
+                newRange.selectNodeContents(textNode);
+
+                // Clear current selection and select the new text
+                selection.removeAllRanges();
+                selection.addRange(newRange);
+
+                utils.debug('✅ Selected text replacement completed', {
+                    newSelection: selection.toString(),
+                    elementContent: element.innerText
+                });
+
+                // Trigger input events to notify Slack
+                const events = ['input', 'change', 'keyup'];
+                events.forEach(eventType => {
+                    const event = new Event(eventType, { bubbles: true });
+                    element.dispatchEvent(event);
+                });
+
+            } catch (error) {
+                utils.debug('❌ Error replacing selected text:', error);
+                // Fallback to full text replacement
+                utils.debug('🔄 Falling back to full text replacement');
+                this.setTextWithFormatting(element, improvedText);
+            }
+        },
+
+        replaceSelectedTextWithPreservedInfo: function(element, improvedText, preservedSelectionInfo) {
+            utils.debug('🎯 Replacing selected text (preserved selection)', {
+                originalSelection: preservedSelectionInfo.selectedText,
+                improvedText: improvedText,
+                selectionLength: preservedSelectionInfo.selectedText.length,
+                improvedLength: improvedText.length
+            });
+
+            try {
+                // Try to recreate the selection using the preserved info
+                // Use textContent to match how TreeWalker counts characters (no DOM-added newlines)
+                const currentFullText = element.textContent || '';
+                const selectedText = preservedSelectionInfo.selectedText;
+
+                utils.debug('Text matching attempt', {
+                    currentFullTextLength: currentFullText.length,
+                    selectedTextLength: selectedText.length,
+                    currentFullTextPreview: currentFullText.substring(0, 100) + '...',
+                    selectedTextPreview: selectedText.substring(0, 100) + '...'
+                });
+
+                // Find the position of the selected text in the current content
+                let selectionIndex = currentFullText.indexOf(selectedText);
+
+                // If exact match fails, try with normalized whitespace
+                if (selectionIndex === -1) {
+                    const normalizedCurrent = currentFullText.replace(/\s+/g, ' ').trim();
+                    const normalizedSelected = selectedText.replace(/\s+/g, ' ').trim();
+                    const normalizedIndex = normalizedCurrent.indexOf(normalizedSelected);
+
+                    if (normalizedIndex !== -1) {
+                        // Try to map back to original position (approximate)
+                        selectionIndex = this.findOriginalPosition(currentFullText, normalizedCurrent, normalizedIndex);
+                        utils.debug('Found match with normalized whitespace', {
+                            normalizedIndex,
+                            mappedIndex: selectionIndex
+                        });
+                    } else {
+                        // Try partial matching from the beginning or end
+                        const selectedStart = selectedText.substring(0, Math.min(50, selectedText.length));
+                        const selectedEnd = selectedText.substring(Math.max(0, selectedText.length - 50));
+
+                        const startIndex = currentFullText.indexOf(selectedStart);
+                        const endIndex = currentFullText.lastIndexOf(selectedEnd);
+
+                        if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+                            selectionIndex = startIndex;
+                            utils.debug('Found match using partial start/end matching', {
+                                startIndex,
+                                endIndex,
+                                selectedStart,
+                                selectedEnd
+                            });
+                        } else {
+                            utils.debug('All matching attempts failed', {
+                                exactMatch: false,
+                                normalizedMatch: false,
+                                partialMatch: false,
+                                selectedStart,
+                                selectedEnd,
+                                startIndex,
+                                endIndex
+                            });
+                        }
+                    }
+                }
+
+                if (selectionIndex === -1) {
+                    console.log('🔍 TEXT MATCHING DEBUG - All attempts failed:');
+                    console.log('Current Full Text:', currentFullText);
+                    console.log('Current Full Text Length:', currentFullText.length);
+                    console.log('Selected Text:', selectedText);
+                    console.log('Selected Text Length:', selectedText.length);
+                    console.log('First 200 chars of current:', currentFullText.substring(0, 200));
+                    console.log('First 200 chars of selected:', selectedText.substring(0, 200));
+                    console.log('Last 200 chars of current:', currentFullText.substring(currentFullText.length - 200));
+                    console.log('Last 200 chars of selected:', selectedText.substring(selectedText.length - 200));
+
+                    utils.debug('⚠️ Could not find selected text in current content');
+                    utils.debug('Text matching failed - detailed analysis', {
+                        currentFullTextLength: currentFullText.length,
+                        selectedTextLength: selectedText.length,
+                        currentFirstChars: currentFullText.substring(0, 100),
+                        selectedFirstChars: selectedText.substring(0, 100),
+                        currentLastChars: currentFullText.substring(Math.max(0, currentFullText.length - 100)),
+                        selectedLastChars: selectedText.substring(Math.max(0, selectedText.length - 100))
+                    });
+
+                    // Offer fallback: improve entire text but warn user
+                    utils.showNotification('Text selection changed during processing. Press Ctrl+Shift again to improve entire message.', 'warning');
+                    return;
+                }
+
+                // Create a new selection at the found position
+                const selection = window.getSelection();
+                const range = document.createRange();
+
+                // Find the text nodes and set the range
+                if (this.setRangeFromTextPosition(element, range, selectionIndex, selectionIndex + selectedText.length)) {
+                    // Select the original text
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+
+                    // Replace the selected content with improved text
+                    range.deleteContents();
+                    const textNode = document.createTextNode(improvedText);
+                    range.insertNode(textNode);
+
+                    // Trigger input events to notify Slack FIRST
+                    const events = ['input', 'change', 'keyup'];
+                    events.forEach(eventType => {
+                        const event = new Event(eventType, { bubbles: true });
+                        element.dispatchEvent(event);
+                    });
+
+                    // Then select the newly inserted text after a small delay
+                    setTimeout(() => {
+                        const newRange = document.createRange();
+                        newRange.selectNodeContents(textNode);
+                        selection.removeAllRanges();
+                        selection.addRange(newRange);
+
+                        console.log('✅ Selection applied after delay:', {
+                            selectedText: selection.toString(),
+                            rangeCount: selection.rangeCount
+                        });
+                    }, 100);
+
+                    utils.debug('✅ Selected text replacement with preserved info completed');
+                } else {
+                    // Fallback to manual text replacement
+                    utils.debug('⚠️ Could not create range, using manual replacement');
+                    const beforeSelection = currentFullText.substring(0, selectionIndex);
+                    const afterSelection = currentFullText.substring(selectionIndex + selectedText.length);
+                    const newFullText = beforeSelection + improvedText + afterSelection;
+
+                    if (element.classList.contains('ql-editor')) {
+                        this.setTextWithFormatting(element, newFullText);
+                    } else {
+                        element.innerText = newFullText;
+                    }
+
+                    // Trigger input events to notify Slack
+                    const events = ['input', 'change', 'keyup'];
+                    events.forEach(eventType => {
+                        const event = new Event(eventType, { bubbles: true });
+                        element.dispatchEvent(event);
+                    });
+
+                    // Try to select the improved text portion after DOM settles
+                    setTimeout(() => {
+                        this.selectTextRange(element, selectionIndex, selectionIndex + improvedText.length);
+                    }, 100);
+                }
+
+            } catch (error) {
+                utils.debug('❌ Error replacing selected text with preserved info:', error);
+                // Fallback to full text replacement
+                utils.debug('🔄 Falling back to full text replacement');
+                this.setTextWithFormatting(element, improvedText);
+            }
+        },
+
+        findOriginalPosition: function(originalText, normalizedText, normalizedIndex) {
+            // This is a simple approximation - map normalized position back to original
+            // by counting characters up to the normalized position
+            let originalPos = 0;
+            let normalizedPos = 0;
+
+            while (normalizedPos < normalizedIndex && originalPos < originalText.length) {
+                const originalChar = originalText[originalPos];
+
+                // If it's whitespace, it might be collapsed in normalized version
+                if (/\s/.test(originalChar)) {
+                    // Skip consecutive whitespace in original
+                    while (originalPos < originalText.length && /\s/.test(originalText[originalPos])) {
+                        originalPos++;
+                    }
+                    // Count as one space in normalized
+                    if (normalizedPos < normalizedText.length && normalizedText[normalizedPos] === ' ') {
+                        normalizedPos++;
+                    }
+                } else {
+                    // Regular character
+                    originalPos++;
+                    normalizedPos++;
+                }
+            }
+
+            return originalPos;
+        },
+
+        setRangeFromTextPosition: function(element, range, startIndex, endIndex) {
+            try {
+                // Simple approach: walk through text nodes and count characters
+                const walker = document.createTreeWalker(
+                    element,
+                    NodeFilter.SHOW_TEXT,
+                    null,
+                    false
+                );
+
+                let currentIndex = 0;
+                let startNode = null;
+                let endNode = null;
+                let startOffset = 0;
+                let endOffset = 0;
+
+                let node;
+                while (node = walker.nextNode()) {
+                    const nodeLength = node.textContent.length;
+
+                    if (startNode === null && currentIndex + nodeLength > startIndex) {
+                        startNode = node;
+                        startOffset = startIndex - currentIndex;
+                    }
+
+                    if (currentIndex + nodeLength >= endIndex) {
+                        endNode = node;
+                        endOffset = endIndex - currentIndex;
+                        break;
+                    }
+
+                    currentIndex += nodeLength;
+                }
+
+                if (startNode && endNode) {
+                    range.setStart(startNode, startOffset);
+                    range.setEnd(endNode, endOffset);
+
+                    console.log('✅ Range set successfully:', {
+                        startIndex,
+                        endIndex,
+                        startOffset,
+                        endOffset,
+                        startNodeText: startNode.textContent.substring(0, 50),
+                        endNodeText: endNode.textContent.substring(0, 50)
+                    });
+
+                    return true;
+                } else {
+                    console.log('❌ Could not find start/end nodes:', {
+                        startNode: !!startNode,
+                        endNode: !!endNode,
+                        startIndex,
+                        endIndex,
+                        currentIndex
+                    });
+                    return false;
+                }
+
+            } catch (error) {
+                utils.debug('❌ Error setting range from text position:', error);
+                console.error('Range setting error:', error);
+                return false;
+            }
+        },
+
+        selectTextRange: function(element, startIndex, endIndex) {
+            try {
+                const selection = window.getSelection();
+                const range = document.createRange();
+
+                // For contenteditable elements, we need to find the text nodes
+                const walker = document.createTreeWalker(
+                    element,
+                    NodeFilter.SHOW_TEXT,
+                    null,
+                    false
+                );
+
+                let currentIndex = 0;
+                let startNode = null;
+                let endNode = null;
+                let startOffset = 0;
+                let endOffset = 0;
+
+                let node;
+                while (node = walker.nextNode()) {
+                    const nodeLength = node.textContent.length;
+
+                    if (startNode === null && currentIndex + nodeLength > startIndex) {
+                        startNode = node;
+                        startOffset = startIndex - currentIndex;
+                    }
+
+                    if (currentIndex + nodeLength >= endIndex) {
+                        endNode = node;
+                        endOffset = endIndex - currentIndex;
+                        break;
+                    }
+
+                    currentIndex += nodeLength;
+                }
+
+                if (startNode && endNode) {
+                    range.setStart(startNode, startOffset);
+                    range.setEnd(endNode, endOffset);
+
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+
+                    utils.debug('✅ Text range selected successfully', {
+                        startIndex, endIndex, startOffset, endOffset
+                    });
+                } else {
+                    utils.debug('⚠️ Could not find text nodes for selection');
+                }
+
+            } catch (error) {
+                utils.debug('❌ Error selecting text range:', error);
+            }
         },
 
         handleDebugInsertion: function(element, markedText) {
@@ -861,6 +1282,13 @@
 
                     let processedResponse = response.trim();
 
+                    // Remove any surrounding quotes that might have leaked through
+                    if ((processedResponse.startsWith('"') && processedResponse.endsWith('"')) ||
+                        (processedResponse.startsWith("'") && processedResponse.endsWith("'"))) {
+                        processedResponse = processedResponse.slice(1, -1);
+                        utils.debug('Removed surrounding quotes from response');
+                    }
+
                     // Special post-processing for TONE_POLISH: simple empty line removal
                     if (CONFIG.STYLE === 'TONE_POLISH') {
                         // Simple approach: replace double newlines with single newlines
@@ -1112,14 +1540,11 @@ Recent conversation context (last ${contextMessages.length} messages):
 
             prompt += `
 
-Now, ${styleInstruction}:
+${styleInstruction}:
 
 ${text}
 
-Requirements:
-- Use ${CONFIG.LANGUAGE} language
-- Return only the improved text without quotes or formatting
-- Do NOT summarize or reference the conversation context`;
+IMPORTANT: Respond with ONLY the improved text. Do not include any explanations, quotes, requirements, or additional text. Use ${CONFIG.LANGUAGE} language. Do NOT reference the conversation context.`;
 
             if (CONFIG.CUSTOM_INSTRUCTIONS) {
                 prompt += `\n- Additional instructions: ${CONFIG.CUSTOM_INSTRUCTIONS}`;
@@ -1684,8 +2109,18 @@ Requirements:
                 setupId
             });
 
+            // Capture selection info BEFORE getting text (selection might be lost during async operations)
+            const selectionInfo = utils.getSelectionInfo(messageInput);
             const originalText = utils.getTextFromElement(messageInput);
+
             utils.log(`Processing text improvement for: "${originalText}" (trigger-id: ${triggerCallId})`);
+            utils.debug('Selection info captured', {
+                hasSelection: selectionInfo.hasSelection,
+                selectedText: selectionInfo.hasSelection ? selectionInfo.selectedText : 'none',
+                selectionLength: selectionInfo.hasSelection ? selectionInfo.selectedText.length : 0,
+                fullTextLength: originalText.length,
+                triggerCallId
+            });
 
             if (!originalText.trim()) {
                 utils.log('No text to improve - input is empty or whitespace only');
@@ -1720,7 +2155,7 @@ Requirements:
                     setupId
                 });
 
-                utils.setTextInElement(messageInput, finalText);
+                utils.setTextInElement(messageInput, finalText, selectionInfo);
             } else {
                 utils.log(`Text improvement failed - no improved text received (trigger-id: ${triggerCallId})`);
                 utils.debug('No improved text received', {

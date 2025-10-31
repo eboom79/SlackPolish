@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.2.31",
-    BUILD: 31,
+    VERSION: "1.2.39",
+    BUILD: 39,
     BUILD_DATE: "2025-10-31",
-    DESCRIPTION: "Extended formatting preservation (numbered lists, clean line breaks) to all text improvement modes",
+    DESCRIPTION: "Fixed selection visibility by applying selection after DOM events with proper delay",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
@@ -145,12 +145,12 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     PROMPTS: {
         STYLES: {
-            PROFESSIONAL: 'Please rewrite the following text in a professional, business-appropriate tone while maintaining the original meaning and key information',
-            CASUAL: 'Please rewrite the following text in a casual, friendly tone while keeping the main message clear',
-            CONCISE: 'Please rewrite the following text to be more concise and to the point while preserving all important information',
-            TONE_POLISH: 'CRITICAL: Do not add any empty lines or line breaks. Fix grammar and improve word choice only. Keep the exact same line structure as the input. If the input has text on consecutive lines without empty lines between them, your output must also have text on consecutive lines without empty lines.',
-            GRAMMAR: 'Please correct any grammar, spelling, and punctuation errors in the following text while maintaining the original tone and meaning exactly as written',
-            TRANSLATE: 'Please translate the following text accurately while preserving the original tone and meaning'
+            PROFESSIONAL: 'Rewrite the following text in a professional, business-appropriate tone while maintaining the original meaning and key information. Return ONLY the improved text, nothing else.',
+            CASUAL: 'Rewrite the following text in a casual, friendly tone while keeping the main message clear. Return ONLY the improved text, nothing else.',
+            CONCISE: 'Rewrite the following text to be more concise and to the point while preserving all important information. Return ONLY the improved text, nothing else.',
+            TONE_POLISH: 'Fix grammar and improve word choice while preserving the original tone and message length. CRITICAL: Do not add any empty lines or line breaks. Keep the exact same line structure as the input. If the input has text on consecutive lines without empty lines between them, your output must also have text on consecutive lines without empty lines. Return ONLY the improved text, nothing else.',
+            GRAMMAR: 'Correct any grammar, spelling, and punctuation errors in the following text while maintaining the original tone and meaning exactly as written. Return ONLY the corrected text, nothing else.',
+            TRANSLATE: 'Translate the following text accurately while preserving the original tone and meaning. Return ONLY the translated text, nothing else.'
         }
     },
 
