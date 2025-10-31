@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SlackPolish Unified Link Processing Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-case {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background-color: #fafafa;
+        }
+        .input-text {
+            background-color: #e8f4fd;
+            padding: 10px;
+            border-radius: 3px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .output-text {
+            background-color: #e8f5e8;
+            padding: 10px;
+            border-radius: 3px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            border: 1px solid #ccc;
+        }
+        .html-output {
+            background-color: #fff3cd;
+            padding: 10px;
+            border-radius: 3px;
+            margin: 10px 0;
+            border: 1px solid #ffc107;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .format-section {
+            margin: 10px 0;
+        }
+        .format-section h4 {
+            margin: 5px 0;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔗 SlackPolish Unified Link Processing Test</h1>
+        <p>This tool tests the unified link processing system that works for both text improvement and channel summaries.</p>
+        
+        <button onclick="runAllTests()">🚀 Run All Tests</button>
+        <button onclick="clearResults()">🗑️ Clear Results</button>
+    </div>
+
+    <div class="container">
+        <h2>Test Cases</h2>
+        <div id="testCases"></div>
+    </div>
+
+    <!-- Load SlackPolish utilities -->
+    <script src="slack-text-improver.js"></script>
+
+    <script>
+        const testCases = [
+            {
+                name: "Plain URL",
+                input: "Check out this website: https://www.gadgetline.co.il/%D7%9E%D7%A2%D7%9E%D7%93-%D7%A1%D7%9E%D7%90%D7%A8%D7%98%D7%A4%D7%95%D7%9F-%D7%9C%D7%98%D7%99%D7%A1%D7%94-%D7%9E%D7%AA%D7%97%D7%91%D7%A8-%D7%9C%D7%9E%D7%92%D7%A9-%D7%94%D7%90%D7%95%D7%9B%D7%9C-flightclip.html for more info."
+            },
+            {
+                name: "Multiple URLs",
+                input: "Compare prices: https://amazon.com vs https://ebay.com vs https://walmart.com"
+            },
+            {
+                name: "Email Address",
+                input: "Contact us at support@company.com for assistance."
+            },
+            {
+                name: "Mixed Links",
+                input: "Visit https://example.com or email info@test.org for more information."
+            },
+            {
+                name: "URL in Text",
+                input: "The article at https://techcrunch.com/2024/01/15/ai-news explains everything."
+            }
+        ];
+
+        function initializeTests() {
+            const container = document.getElementById('testCases');
+            container.innerHTML = '';
+            
+            testCases.forEach((testCase, index) => {
+                const testDiv = document.createElement('div');
+                testDiv.className = 'test-case';
+                testDiv.innerHTML = `
+                    <h3>Test ${index + 1}: ${testCase.name}</h3>
+                    
+                    <div>
+                        <strong>Input Text:</strong>
+                        <div class="input-text">${testCase.input}</div>
+                    </div>
+                    
+                    <div class="format-section">
+                        <h4>Slack Format (for text improvement):</h4>
+                        <div class="output-text" id="slack-output-${index}">Not tested yet</div>
+                    </div>
+                    
+                    <div class="format-section">
+                        <h4>HTML Format (for channel summaries):</h4>
+                        <div class="html-output" id="html-output-${index}">Not tested yet</div>
+                    </div>
+                    
+                    <div class="format-section">
+                        <h4>Markdown Format (for future use):</h4>
+                        <div class="output-text" id="markdown-output-${index}">Not tested yet</div>
+                    </div>
+                    
+                    <button onclick="runSingleTest(${index})">Run This Test</button>
+                `;
+                container.appendChild(testDiv);
+            });
+        }
+
+        function runSingleTest(index) {
+            const testCase = testCases[index];
+            
+            // Check if SlackPolishUtils is available
+            if (!window.SlackPolishUtils || !window.SlackPolishUtils.processLinksInText) {
+                alert('SlackPolish utilities not loaded. Make sure slack-text-improver.js is loaded.');
+                return;
+            }
+            
+            const processLinksInText = window.SlackPolishUtils.processLinksInText;
+            
+            // Test Slack format
+            const slackOutput = processLinksInText(testCase.input, 'slack');
+            document.getElementById(`slack-output-${index}`).textContent = slackOutput;
+            
+            // Test HTML format
+            const htmlOutput = processLinksInText(testCase.input, 'html');
+            document.getElementById(`html-output-${index}`).innerHTML = htmlOutput;
+            
+            // Test Markdown format
+            const markdownOutput = processLinksInText(testCase.input, 'markdown');
+            document.getElementById(`markdown-output-${index}`).textContent = markdownOutput;
+        }
+
+        function runAllTests() {
+            for (let i = 0; i < testCases.length; i++) {
+                runSingleTest(i);
+            }
+        }
+
+        function clearResults() {
+            initializeTests();
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeTests();
+            
+            // Wait a bit for SlackPolish to load, then run tests
+            setTimeout(() => {
+                if (window.SlackPolishUtils) {
+                    console.log('✅ SlackPolish utilities loaded successfully');
+                    runAllTests();
+                } else {
+                    console.log('❌ SlackPolish utilities not found');
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

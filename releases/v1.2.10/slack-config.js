@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.2.31",
-    BUILD: 31,
-    BUILD_DATE: "2025-10-31",
-    DESCRIPTION: "Extended formatting preservation (numbered lists, clean line breaks) to all text improvement modes",
+    VERSION: "1.2.10",
+    BUILD: 10,
+    BUILD_DATE: "2025-07-27",
+    DESCRIPTION: "Fixed Ctrl+V hotkey detection bug",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
@@ -135,23 +135,8 @@ window.SLACKPOLISH_CONFIG = {
         PROFESSIONAL: { name: '💼 Professional', description: 'Business-appropriate tone' },
         CASUAL: { name: '😊 Casual', description: 'Friendly and relaxed' },
         CONCISE: { name: '⚡ Concise', description: 'Brief and to the point' },
-        TONE_POLISH: { name: '✨ Tone Polish', description: 'Improve grammar & phrasing, keep original tone' },
         GRAMMAR: { name: '✏️ Grammar Fix', description: 'Correct errors only' },
         TRANSLATE: { name: '🌍 Translate Only', description: 'Pure translation' }
-    },
-
-    // ========================================
-    // DETAILED PROMPTS FOR EACH STYLE
-    // ========================================
-    PROMPTS: {
-        STYLES: {
-            PROFESSIONAL: 'Please rewrite the following text in a professional, business-appropriate tone while maintaining the original meaning and key information',
-            CASUAL: 'Please rewrite the following text in a casual, friendly tone while keeping the main message clear',
-            CONCISE: 'Please rewrite the following text to be more concise and to the point while preserving all important information',
-            TONE_POLISH: 'CRITICAL: Do not add any empty lines or line breaks. Fix grammar and improve word choice only. Keep the exact same line structure as the input. If the input has text on consecutive lines without empty lines between them, your output must also have text on consecutive lines without empty lines.',
-            GRAMMAR: 'Please correct any grammar, spelling, and punctuation errors in the following text while maintaining the original tone and meaning exactly as written',
-            TRANSLATE: 'Please translate the following text accurately while preserving the original tone and meaning'
-        }
     },
 
     // ========================================

@@ -294,157 +294,7 @@
 
         getTextFromElement: function(element) {
             if (!element) return '';
-
-            // Special handling for Slack's rich text editor to preserve numbering
-            if (element.classList.contains('ql-editor')) {
-                return this.extractTextWithNumbering(element);
-            }
-
-            // Use standard text extraction but clean up extra line breaks
-            let text = element.innerText || element.textContent || '';
-
-            // Replace multiple consecutive newlines with single newlines
-            text = text.replace(/\n\s*\n+/g, '\n');
-
-            // Trim whitespace from start and end
-            text = text.trim();
-
-            return text;
-        },
-
-        extractTextWithNumbering: function(element) {
-            let result = '';
-            let listCounter = 1;
-
-            // Process all child nodes
-            const processNode = (node) => {
-                if (node.nodeType === Node.TEXT_NODE) {
-                    return node.textContent;
-                } else if (node.nodeType === Node.ELEMENT_NODE) {
-                    const tagName = node.tagName.toLowerCase();
-
-                    if (tagName === 'ol') {
-                        // Ordered list - reset counter
-                        listCounter = 1;
-                        let listText = '';
-                        for (const li of node.children) {
-                            if (li.tagName.toLowerCase() === 'li') {
-                                const liText = this.getTextFromNode(li);
-                                if (liText.trim()) {
-                                    listText += `${listCounter}. ${liText.trim()}\n`;
-                                    listCounter++;
-                                }
-                            }
-                        }
-                        return listText;
-                    } else if (tagName === 'ul') {
-                        // Unordered list
-                        let listText = '';
-                        for (const li of node.children) {
-                            if (li.tagName.toLowerCase() === 'li') {
-                                const liText = this.getTextFromNode(li);
-                                if (liText.trim()) {
-                                    listText += `• ${liText.trim()}\n`;
-                                }
-                            }
-                        }
-                        return listText;
-                    } else if (tagName === 'p' || tagName === 'div') {
-                        // Paragraph or div - get text and add newline
-                        const pText = this.getTextFromNode(node);
-                        return pText.trim() ? pText.trim() + '\n' : '';
-                    } else if (tagName === 'br') {
-                        return '\n';
-                    } else {
-                        // Other elements - just get their text content
-                        return this.getTextFromNode(node);
-                    }
-                }
-                return '';
-            };
-
-            for (const child of element.childNodes) {
-                result += processNode(child);
-            }
-
-            // Clean up extra newlines and trim
-            result = result.replace(/\n\s*\n+/g, '\n').trim();
-
-            return result;
-        },
-
-        getTextFromNode: function(node) {
-            if (!node) return '';
-
-            if (node.nodeType === Node.TEXT_NODE) {
-                return node.textContent;
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
-                let text = '';
-                for (const child of node.childNodes) {
-                    text += this.getTextFromNode(child);
-                }
-                return text;
-            }
-
-            return '';
-        },
-
-        setTextWithFormatting: function(element, text) {
-            // Clear the element
-            element.innerHTML = '';
-
-            const lines = text.split('\n');
-            let currentList = null;
-            let currentListType = null;
-
-            lines.forEach((line, index) => {
-                const trimmedLine = line.trim();
-                if (!trimmedLine) return; // Skip empty lines
-
-                // Check if this is a numbered list item
-                const numberedMatch = trimmedLine.match(/^(\d+)\.\s+(.+)$/);
-                if (numberedMatch) {
-                    const [, number, content] = numberedMatch;
-
-                    // Create or continue ordered list
-                    if (!currentList || currentListType !== 'ol') {
-                        currentList = document.createElement('ol');
-                        currentListType = 'ol';
-                        element.appendChild(currentList);
-                    }
-
-                    const li = document.createElement('li');
-                    li.textContent = content;
-                    currentList.appendChild(li);
-                    return;
-                }
-
-                // Check if this is a bullet list item
-                const bulletMatch = trimmedLine.match(/^[•·*-]\s+(.+)$/);
-                if (bulletMatch) {
-                    const [, content] = bulletMatch;
-
-                    // Create or continue unordered list
-                    if (!currentList || currentListType !== 'ul') {
-                        currentList = document.createElement('ul');
-                        currentListType = 'ul';
-                        element.appendChild(currentList);
-                    }
-
-                    const li = document.createElement('li');
-                    li.textContent = content;
-                    currentList.appendChild(li);
-                    return;
-                }
-
-                // Regular paragraph - reset list context
-                currentList = null;
-                currentListType = null;
-
-                const p = document.createElement('p');
-                p.textContent = trimmedLine;
-                element.appendChild(p);
-            });
+            return element.innerText || element.textContent || '';
         },
 
         isInThread: function() {
@@ -506,27 +356,9 @@
                 return;
             }
 
-            // Special handling for Slack rich text editor to preserve formatting
-            if (element.classList.contains('ql-editor')) {
-                utils.debug('Setting text back to Slack with formatting preservation', {
-                    style: CONFIG.STYLE,
-                    text: text,
-                    textLength: text.length
-                });
-
-                this.setTextWithFormatting(element, text);
-
-                utils.debug('Final HTML structure in Slack', {
-                    style: CONFIG.STYLE,
-                    innerHTML: element.innerHTML,
-                    paragraphCount: element.querySelectorAll('p').length,
-                    listCount: element.querySelectorAll('ol, ul').length
-                });
-            } else {
-                // Fallback for non-rich-text elements
-                element.innerHTML = '';
-                element.innerText = text;
-            }
+            // Normal insertion (current method)
+            element.innerHTML = '';
+            element.innerText = text;
 
             // Trigger input events to notify Slack
             const events = ['input', 'change', 'keyup'];
@@ -789,8 +621,6 @@
                 hasApiKey: !!CONFIG.OPENAI_API_KEY
             });
 
-
-
             // DEBUG TEST SYSTEM: Intercept debug commands in debug mode
             if (CONFIG.DEBUG_MODE && originalText.trim().startsWith('SlackPolish test')) {
                 utils.debug('Debug test command detected', { command: originalText });
@@ -826,12 +656,6 @@
             try {
                 const prompt = await this.buildPrompt(originalText);
 
-                // DEBUG: Log the complete prompt to SlackPolish debug system
-                utils.debug('FULL PROMPT SENT TO OPENAI', {
-                    fullPrompt: prompt,
-                    promptLength: prompt.length
-                });
-
                 // Use shared OpenAI module if available, fallback to local implementation
                 let response;
                 if (window.SlackPolishOpenAI) {
@@ -856,30 +680,14 @@
                         promptPreview: prompt.substring(0, 100) + '...'
                     });
 
-                    // FULL PROMPT DEBUG: Show the complete prompt being sent to OpenAI
-                    console.log('🔍 FULL PROMPT SENT TO OPENAI:', prompt);
-
-                    let processedResponse = response.trim();
-
-                    // Special post-processing for TONE_POLISH: simple empty line removal
-                    if (CONFIG.STYLE === 'TONE_POLISH') {
-                        // Simple approach: replace double newlines with single newlines
-                        processedResponse = processedResponse.replace(/\n\n+/g, '\n');
-                        utils.debug('Applied TONE_POLISH post-processing', {
-                            originalResponse: response.trim(),
-                            processedResponse: processedResponse,
-                            removedExtraLineBreaks: response.trim() !== processedResponse
-                        });
-                    }
-
                     utils.debug('Text improvement successful', {
                         originalLength: originalText.length,
-                        improvedLength: processedResponse.length,
+                        improvedLength: response.trim().length,
                         originalText: originalText,
-                        improvedText: processedResponse,
+                        improvedText: response.trim(),
                         usedSharedModule: !!window.SlackPolishOpenAI
                     });
-                    return processedResponse;
+                    return response.trim();
                 } else {
                     utils.debug('Empty response from API', { response });
                     showSimpleError('Received empty response from OpenAI');
@@ -1073,8 +881,8 @@ Available test commands (use in debug mode only):
 
             let prompt = `You are helping improve a Slack message.`;
 
-            // Add Smart Context if enabled (but skip for TONE_POLISH to avoid formatting confusion)
-            if (CONFIG.SMART_CONTEXT && CONFIG.SMART_CONTEXT.enabled && CONFIG.STYLE !== 'TONE_POLISH') {
+            // Add Smart Context if enabled
+            if (CONFIG.SMART_CONTEXT && CONFIG.SMART_CONTEXT.enabled) {
                 try {
                     const contextMessages = await this.getSmartContext();
                     if (contextMessages && contextMessages.length > 0) {
@@ -1100,23 +908,15 @@ Recent conversation context (last ${contextMessages.length} messages):
                 }
             }
 
-            // Get detailed prompt from config if available
-            let styleInstruction = `please improve ONLY the following message to be more ${CONFIG.STYLE} in ${CONFIG.LANGUAGE}`;
-
-            if (window.SLACKPOLISH_CONFIG && window.SLACKPOLISH_CONFIG.PROMPTS && window.SLACKPOLISH_CONFIG.PROMPTS.STYLES) {
-                const detailedPrompt = window.SLACKPOLISH_CONFIG.PROMPTS.STYLES[CONFIG.STYLE];
-                if (detailedPrompt) {
-                    styleInstruction = detailedPrompt;
-                }
-            }
-
             prompt += `
 
-Now, ${styleInstruction}:
+Now, please improve ONLY the following message to be more ${CONFIG.STYLE} in ${CONFIG.LANGUAGE}:
 
 ${text}
 
 Requirements:
+- Keep the same meaning and intent
+- Make it sound more ${CONFIG.STYLE}
 - Use ${CONFIG.LANGUAGE} language
 - Return only the improved text without quotes or formatting
 - Do NOT summarize or reference the conversation context`;

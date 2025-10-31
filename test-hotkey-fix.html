@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SlackPolish Hotkey Fix Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-area { margin: 20px 0; padding: 20px; border: 1px solid #ccc; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; font-family: monospace; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>SlackPolish Hotkey Fix Test</h1>
+    
+    <div class="test-area">
+        <h2>Test Instructions</h2>
+        <p>This test verifies that the hotkey detection works correctly:</p>
+        <ul>
+            <li><strong>Ctrl+Shift</strong> should trigger text improvement</li>
+            <li><strong>Ctrl+V</strong> should NOT trigger text improvement</li>
+            <li><strong>Ctrl+Alt</strong> should NOT trigger text improvement (unless configured)</li>
+        </ul>
+        
+        <textarea id="test-input" placeholder="Type some text here and test the hotkeys..." 
+                  style="width: 100%; height: 100px; margin: 10px 0;"></textarea>
+        
+        <div id="log-output" class="log"></div>
+    </div>
+
+    <script>
+        // Mock the SlackPolish configuration
+        window.SLACKPOLISH_CONFIG = {
+            HOTKEY: 'Ctrl+Shift',
+            AVAILABLE_HOTKEYS: ['Ctrl+Shift', 'Ctrl+Alt', 'Ctrl+Tab']
+        };
+
+        // Simple logging function
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log-output');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'success' ? 'success' : type === 'error' ? 'error' : 'info';
+            logDiv.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        // Parse hotkey combination into individual keys
+        function parseHotkey(hotkeyString) {
+            const parts = hotkeyString.split('+');
+            return {
+                ctrl: parts.includes('Ctrl'),
+                shift: parts.includes('Shift'),
+                alt: parts.includes('Alt'),
+                tab: parts.includes('Tab'),
+                displayName: hotkeyString
+            };
+        }
+
+        // Test the hotkey matching logic
+        function testHotkeyLogic() {
+            const hotkey = parseHotkey('Ctrl+Shift');
+            log(`Testing hotkey configuration: ${JSON.stringify(hotkey)}`);
+
+            let ctrlPressed = false;
+            let shiftPressed = false;
+            let altPressed = false;
+            let tabPressed = false;
+
+            document.addEventListener('keydown', function(event) {
+                // Track key states
+                if (event.key === 'Control') {
+                    ctrlPressed = true;
+                    log('Ctrl pressed');
+                }
+                if (event.key === 'Shift') {
+                    shiftPressed = true;
+                    log('Shift pressed');
+                }
+                if (event.key === 'Alt') {
+                    altPressed = true;
+                    log('Alt pressed');
+                }
+                if (event.key === 'Tab') {
+                    tabPressed = true;
+                    log('Tab pressed');
+                }
+
+                // Test the FIXED hotkey matching logic
+                const hotkeyMatch =
+                    (hotkey.ctrl && ctrlPressed) &&
+                    (hotkey.shift && shiftPressed) &&
+                    (hotkey.alt === altPressed) &&
+                    (hotkey.tab === tabPressed);
+
+                log(`Key states - Ctrl: ${ctrlPressed}, Shift: ${shiftPressed}, Alt: ${altPressed}, Tab: ${tabPressed}`);
+                log(`Hotkey match: ${hotkeyMatch}`, hotkeyMatch ? 'success' : 'info');
+
+                if (hotkeyMatch) {
+                    log('🎯 HOTKEY TRIGGERED! Text improvement would start now.', 'success');
+                    event.preventDefault();
+                }
+            });
+
+            document.addEventListener('keyup', function(event) {
+                if (event.key === 'Control') {
+                    ctrlPressed = false;
+                    log('Ctrl released');
+                }
+                if (event.key === 'Shift') {
+                    shiftPressed = false;
+                    log('Shift released');
+                }
+                if (event.key === 'Alt') {
+                    altPressed = false;
+                    log('Alt released');
+                }
+                if (event.key === 'Tab') {
+                    tabPressed = false;
+                    log('Tab released');
+                }
+            });
+        }
+
+        // Initialize the test
+        document.addEventListener('DOMContentLoaded', function() {
+            log('SlackPolish Hotkey Fix Test initialized');
+            log('Focus the textarea and try different key combinations:');
+            log('- Ctrl+Shift should trigger (SUCCESS)');
+            log('- Ctrl+V should NOT trigger');
+            log('- Ctrl+Alt should NOT trigger');
+            testHotkeyLogic();
+        });
+    </script>
+</body>
+</html>
