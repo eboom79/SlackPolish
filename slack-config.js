@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.2.39",
-    BUILD: 39,
-    BUILD_DATE: "2025-10-31",
-    DESCRIPTION: "Fixed selection visibility by applying selection after DOM events with proper delay",
+    VERSION: "1.2.42",
+    BUILD: 42,
+    BUILD_DATE: "2025-11-02",
+    DESCRIPTION: "Native American English speaker for Tone Polish",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
@@ -148,7 +148,7 @@ window.SLACKPOLISH_CONFIG = {
             PROFESSIONAL: 'Rewrite the following text in a professional, business-appropriate tone while maintaining the original meaning and key information. Return ONLY the improved text, nothing else.',
             CASUAL: 'Rewrite the following text in a casual, friendly tone while keeping the main message clear. Return ONLY the improved text, nothing else.',
             CONCISE: 'Rewrite the following text to be more concise and to the point while preserving all important information. Return ONLY the improved text, nothing else.',
-            TONE_POLISH: 'Fix grammar and improve word choice while preserving the original tone and message length. CRITICAL: Do not add any empty lines or line breaks. Keep the exact same line structure as the input. If the input has text on consecutive lines without empty lines between them, your output must also have text on consecutive lines without empty lines. Return ONLY the improved text, nothing else.',
+            TONE_POLISH: 'Fix grammar and improve word choice to sound like a native American English speaker. Use natural American English expressions, idioms, and phrasing that native speakers would use. Make the text sound fluent and natural. Preserve the original tone and message length. CRITICAL: Do not add any empty lines or line breaks. Keep the exact same line structure as the input. If the input has text on consecutive lines without empty lines between them, your output must also have text on consecutive lines without empty lines. Return ONLY the improved text, nothing else.',
             GRAMMAR: 'Correct any grammar, spelling, and punctuation errors in the following text while maintaining the original tone and meaning exactly as written. Return ONLY the corrected text, nothing else.',
             TRANSLATE: 'Translate the following text accurately while preserving the original tone and meaning. Return ONLY the translated text, nothing else.'
         }

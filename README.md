@@ -49,10 +49,11 @@ Transform your messages instantly with professional polish, casual tone, grammar
 - 🇮🇳 **Hindi** - Indian subcontinent support
 - 🇧🇬 **Bulgarian** - Eastern European support
 
-### **🎨 Text Improvement Styles (5 Options):**
+### **🎨 Text Improvement Styles (6 Options):**
 - 💼 **Professional** - Business-appropriate tone and formal language
 - 😊 **Casual** - Friendly, relaxed, and conversational style
 - ⚡ **Concise** - Brief, direct, and to-the-point communication
+- ✨ **Tone Polish** - Sound like a native American English speaker with natural expressions
 - ✏️ **Grammar Fix** - Correct errors while maintaining original tone
 - 🌍 **Translate Only** - Pure translation between any supported languages
 
@@ -308,6 +309,73 @@ dir app.asar*
 ---
 
 ## 📝 Changelog
+
+### **✨ v1.2.42 - Native American English for Tone Polish**
+**Date:** November 2, 2025
+**Status:** ✅ **PRODUCTION READY - NATIVE SPEAKER ENHANCEMENT**
+
+**🎯 New Feature: Sound Like a Native American English Speaker!**
+
+**🚀 Tone Polish Enhancement:**
+- ✅ **Native Speaker Phrasing** - Makes text sound like a native American English speaker
+- ✅ **Natural Expressions** - Uses authentic American English idioms and expressions
+- ✅ **Fluent Language** - Transforms non-native phrasing to natural, fluent English
+- ✅ **Preserves Tone & Length** - Maintains original message intent and approximate length
+
+**🔧 Technical Implementation:**
+- ✅ **Enhanced Prompt** - Updated TONE_POLISH style prompt with native speaker instructions
+- ✅ **AI-Powered** - Leverages GPT-4 understanding of natural American English
+- ✅ **Automatic Application** - Works seamlessly when Tone Polish style is selected
+
+**📝 Example Transformations:**
+```
+Before: "I will do the needful"
+After:  "I'll take care of it"
+
+Before: "Please revert back to me"
+After:  "Please get back to me"
+
+Before: "Kindly do the same"
+After:  "Please do the same"
+```
+
+**💡 Use Cases:**
+- Non-native English speakers wanting to sound more natural
+- Making formal text sound more conversational and American
+- Improving fluency and natural expression in messages
+- Learning natural American English phrasing
+
+---
+
+### **✨ v1.2.41 - Semicolon Replacement & Auto-Capitalization**
+**Date:** November 2, 2025
+**Status:** ✅ **PRODUCTION READY - PUNCTUATION NORMALIZATION**
+
+**🎯 New Feature: Automatic Semicolon Replacement!**
+
+**🚀 Punctuation Normalization:**
+- ✅ **Semicolon Replacement** - Automatically replaces all semicolons (`;`) with periods (`.`)
+- ✅ **Auto-Capitalization** - Capitalizes the first letter after each period
+- ✅ **Consistent Formatting** - Ensures professional, readable message formatting
+- ✅ **Universal Application** - Works across all languages and styles
+
+**🔧 Technical Implementation:**
+- ✅ **Post-Processing Pipeline** - Applied after AI response, before text insertion
+- ✅ **Smart Pattern Matching** - Handles various spacing scenarios
+- ✅ **Debug Logging** - Tracks replacements for troubleshooting
+
+**🧪 Quality Assurance:**
+- ✅ **14 comprehensive tests** for semicolon replacement functionality
+- ✅ **All tests passing** (100% success rate)
+- ✅ **Edge case coverage** - Multiple semicolons, spacing variations, multiline text
+
+**📝 Example:**
+```
+Before: "I need to finish this; then I will start that; finally I will rest"
+After:  "I need to finish this. Then I will start that. Finally I will rest"
+```
+
+---
 
 ### **✨ v1.2.39 - Selective Text Improvement**
 **Date:** October 31, 2025

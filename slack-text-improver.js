@@ -1289,6 +1289,24 @@
                         utils.debug('Removed surrounding quotes from response');
                     }
 
+                    // Replace semicolons with periods and capitalize the next letter
+                    const beforeSemicolonReplacement = processedResponse;
+                    processedResponse = processedResponse.replace(/;\s*/g, function(match) {
+                        return '. ';
+                    });
+
+                    // Capitalize first letter after each period
+                    processedResponse = processedResponse.replace(/\.\s+([a-z])/g, function(match, letter) {
+                        return '. ' + letter.toUpperCase();
+                    });
+
+                    if (beforeSemicolonReplacement !== processedResponse) {
+                        utils.debug('Replaced semicolons with periods and capitalized', {
+                            before: beforeSemicolonReplacement,
+                            after: processedResponse
+                        });
+                    }
+
                     // Special post-processing for TONE_POLISH: simple empty line removal
                     if (CONFIG.STYLE === 'TONE_POLISH') {
                         // Simple approach: replace double newlines with single newlines

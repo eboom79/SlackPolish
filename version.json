@@ -1,8 +1,8 @@
 {
     "major": 1,
     "minor": 2,
-    "build": 39,
-    "version_string": "1.2.39",
-    "description": "Fixed selection visibility by applying selection after DOM events with proper delay",
-    "date": "2025-10-31"
+    "build": 42,
+    "version_string": "1.2.42",
+    "description": "Native American English speaker for Tone Polish",
+    "date": "2025-11-02"
 }
