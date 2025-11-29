@@ -2,45 +2,63 @@
 
 ## Overview
 
-This test suite validates the hotkey system improvements implemented in SlackPolish v1.2.1 to prevent the bug where multiple rapid `triggerTextImprovement()` calls could occur without explicit hotkey presses.
+This test suite validates the hotkey system improvements implemented in SlackPolish to prevent bugs related to hotkey handling, including:
+- Multiple rapid `triggerTextImprovement()` calls without explicit hotkey presses (v1.2.1)
+- Fast hotkey presses (< 50ms) not triggering due to debounce timeout cancellation (v1.2.44)
 
 ## 🐛 Bug Context
 
+### Issue 1: Multiple Triggers (v1.2.1)
 **Original Issue:** User reported that typing "Hi R" triggered Smart Context and replaced text with previous conversation content, with logs showing:
 ```
 [2:30:19 PM] triggerTextImprovement() called
-[2:30:24 PM] triggerTextImprovement() called  
+[2:30:24 PM] triggerTextImprovement() called
 [2:30:25 PM] triggerTextImprovement() called
 ```
 
 **Root Cause:** Multiple event listeners were registered due to rapid settings changes, causing the same hotkey press to trigger multiple times.
 
+### Issue 2: Fast Press Not Working (v1.2.44)
+**Original Issue:** User reported that pressing Ctrl+Shift very quickly (< 50ms) would sometimes not trigger the action, requiring multiple attempts or switching to a different hotkey combination.
+
+**Root Cause:** The old implementation used a 50ms debounce timeout that would be cancelled by the keyup event when keys were released too quickly, preventing the trigger from executing.
+
 ## 🔧 Improvements Implemented
 
-### 1. **Debounced Settings Updates**
+### 1. **Debounced Settings Updates** (v1.2.1)
 - **Problem**: Multiple events (storage + custom) fired for same settings change
 - **Solution**: 150ms debounce delay with unified handler
 - **Test**: `runDebounceTest()` - fires 5 rapid settings changes
 
-### 2. **Rate Limiting**
+### 2. **Rate Limiting** (v1.2.1)
 - **Problem**: Rapid hotkey presses could cause multiple triggers
 - **Solution**: 500ms minimum interval between triggers
 - **Test**: `runRateLimitTest()` - simulates rapid Ctrl+Shift presses
 
-### 3. **Enhanced Logging**
+### 3. **Enhanced Logging** (v1.2.1)
 - **Problem**: Hard to debug hotkey issues
 - **Solution**: Setup IDs, trigger IDs, call stack traces
 - **Test**: `runLoggingTest()` - enables debug mode and logs details
 
-### 4. **Setup ID Tracking**
+### 4. **Setup ID Tracking** (v1.2.1)
 - **Problem**: Multiple event listeners hard to track
 - **Solution**: Unique ID for each `setupEventListeners()` call
 - **Test**: `runSetupIdTest()` - changes hotkeys multiple times
 
-### 5. **Error Handling**
+### 5. **Error Handling** (v1.2.1)
 - **Problem**: Invalid settings could break system
 - **Solution**: Defensive programming with try-catch blocks
 - **Test**: `runErrorHandlingTest()` - tests invalid JSON and null values
+
+### 6. **Native Browser Key State** (v1.2.43)
+- **Problem**: Manual key state tracking could become desynchronized
+- **Solution**: Use native browser properties (`event.ctrlKey`, `event.shiftKey`, `event.altKey`)
+- **Test**: `test_hotkey_handling.js` - validates hotkey matching logic
+
+### 7. **Immediate Trigger (No Debounce)** (v1.2.44)
+- **Problem**: 50ms debounce timeout cancelled by fast key releases (< 50ms)
+- **Solution**: Trigger immediately without timeout, use flags to prevent duplicates
+- **Test**: `test_fast_hotkey_press.js` - validates fast press handling
 
 ## 📁 Test Files
 
@@ -53,6 +71,21 @@ Interactive web-based test environment with:
 
 ### `test-hotkey-improvements.js`
 Standalone JavaScript test functions that can be run in any environment.
+
+### `tests/unit/test_hotkey_handling.js`
+Unit tests for hotkey matching logic:
+- Tests all configured hotkey combinations (Ctrl+Shift, Ctrl+Alt, Ctrl+Tab, F12)
+- Validates exact modifier matching (no extra modifiers allowed)
+- Tests edge cases (case sensitivity, special keys, invalid hotkeys)
+
+### `tests/unit/test_fast_hotkey_press.js` ⭐ NEW
+Unit tests for fast hotkey press handling:
+- **Very fast press (< 50ms)**: Validates that quick presses trigger successfully
+- **Duplicate prevention**: Ensures same key sequence doesn't trigger multiple times
+- **Key release reset**: Validates that releasing keys allows next trigger
+- **Rate limiting**: Confirms 500ms minimum interval between triggers
+- **Processing guard**: Prevents overlapping triggers during async operations
+- **Independent hotkeys**: Different hotkey combinations work independently
 
 ## 🚀 Running the Tests
 
@@ -158,6 +191,9 @@ npm run test:hotkey
 | Setup ID Tracking | ✅ Complete | Tracks multiple listeners |
 | Error Handling | ✅ Complete | Graceful failure handling |
 | Memory Leak Prevention | ✅ Complete | Proper cleanup |
+| Native Key State | ✅ Complete | Uses browser properties |
+| Fast Press Handling | ✅ Complete | Works with < 50ms presses |
+| Duplicate Prevention | ✅ Complete | One trigger per key sequence |
 
 ## 🔄 Maintenance
 
@@ -183,6 +219,6 @@ When contributing hotkey-related changes:
 
 ---
 
-**Last Updated**: 2025-07-23  
-**Version**: 1.2.1  
+**Last Updated**: 2025-11-29
+**Version**: 1.2.44
 **Maintainer**: SlackPolish Development Team

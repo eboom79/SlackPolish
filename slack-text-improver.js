@@ -1900,6 +1900,8 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
     // Current event listeners (for cleanup)
     let currentKeydownListener = null;
     let currentKeyupListener = null;
+    let currentFocusListener = null;
+    let currentBlurListener = null;
 
     // Event handlers
     function setupEventListeners() {
@@ -1916,19 +1918,31 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
                 document.removeEventListener('keyup', currentKeyupListener);
                 utils.debug('Removed previous keyup listener', { setupId });
             }
+            if (currentFocusListener) {
+                window.removeEventListener('focus', currentFocusListener);
+                utils.debug('Removed previous focus listener', { setupId });
+            }
+            if (currentBlurListener) {
+                window.removeEventListener('blur', currentBlurListener);
+                utils.debug('Removed previous blur listener', { setupId });
+            }
         } catch (error) {
             utils.log(`Warning: Error during event listener cleanup: ${error.message}`);
             utils.debug('Event listener cleanup error', {
                 error: error.message,
                 setupId,
                 hadKeydownListener: !!currentKeydownListener,
-                hadKeyupListener: !!currentKeyupListener
+                hadKeyupListener: !!currentKeyupListener,
+                hadFocusListener: !!currentFocusListener,
+                hadBlurListener: !!currentBlurListener
             });
         }
 
         // Clear references to prevent memory leaks
         currentKeydownListener = null;
         currentKeyupListener = null;
+        currentFocusListener = null;
+        currentBlurListener = null;
 
         const hotkey = parseHotkey(CONFIG.HOTKEY);
         utils.debug('Parsed hotkey configuration', {
@@ -1937,85 +1951,103 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
             setupId
         });
 
-        let ctrlPressed = false;
-        let shiftPressed = false;
-        let altPressed = false;
-        let tabPressed = false;
-        let triggerTimeout = null;
-        let lastTriggerTime = 0;
-        const MIN_TRIGGER_INTERVAL = 500; // Minimum 500ms between triggers
+        let isProcessing = false; // Flag to prevent double-triggers
+        let lastSuccessfulTriggerTime = 0;
+        const MIN_TRIGGER_INTERVAL = 500; // Minimum 500ms between successful triggers
+        let hotkeyPressedOnce = false; // Track if hotkey was already detected in this key sequence
 
-        // Dynamic keydown handler with enhanced logging and safeguards
+        // Helper function to check if hotkey matches using native browser properties
+        // This is more reliable than manually tracking key states
+        function checkHotkeyMatch(event) {
+            // For Tab key, we need to check both the key and the modifiers
+            if (hotkey.tab) {
+                return event.key === 'Tab' &&
+                       event.ctrlKey === hotkey.ctrl &&
+                       event.shiftKey === hotkey.shift &&
+                       event.altKey === hotkey.alt;
+            }
+
+            // For modifier-only combinations (Ctrl+Shift, Ctrl+Alt)
+            // Check that the event is a modifier key press and all required modifiers are active
+            const isModifierKey = ['Control', 'Shift', 'Alt'].includes(event.key);
+            if (!isModifierKey) {
+                return false; // Not a modifier key, can't be our hotkey
+            }
+
+            return event.ctrlKey === hotkey.ctrl &&
+                   event.shiftKey === hotkey.shift &&
+                   event.altKey === hotkey.alt &&
+                   !hotkey.tab; // Tab should not be part of modifier-only combos
+        }
+
+        // Dynamic keydown handler using native browser key state properties
         currentKeydownListener = function(event) {
-            // Track key states with enhanced logging
-            if (event.key === 'Control') {
-                ctrlPressed = true;
-                utils.debug('Ctrl pressed', { setupId });
-            }
-            if (event.key === 'Shift') {
-                shiftPressed = true;
-                utils.debug('Shift pressed', { setupId });
-            }
-            if (event.key === 'Alt') {
-                altPressed = true;
-                utils.debug('Alt pressed', { setupId });
-            }
-            if (event.key === 'Tab') {
-                tabPressed = true;
-                utils.debug('Tab pressed', { setupId });
-            }
-
-            // Check if the configured hotkey combination is pressed
-            const hotkeyMatch =
-                (hotkey.ctrl === ctrlPressed) &&
-                (hotkey.shift === shiftPressed) &&
-                (hotkey.alt === altPressed) &&
-                (hotkey.tab === tabPressed);
+            const hotkeyMatch = checkHotkeyMatch(event);
 
             // Enhanced debug logging for hotkey detection
-            if (hotkeyMatch || (ctrlPressed || shiftPressed || altPressed || tabPressed)) {
+            if (hotkeyMatch || event.ctrlKey || event.shiftKey || event.altKey) {
                 utils.debug('Hotkey state check', {
-                    event: event.key,
-                    current: { ctrlPressed, shiftPressed, altPressed, tabPressed },
+                    eventKey: event.key,
+                    eventState: {
+                        ctrlKey: event.ctrlKey,
+                        shiftKey: event.shiftKey,
+                        altKey: event.altKey,
+                        key: event.key
+                    },
                     required: hotkey,
                     match: hotkeyMatch,
+                    isProcessing,
+                    hotkeyPressedOnce,
                     setupId
                 });
             }
 
             if (hotkeyMatch) {
-                const now = Date.now();
-
                 // Prevent Tab from changing focus if it's part of the hotkey
                 if (hotkey.tab) {
                     event.preventDefault();
                 }
 
-                // Rate limiting to prevent rapid multiple triggers
-                if (now - lastTriggerTime < MIN_TRIGGER_INTERVAL) {
+                // Prevent multiple triggers from the same key sequence
+                // (e.g., when both Ctrl and Shift fire keydown events)
+                if (hotkeyPressedOnce) {
+                    utils.debug('Hotkey already detected in this sequence, ignoring duplicate', { setupId });
+                    return;
+                }
+
+                // Prevent triggering while already processing
+                if (isProcessing) {
+                    utils.debug('Already processing a trigger, ignoring new hotkey press', { setupId });
+                    return;
+                }
+
+                const now = Date.now();
+
+                // Rate limiting - only apply to successful triggers
+                // This allows rapid retries if the previous attempt failed
+                if (now - lastSuccessfulTriggerTime < MIN_TRIGGER_INTERVAL) {
                     utils.debug('Hotkey trigger rate limited', {
-                        timeSinceLastTrigger: now - lastTriggerTime,
+                        timeSinceLastTrigger: now - lastSuccessfulTriggerTime,
                         minInterval: MIN_TRIGGER_INTERVAL,
                         setupId
                     });
                     return;
                 }
 
+                // Mark that we've detected the hotkey in this sequence
+                hotkeyPressedOnce = true;
+
                 utils.log(`${CONFIG.HOTKEY} combination pressed - triggering text improvement (setup-id: ${setupId})`);
 
-                // Clear any existing timeout to prevent multiple triggers
-                if (triggerTimeout) {
-                    clearTimeout(triggerTimeout);
-                    triggerTimeout = null;
-                    utils.debug('Cleared existing trigger timeout', { setupId });
-                }
-
-                // Trigger with short delay to debounce multiple rapid key presses
-                triggerTimeout = setTimeout(async () => {
+                // Trigger immediately without debounce delay
+                // This makes fast presses work reliably
+                isProcessing = true;
+                (async () => {
                     try {
-                        lastTriggerTime = Date.now();
                         utils.log(`${CONFIG.HOTKEY} triggered - starting text improvement (setup-id: ${setupId})`);
                         await triggerTextImprovement();
+                        // Only update lastSuccessfulTriggerTime after successful completion
+                        lastSuccessfulTriggerTime = Date.now();
                     } catch (error) {
                         utils.log(`Error in hotkey trigger: ${error.message}`);
                         utils.debug('Hotkey trigger error', {
@@ -2024,44 +2056,26 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
                             setupId
                         });
                     } finally {
-                        triggerTimeout = null;
+                        isProcessing = false;
                     }
-                }, 50); // Very short delay just to debounce multiple rapid key presses
+                })();
             }
         };
 
         document.addEventListener('keydown', currentKeydownListener);
 
-        // Dynamic keyup handler with enhanced logging
+        // Dynamic keyup handler - reset the sequence flag when keys are released
         currentKeyupListener = function(event) {
-            if (event.key === 'Control') {
-                ctrlPressed = false;
-                utils.debug('Ctrl released', { setupId });
-            }
-            if (event.key === 'Shift') {
-                shiftPressed = false;
-                utils.debug('Shift released', { setupId });
-            }
-            if (event.key === 'Alt') {
-                altPressed = false;
-                utils.debug('Alt released', { setupId });
-            }
-            if (event.key === 'Tab') {
-                tabPressed = false;
-                utils.debug('Tab released', { setupId });
-            }
+            const isRequiredKey =
+                (hotkey.ctrl && event.key === 'Control') ||
+                (hotkey.shift && event.key === 'Shift') ||
+                (hotkey.alt && event.key === 'Alt') ||
+                (hotkey.tab && event.key === 'Tab');
 
-            // Clear timeout if any required key is released
-            const anyRequiredKeyReleased =
-                (hotkey.ctrl && !ctrlPressed) ||
-                (hotkey.shift && !shiftPressed) ||
-                (hotkey.alt && !altPressed) ||
-                (hotkey.tab && !tabPressed);
-
-            if (triggerTimeout && anyRequiredKeyReleased) {
-                clearTimeout(triggerTimeout);
-                triggerTimeout = null;
-                utils.debug('Trigger timeout cleared due to key release', {
+            if (isRequiredKey) {
+                // Reset the flag so the next key sequence can trigger
+                hotkeyPressedOnce = false;
+                utils.debug('Required key released, reset sequence flag', {
                     releasedKey: event.key,
                     setupId
                 });
@@ -2069,6 +2083,21 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
         };
 
         document.addEventListener('keyup', currentKeyupListener);
+
+        // Focus/blur listeners to reset state when window loses/regains focus
+        // This prevents stuck key states when user switches windows
+        currentFocusListener = function(event) {
+            hotkeyPressedOnce = false;
+            utils.debug('Window focus changed, reset sequence flag', { setupId });
+        };
+
+        currentBlurListener = function(event) {
+            hotkeyPressedOnce = false;
+            utils.debug('Window blur, reset sequence flag', { setupId });
+        };
+
+        window.addEventListener('focus', currentFocusListener);
+        window.addEventListener('blur', currentBlurListener);
 
         // Log successful setup completion
         utils.log(`Event listeners registered successfully for ${CONFIG.HOTKEY} (setup-id: ${setupId})`);
@@ -2078,6 +2107,8 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
             setupId,
             hasKeydownListener: !!currentKeydownListener,
             hasKeyupListener: !!currentKeyupListener,
+            hasFocusListener: !!currentFocusListener,
+            hasBlurListener: !!currentBlurListener,
             minTriggerInterval: MIN_TRIGGER_INTERVAL
         });
 

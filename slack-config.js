@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.2.42",
-    BUILD: 42,
-    BUILD_DATE: "2025-11-02",
-    DESCRIPTION: "Native American English speaker for Tone Polish",
+    VERSION: "1.2.44",
+    BUILD: 44,
+    BUILD_DATE: "2025-11-29",
+    DESCRIPTION: "Improved fast hotkey press support - triggers immediately",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
