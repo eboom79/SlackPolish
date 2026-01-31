@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.2.44",
-    BUILD: 44,
-    BUILD_DATE: "2025-11-29",
-    DESCRIPTION: "Improved fast hotkey press support - triggers immediately",
+    VERSION: "1.3.0",
+    BUILD: 62,
+    BUILD_DATE: "2026-01-31",
+    DESCRIPTION: "Support for Slack v4.47.69 - Fixed injection method for new Slack versions",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)

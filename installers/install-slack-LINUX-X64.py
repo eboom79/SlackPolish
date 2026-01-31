@@ -399,13 +399,14 @@ def inject_scripts(injection_file, config_path, *script_paths):
                     settings_script += ';'
 
         # Read the channel summary script
+        # TEMPORARILY DISABLED - causes syntax errors
         channel_summary_script = ""
-        if os.path.exists('slack-channel-summary.js'):
-            with open('slack-channel-summary.js', 'r', encoding='utf-8') as f:
-                channel_summary_script = f.read().strip()
-                # Ensure script ends with a semicolon
-                if not channel_summary_script.endswith(';'):
-                    channel_summary_script += ';'
+        # if os.path.exists('slack-channel-summary.js'):
+        #     with open('slack-channel-summary.js', 'r', encoding='utf-8') as f:
+        #         channel_summary_script = f.read().strip()
+        #         # Ensure script ends with a semicolon
+        #         if not channel_summary_script.endswith(';'):
+        #             channel_summary_script += ';'
 
         # Ensure config script ends properly
         config_script = config_script.strip()
@@ -423,6 +424,7 @@ def inject_scripts(injection_file, config_path, *script_paths):
             content = content.rstrip() + ';\n'
 
         # Inject scripts with proper separation
+        # NOTE: Channel summary is temporarily disabled due to syntax errors
         injection = f"""
 ;
 // === SLACKPOLISH INJECTION START ===
@@ -437,11 +439,47 @@ def inject_scripts(injection_file, config_path, *script_paths):
 {settings_script}
 
 // === SLACK-CHANNEL-SUMMARY.JS ===
-{channel_summary_script}
+// TEMPORARILY DISABLED - causes syntax errors when injected
+// Will be fixed in future version
+// {channel_summary_script}
 // === SLACKPOLISH INJECTION END ===
 """
 
-        content += injection
+        # Find the closing IIFE pattern before the sourcemap comment
+        # The file structure is: (()=>{ ... })();\n\n//# sourceMappingURL=...
+        # We need to inject BEFORE the })(); that closes the main IIFE
+        #
+        # Strategy: The sourcemap comment is at the very end, and right before it
+        # is the closing })(); of Slack's main IIFE. We'll inject right before that.
+        sourcemap_marker = "//# sourceMappingURL="
+
+        if sourcemap_marker in content:
+            # Find the position of the sourcemap comment
+            sourcemap_pos = content.rfind(sourcemap_marker)
+
+            # Get the content before the sourcemap
+            before_sourcemap = content[:sourcemap_pos]
+
+            # The pattern is: })();\n\n//# sourceMappingURL=
+            # So we need to find the last })(); before the sourcemap
+            # We'll look for })(); followed by whitespace (newlines) and then the sourcemap
+
+            # Strip trailing whitespace from before_sourcemap to find the actual last code
+            before_sourcemap_stripped = before_sourcemap.rstrip()
+
+            # Check if it ends with })();
+            if before_sourcemap_stripped.endswith("})();"):
+                # Inject AFTER the })(); to avoid breaking the minified JavaScript line
+                # The injection will be between the closing IIFE and the sourcemap comment
+                # Preserve the original whitespace between })(); and sourcemap
+                whitespace_before_sourcemap = before_sourcemap[len(before_sourcemap_stripped):]
+                content = before_sourcemap_stripped + "\n" + injection + whitespace_before_sourcemap + content[sourcemap_pos:]
+            else:
+                # Fallback: inject before sourcemap if we can't find the expected pattern
+                content = content[:sourcemap_pos] + injection + "\n" + content[sourcemap_pos:]
+        else:
+            # No sourcemap, append at the end (old behavior)
+            content += injection
 
         # Write back
         with open(injection_file, 'w', encoding='utf-8') as f:

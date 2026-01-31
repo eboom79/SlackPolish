@@ -1,4 +1,3 @@
-// === SLACKPOLISH INJECTION START ===
 // SlackPolish - Text Improvement for Slack
 // Simple, focused text polishing with Ctrl+Shift hotkey
 
@@ -4102,4 +4101,3 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
     init();
 
 })();
-// === SLACKPOLISH INJECTION END ===

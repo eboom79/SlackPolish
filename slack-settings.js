@@ -1,4 +1,3 @@
-// === SLACK TEXT IMPROVER INJECTION START ===
 // SlackPolish Settings - Independent Settings Management
 // This script handles the settings interface separately from the main text improver
 
@@ -649,4 +648,3 @@
     }
 
 })();
-// === SLACK TEXT IMPROVER INJECTION END ===

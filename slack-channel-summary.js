@@ -1,4 +1,3 @@
-// === SLACK TEXT IMPROVER INJECTION START ===
 // SlackPolish Channel Summary - Independent Channel Summary Management
 // This script handles the channel summary interface separately from the main text improver
 
@@ -1594,4 +1593,3 @@ Please provide your summary now:`;
     }
 
 })();
-// === SLACK TEXT IMPROVER INJECTION END ===
