@@ -37,6 +37,7 @@ jobs:
         echo "Checking for required macOS runtime files..."
         for file in \
           slack-text-improver.js \
+          slack-channel-summary.js \
           slack-settings.js \
           slack-config.js \
           logo-data.js \
@@ -68,6 +69,7 @@ jobs:
         PKG_DIR="SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
 
         cp slack-text-improver.js "$PKG_DIR/"
+        cp slack-channel-summary.js "$PKG_DIR/"
         cp slack-settings.js "$PKG_DIR/"
         cp slack-config.js "$PKG_DIR/"
         cp logo-data.js "$PKG_DIR/"

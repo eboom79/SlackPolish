@@ -71,12 +71,7 @@ The runtime payload currently loads:
 - `logo-data.js`
 - `slack-text-improver.js`
 - `slack-settings.js`
-
-It does not yet include a dedicated macOS runtime strategy for:
-
 - `slack-channel-summary.js`
-
-That can be added later once the page-target attachment path is proven stable.
 
 ## Operational model
 
@@ -96,7 +91,6 @@ What is already validated:
 - no ASAR repack is required
 - Slack exposes usable DevTools page targets in runtime-launch mode
 - SlackPolish can be injected into the real workspace page
-- text improvement and settings work through this launcher path
-
-Current limitation:
-- `slack-channel-summary.js` is still not part of the macOS runtime payload
+- text improvement works through this launcher path
+- settings work through this launcher path
+- channel summary works through this launcher path

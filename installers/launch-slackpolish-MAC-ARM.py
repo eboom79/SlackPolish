@@ -93,6 +93,7 @@ def build_runtime_payload():
         ("logo-data.js", "logo"),
         ("slack-text-improver.js", "text improver"),
         ("slack-settings.js", "settings"),
+        ("slack-channel-summary.js", "channel summary"),
     ]
 
     missing = [name for name, _ in file_map if not (SCRIPT_DIR / name).exists()]

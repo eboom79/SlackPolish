@@ -1,8 +1,8 @@
 {
     "major": 1,
     "minor": 4,
-    "build": 1,
-    "version_string": "1.4.1",
-    "description": "macOS launcher hotfix for runtime support",
+    "build": 2,
+    "version_string": "1.4.2",
+    "description": "macOS channel summary support via runtime launcher",
     "date": "2026-04-08"
 }

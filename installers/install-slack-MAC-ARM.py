@@ -34,6 +34,7 @@ RUNTIME_FILES = [
     "logo-data.js",
     "slack-text-improver.js",
     "slack-settings.js",
+    "slack-channel-summary.js",
     "docs/MACOS-RUNTIME-LAUNCHER.md",
 ]
 

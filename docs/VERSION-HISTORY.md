@@ -2,12 +2,13 @@
 
 ## 🎯 Current Stable Version
 
-**v1.4.1 - macOS Launcher Hotfix**  
+**v1.4.2 - macOS Channel Summary Support**  
 **Release Date:** April 8, 2026  
 **Status:** ✅ **PRODUCTION READY**
 
 ### Key Features:
 - 🍎 New macOS Apple Silicon support via runtime launcher
+- 📊 macOS channel summary support via runtime injection
 - 🐧 Linux support remains available
 - 🚫 No Slack app bundle mutation required on macOS
 - 🖥️ `SlackPolish.app` Desktop symlink to the runtime app bundle
@@ -20,6 +21,16 @@
 ---
 
 ## 📋 Version History (Newest to Oldest)
+
+### **v1.4.2 - macOS Channel Summary Support**
+**Date:** April 8, 2026  
+**Status:** ✅ Production Ready
+
+- Added `slack-channel-summary.js` to the macOS runtime payload
+- Added `slack-channel-summary.js` to the macOS release package
+- Updated macOS runtime documentation to reflect summary support
+- Kept the working Desktop symlink launcher model introduced in `v1.4.1`
+- Kept the runtime-based macOS architecture without modifying `Slack.app`
 
 ### **v1.4.1 - macOS Launcher Hotfix**
 **Date:** April 8, 2026  
