@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.4.0",
-    BUILD: 0,
+    VERSION: "1.4.1",
+    BUILD: 1,
     BUILD_DATE: "2026-04-08",
-    DESCRIPTION: "New macOS ARM support via runtime launcher",
+    DESCRIPTION: "macOS launcher hotfix for runtime support",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)

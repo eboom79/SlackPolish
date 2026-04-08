@@ -48,6 +48,10 @@ def get_runtime_root():
     return Path.home() / "Library" / "Application Support" / "SlackPolish Runtime" / "mac-arm-runtime"
 
 
+def get_runtime_app_path():
+    return get_runtime_root() / "SlackPolish.app"
+
+
 def get_launcher_paths():
     desktop = Path.home() / "Desktop"
     return [
@@ -97,9 +101,9 @@ def terminate_running_launchers():
 
 
 def remove_path(path):
-    if not path.exists():
+    if not path.exists() and not path.is_symlink():
         return False
-    if path.is_dir():
+    if path.is_dir() and not path.is_symlink():
         shutil.rmtree(path)
     else:
         path.unlink()
@@ -136,6 +140,10 @@ def main():
         remove_empty_parents(runtime_root.parent, Path.home())
     else:
         print_warning(f"Runtime directory not found: {runtime_root}")
+
+    runtime_app = get_runtime_app_path()
+    if remove_path(runtime_app):
+        print_success(f"Removed runtime app: {runtime_app}")
 
     if args.keep_launchers:
         print_info("Keeping Desktop launcher files as requested")

@@ -2,7 +2,7 @@
 
 ## 🎯 Current Stable Version
 
-**v1.4.0 - New macOS ARM Support via Runtime Launcher**  
+**v1.4.1 - macOS Launcher Hotfix**  
 **Release Date:** April 8, 2026  
 **Status:** ✅ **PRODUCTION READY**
 
@@ -10,7 +10,7 @@
 - 🍎 New macOS Apple Silicon support via runtime launcher
 - 🐧 Linux support remains available
 - 🚫 No Slack app bundle mutation required on macOS
-- 🖥️ Smart `SlackPolish.app` launcher for attach-or-launch behavior
+- 🖥️ `SlackPolish.app` Desktop symlink to the runtime app bundle
 - 🌍 8 languages: English, Spanish, French, German, Hebrew, Chinese, Hindi, Bulgarian
 - 🎨 5 styles: Professional, Casual, Concise, Grammar Fix, Translate Only
 - ✨ Personal Polish feature for custom style preferences
@@ -20,6 +20,16 @@
 ---
 
 ## 📋 Version History (Newest to Oldest)
+
+### **v1.4.1 - macOS Launcher Hotfix**
+**Date:** April 8, 2026  
+**Status:** ✅ Production Ready
+
+- Fixed the macOS Desktop launcher path shipped in `v1.4.0`
+- `SlackPolish.app` is now exposed on the Desktop as a symlink to the real runtime app bundle
+- Added single-instance protection for the macOS runtime launcher
+- Fixed macOS uninstall cleanup so Desktop symlinks are removed correctly
+- Kept the runtime-based macOS architecture without modifying `Slack.app`
 
 ### **v1.4.0 - New macOS ARM Support**
 **Date:** April 8, 2026  

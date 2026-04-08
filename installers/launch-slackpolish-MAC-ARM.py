@@ -12,6 +12,7 @@ The launcher is intended to remain running while Slack is open.
 
 import argparse
 import base64
+import fcntl
 import hashlib
 import json
 import os
@@ -35,6 +36,7 @@ RESET = "\033[0m"
 
 VERBOSE = False
 SCRIPT_DIR = Path(__file__).resolve().parent
+LOCK_PATH = Path.home() / "Library" / "Application Support" / "SlackPolish Runtime" / "mac-arm-runtime" / "launcher.lock"
 
 
 def print_header(text):
@@ -331,10 +333,12 @@ class SlackPolishMacLauncher:
         self.runtime_payload = build_runtime_payload()
         self.payload_hash = hashlib.sha256(self.runtime_payload.encode("utf-8")).hexdigest()[:12]
         self.sessions = {}
+        self.lock_handle = None
 
     def run(self):
         print_header("🍎 SlackPolish Runtime Launcher for macOS ARM")
         print_success(f"Runtime payload prepared ({self.payload_hash})")
+        self._acquire_single_instance_lock()
 
         if self.relaunch:
             self._quit_slack()
@@ -360,6 +364,31 @@ class SlackPolishMacLauncher:
 
         for session in self.sessions.values():
             session.close()
+        self._release_single_instance_lock()
+
+    def _acquire_single_instance_lock(self):
+        LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+        self.lock_handle = open(LOCK_PATH, "a+", encoding="utf-8")
+        try:
+            fcntl.flock(self.lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise RuntimeError("SlackPolish is already running")
+
+        self.lock_handle.seek(0)
+        self.lock_handle.truncate()
+        self.lock_handle.write(str(os.getpid()))
+        self.lock_handle.flush()
+
+    def _release_single_instance_lock(self):
+        if not self.lock_handle:
+            return
+        try:
+            self.lock_handle.seek(0)
+            self.lock_handle.truncate()
+            fcntl.flock(self.lock_handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            self.lock_handle.close()
+            self.lock_handle = None
 
     def _quit_slack(self):
         subprocess.run(["pkill", "-x", "Slack"], check=False)

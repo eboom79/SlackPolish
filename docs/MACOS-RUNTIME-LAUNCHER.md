@@ -83,6 +83,8 @@ That can be added later once the page-target attachment path is proven stable.
 - The launcher is intended to remain running while Slack is open.
 - Closing the launcher stops future target attachment.
 - Restarting Slack normally without the launcher will run Slack without SlackPolish.
+- The installed `SlackPolish.app` should be a Desktop symlink to the real app bundle stored under SlackPolish Runtime.
+- The `.command` launchers remain available as fallback entry points.
 
 ## Status
 

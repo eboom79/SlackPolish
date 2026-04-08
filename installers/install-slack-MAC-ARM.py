@@ -8,6 +8,7 @@ Application Support directory and creates convenient `.command` launchers.
 """
 
 import argparse
+import json
 import os
 import plistlib
 import shutil
@@ -114,6 +115,10 @@ def get_desktop_launch_app_path():
     return Path.home() / "Desktop" / "SlackPolish Launch.app"
 
 
+def get_runtime_app_path():
+    return get_runtime_root() / "SlackPolish.app"
+
+
 def ensure_required_files():
     missing = [str(REPO_ROOT / rel) for rel in RUNTIME_FILES if not (REPO_ROOT / rel).exists()]
     if missing:
@@ -187,71 +192,95 @@ def apply_custom_finder_icon(target_path, png_path):
         return False
 
 
-def write_app_wrapper(app_path, runtime_dir, attach_only=False):
+def build_app_shell_command(runtime_dir):
+    launcher_path = runtime_dir / "launch-slackpolish-MAC-ARM.py"
+    return (
+        f"cd {shell_quote(str(runtime_dir))} && "
+        "if pgrep -x Slack >/dev/null 2>&1; then "
+        f"nohup python3 {shell_quote(str(launcher_path))} --attach-only --launch-mode open -v >/dev/null 2>&1 & "
+        "else "
+        f"nohup python3 {shell_quote(str(launcher_path))} --relaunch --launch-mode open -v >/dev/null 2>&1 & "
+        "fi"
+    )
+
+
+def json_string_literal(value):
+    return json.dumps(value)
+
+
+def write_jxa_app(app_path, shell_command):
     if app_path.exists():
         shutil.rmtree(app_path)
 
+    jxa_source = "\n".join([
+        "function run() {",
+        "  var app = Application.currentApplication();",
+        "  app.includeStandardAdditions = true;",
+        f'  return app.doShellScript({json_string_literal("/bin/zsh -lc " + shell_command)});',
+        "}",
+        "",
+    ])
+
+    source_path = app_path.with_suffix(".js")
+    source_path.write_text(jxa_source, encoding="utf-8")
+    try:
+        subprocess.run(
+            ["/usr/bin/osacompile", "-l", "JavaScript", "-o", str(app_path), str(source_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    finally:
+        if source_path.exists():
+            source_path.unlink()
+
+
+def write_app_wrapper(app_path, runtime_dir):
+    write_jxa_app(app_path, build_app_shell_command(runtime_dir))
+
     contents = app_path / "Contents"
-    macos_dir = contents / "MacOS"
     resources_dir = contents / "Resources"
-    macos_dir.mkdir(parents=True, exist_ok=True)
     resources_dir.mkdir(parents=True, exist_ok=True)
-
-    launcher_path = runtime_dir / "launch-slackpolish-MAC-ARM.py"
-    args = ["--launch-mode", "open", "-v"]
-    bundle_name = "SlackPolish"
-    if attach_only:
-        args.insert(0, "--attach-only")
-    else:
-        args.insert(0, "--relaunch")
-        bundle_name = "SlackPolish Launch"
-
-    executable = macos_dir / bundle_name
-    if attach_only:
-        script = "\n".join([
-            "#!/bin/zsh",
-            "set -e",
-            f"cd {shell_quote(str(runtime_dir))}",
-            "if pgrep -x Slack >/dev/null 2>&1; then",
-            f"  exec python3 {shell_quote(str(launcher_path))} --attach-only --launch-mode open -v",
-            "else",
-            f"  exec python3 {shell_quote(str(launcher_path))} --relaunch --launch-mode open -v",
-            "fi",
-            "",
-        ])
-    else:
-        script = "\n".join([
-            "#!/bin/zsh",
-            "set -e",
-            f"cd {shell_quote(str(runtime_dir))}",
-            f"exec python3 {shell_quote(str(launcher_path))} {' '.join(shell_quote(arg) for arg in args)}",
-            "",
-        ])
-    executable.write_text(script, encoding="utf-8")
-    executable.chmod(executable.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
     icon_path = resources_dir / "AppIcon.png"
     icon_path.write_bytes(load_app_icon_png_bytes())
 
-    plist = {
-        "CFBundleDevelopmentRegion": "en",
-        "CFBundleDisplayName": bundle_name,
-        "CFBundleExecutable": bundle_name,
+    plist_path = contents / "Info.plist"
+    with open(plist_path, "rb") as handle:
+        existing_plist = plistlib.load(handle)
+
+    existing_plist.update({
+        "CFBundleDisplayName": "SlackPolish",
         "CFBundleIconFile": "AppIcon.png",
         "CFBundleIconName": "AppIcon",
-        "CFBundleIdentifier": f"local.slackpolish.{'attach' if attach_only else 'launch'}",
-        "CFBundleInfoDictionaryVersion": "6.0",
-        "CFBundleName": bundle_name,
-        "CFBundlePackageType": "APPL",
+        "CFBundleIdentifier": "local.slackpolish.attach",
+        "CFBundleName": "SlackPolish",
         "CFBundleShortVersionString": "1.0",
         "CFBundleVersion": "1",
         "LSUIElement": False,
         "NSHighResolutionCapable": True,
-    }
-    with open(contents / "Info.plist", "wb") as handle:
-        plistlib.dump(plist, handle)
+    })
+
+    with open(plist_path, "wb") as handle:
+        plistlib.dump(existing_plist, handle)
 
     apply_custom_finder_icon(str(app_path), str(icon_path))
+
+
+def create_desktop_app_link():
+    desktop_app = get_desktop_app_path()
+    runtime_app = get_runtime_app_path()
+
+    legacy_alias = desktop_app.parent / f"{desktop_app.name} alias"
+    for path in (desktop_app, legacy_alias):
+        if path.exists() or path.is_symlink():
+            if path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+
+    desktop_app.symlink_to(runtime_app)
+    print_success(f"Desktop app link created: {desktop_app} -> {runtime_app}")
 
 
 def shell_quote(value):
@@ -266,7 +295,8 @@ def install_runtime():
     copy_runtime_files(current_dir)
     write_command_file(get_desktop_launcher_path(), current_dir, attach_only=False)
     write_command_file(get_desktop_attach_path(), current_dir, attach_only=True)
-    write_app_wrapper(get_desktop_app_path(), current_dir, attach_only=True)
+    write_app_wrapper(get_runtime_app_path(), current_dir)
+    create_desktop_app_link()
 
     legacy_launch_app = get_desktop_launch_app_path()
     if legacy_launch_app.exists():
@@ -279,7 +309,7 @@ def install_runtime():
     print_success(f"Runtime installed to: {current_dir}")
     print_success(f"Desktop launcher created: {get_desktop_launcher_path()}")
     print_success(f"Desktop attach launcher created: {get_desktop_attach_path()}")
-    print_success(f"Desktop app created: {get_desktop_app_path()}")
+    print_success(f"Runtime app created: {get_runtime_app_path()}")
     return current_dir
 
 
@@ -322,8 +352,8 @@ def main():
     print("")
     print("Alternative launchers:")
     print(f"  Smart attach-or-launch app: {get_desktop_app_path()}")
-    print(f"  Command launcher: {get_desktop_launcher_path()}")
-    print(f"  Command attach: {get_desktop_attach_path()}")
+    print(f"  Launch Slack with SlackPolish: {get_desktop_launcher_path()}")
+    print(f"  Attach to already-running Slack: {get_desktop_attach_path()}")
     return 0
 
 
