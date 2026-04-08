@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.3.1",
-    BUILD: 63,
-    BUILD_DATE: "2026-01-31",
-    DESCRIPTION: "Full feature support for Slack v4.47.69 - All features working including channel summary",
+    VERSION: "1.4.0",
+    BUILD: 0,
+    BUILD_DATE: "2026-04-08",
+    DESCRIPTION: "New macOS ARM support via runtime launcher",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)

@@ -2,17 +2,17 @@
 
 ## 🎯 Current Stable Version
 
-**v8.9.8 - External Logo System & Complete Test Coverage**  
-**Release Date:** July 17, 2025  
+**v1.4.0 - New macOS ARM Support via Runtime Launcher**  
+**Release Date:** April 8, 2026  
 **Status:** ✅ **PRODUCTION READY**
 
 ### Key Features:
-- 🎨 External logo system with clean code organization
-- ✅ 100% test coverage across 11 test categories
-- 🔧 Cross-platform installer support (Linux, macOS, Windows)
+- 🍎 New macOS Apple Silicon support via runtime launcher
+- 🐧 Linux support remains available
+- 🚫 No Slack app bundle mutation required on macOS
+- 🖥️ Smart `SlackPolish.app` launcher for attach-or-launch behavior
 - 🌍 8 languages: English, Spanish, French, German, Hebrew, Chinese, Hindi, Bulgarian
 - 🎨 5 styles: Professional, Casual, Concise, Grammar Fix, Translate Only
-- ⌨️ 3 hotkey options: Ctrl+Shift, Ctrl+Alt, Ctrl+Tab
 - ✨ Personal Polish feature for custom style preferences
 - 🛠️ F12 settings menu with developer mode
 - 🔐 Robust API key management and error handling
@@ -20,6 +20,17 @@
 ---
 
 ## 📋 Version History (Newest to Oldest)
+
+### **v1.4.0 - New macOS ARM Support**
+**Date:** April 8, 2026  
+**Status:** ✅ Production Ready
+
+- Added working macOS Apple Silicon support
+- Replaced the older macOS ASAR-based approach with a runtime launcher
+- Added dedicated macOS install and uninstall flows
+- Added `SlackPolish.app` as the smart Desktop entry point
+- Added a macOS package builder workflow for GitHub releases
+- Added a dedicated app icon asset for the macOS launcher
 
 ### **v8.9.8 - External Logo System & Complete Test Coverage**
 **Date:** July 17, 2025  

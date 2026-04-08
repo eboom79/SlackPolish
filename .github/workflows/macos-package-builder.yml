@@ -1,0 +1,204 @@
+name: macOS Package Builder
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to package (e.g., v1.3.2)'
+        required: true
+        default: 'v1.3.2'
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos-package:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Get version
+      id: get_version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=${GITHUB_REF#refs/tags/}
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building macOS package for version: $VERSION"
+
+    - name: Verify required files exist
+      run: |
+        echo "Checking for required macOS runtime files..."
+        for file in \
+          slack-text-improver.js \
+          slack-settings.js \
+          slack-config.js \
+          logo-data.js \
+          version.json \
+          installers/install-slack-MAC-ARM.py \
+          installers/uninstall-slack-MAC-ARM.py \
+          installers/launch-slackpolish-MAC-ARM.py \
+          docs/MACOS-RUNTIME-LAUNCHER.md \
+          "assets/logos/SlackPolish app icon.png"
+        do
+          if [ -f "$file" ]; then
+            echo "✅ Found: $file"
+          else
+            echo "❌ Missing: $file"
+            exit 1
+          fi
+        done
+
+    - name: Create package directory
+      run: |
+        PKG_DIR="SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
+        mkdir -p "$PKG_DIR/installers"
+        mkdir -p "$PKG_DIR/docs"
+        mkdir -p "$PKG_DIR/assets/logos"
+        echo "Created directory: $PKG_DIR"
+
+    - name: Copy package files
+      run: |
+        PKG_DIR="SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
+
+        cp slack-text-improver.js "$PKG_DIR/"
+        cp slack-settings.js "$PKG_DIR/"
+        cp slack-config.js "$PKG_DIR/"
+        cp logo-data.js "$PKG_DIR/"
+        cp version.json "$PKG_DIR/"
+        cp LICENSE "$PKG_DIR/"
+
+        cp installers/install-slack-MAC-ARM.py "$PKG_DIR/installers/"
+        cp installers/uninstall-slack-MAC-ARM.py "$PKG_DIR/installers/"
+        cp installers/launch-slackpolish-MAC-ARM.py "$PKG_DIR/installers/"
+
+        cp docs/MACOS-RUNTIME-LAUNCHER.md "$PKG_DIR/docs/"
+        cp "assets/logos/SlackPolish app icon.png" "$PKG_DIR/assets/logos/"
+
+        echo "✅ macOS package files copied"
+
+    - name: Create user documentation
+      run: |
+        PKG_DIR="SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
+
+        cat > "$PKG_DIR/README.md" << 'EOF'
+        # SlackPolish - macOS ARM Installation Package
+
+        SlackPolish for macOS Apple Silicon uses a runtime launcher.
+        It does not modify Slack.app.
+
+        ## Quick Installation
+
+        ```bash
+        python3 installers/install-slack-MAC-ARM.py
+        ```
+
+        ## Daily Use
+
+        After installation, use:
+
+        - `~/Desktop/SlackPolish.app`
+
+        That app will:
+        - attach to Slack if Slack is already running
+        - launch Slack with SlackPolish if Slack is not running
+
+        ## Uninstall
+
+        ```bash
+        python3 installers/uninstall-slack-MAC-ARM.py
+        ```
+
+        ## Requirements
+
+        - macOS Apple Silicon (ARM)
+        - Slack desktop application
+        - Python 3
+        - OpenAI API key
+
+        ## Support
+
+        Visit: https://github.com/eboom79/SlackPolish
+        EOF
+
+        echo "✅ README created"
+
+    - name: Create convenience scripts
+      run: |
+        PKG_DIR="SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
+
+        cat > "$PKG_DIR/install.command" << 'EOF'
+        #!/bin/zsh
+        set -e
+        cd "$(dirname "$0")"
+        python3 installers/install-slack-MAC-ARM.py "$@"
+        EOF
+
+        cat > "$PKG_DIR/uninstall.command" << 'EOF'
+        #!/bin/zsh
+        set -e
+        cd "$(dirname "$0")"
+        python3 installers/uninstall-slack-MAC-ARM.py "$@"
+        EOF
+
+        chmod +x "$PKG_DIR/install.command"
+        chmod +x "$PKG_DIR/uninstall.command"
+
+        echo "✅ Convenience scripts created"
+
+    - name: Create package info
+      run: |
+        PKG_DIR="SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
+
+        cat > "$PKG_DIR/PACKAGE-INFO.txt" << EOF
+        SlackPolish macOS ARM Package
+        ============================
+
+        Version: ${{ steps.get_version.outputs.version }}
+        Platform: macOS Apple Silicon
+        Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+
+        Installation: ./install.command
+        Uninstallation: ./uninstall.command
+
+        Repository: https://github.com/eboom79/SlackPolish
+        EOF
+
+        echo "✅ Package info created"
+
+    - name: List package contents
+      run: |
+        PKG_DIR="SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
+        echo "📦 Package contents:"
+        find "$PKG_DIR" -maxdepth 3 -print | sort
+
+    - name: Create compressed package
+      run: |
+        PKG_DIR="SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
+        zip -r "${PKG_DIR}.zip" "$PKG_DIR/"
+        echo "📦 Package created:"
+        ls -la "${PKG_DIR}.zip"
+        echo "Size: $(du -h "${PKG_DIR}.zip" | cut -f1)"
+
+    - name: Upload macOS package as artifact
+      uses: actions/upload-artifact@v4
+      if: github.event_name == 'workflow_dispatch'
+      with:
+        name: SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}
+        path: SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}.zip
+        retention-days: 30
+
+    - name: Upload package to release
+      uses: softprops/action-gh-release@v1
+      if: github.event_name == 'release'
+      with:
+        tag_name: ${{ steps.get_version.outputs.version }}
+        files: SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

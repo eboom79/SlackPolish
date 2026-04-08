@@ -13,7 +13,7 @@ Transform your messages instantly with professional polish, casual tone, grammar
 - [🚀 Features](#-features)
 - [� Project Structure](#-project-structure)
 - [📋 Pre-Installation Requirements](#-pre-installation-requirements)
-- [🛠️ Installation Instructions (Linux Only)](#️-installation-instructions-linux-only)
+- [🛠️ Installation Instructions](#️-installation-instructions)
 - [🚫 Platform Support Status](#-platform-support-status)
 - [🗑️ Uninstallation](#️-uninstallation)
 - [🖥️ System Compatibility](#️-system-compatibility)
@@ -21,7 +21,7 @@ Transform your messages instantly with professional polish, casual tone, grammar
 
 ## 🎯 Product Overview
 
-**SlackPolish** is an internal Redis Enterprise team tool that seamlessly integrates with Slack Desktop to improve written communication using OpenAI's advanced language models. This productivity enhancement tool is currently **Linux-focused** and optimized for Redis Enterprise team members using Linux environments.
+**SlackPolish** is an internal Redis Enterprise team tool that seamlessly integrates with Slack Desktop to improve written communication using OpenAI's advanced language models. It now supports Linux and macOS Apple Silicon, with the new macOS support delivered through a runtime launcher that leaves `Slack.app` untouched.
 
 ### **How It Works:**
 
@@ -107,20 +107,50 @@ Base64-encoded SlackPolish logo data for clean code organization. Custom logo ap
 ### **All Operating Systems Need:**
 1. ✅ **Slack Desktop App** - Must be installed and working
 2. ✅ **Python 3** - Version 3.6 or higher
-3. ✅ **Node.js & npm** - For the `asar` tool (Slack app modification)
+3. ✅ **Node.js & npm** - Required for the Linux installer
 4. ✅ **OpenAI API Key** - Required for AI text improvement and channel summary features
    - Get your API key from: [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
    - **Note**: You'll be prompted to enter this on first use - no need to configure it during installation
-5. ✅ **Administrator Privileges** - Needed to modify Slack installation files
+5. ✅ **Administrator Privileges** - Needed for the Linux installer
 
 
 
 
-## 🛠️ Installation Instructions (Linux Only)
+## 🛠️ Installation Instructions
 
+### **🍎 macOS ARM (Apple Silicon)**
 
+**New in this release:** SlackPolish now supports macOS Apple Silicon.
 
+SlackPolish on macOS uses a runtime launcher. It does **not** modify
+`Slack.app`, `app-arm64.asar`, or `Info.plist`.
 
+### **Step 1: Install the macOS runtime launcher**
+```bash
+python3 installers/install-slack-MAC-ARM.py
+```
+
+This creates:
+- `~/Library/Application Support/SlackPolish Runtime/mac-arm-runtime/current`
+- `~/Desktop/SlackPolish.command`
+- `~/Desktop/SlackPolish-Attach.command`
+
+### **Step 2: Launch SlackPolish on macOS**
+```bash
+~/Desktop/SlackPolish.command
+```
+
+If Slack is already open:
+
+```bash
+~/Desktop/SlackPolish-Attach.command
+```
+
+### **Step 3: Verify on macOS**
+1. **Wait for Slack to open to your channels**
+2. **Open any message input field**
+3. **Press Ctrl+Shift** - Should trigger text improvement
+4. **Press F12** - Should open settings
 
 ### **🐧 Linux Requirements**
 
@@ -177,12 +207,13 @@ sudo python3 installers/install-slack-LINUX-X64.py
 
 ### **✅ Supported Platforms**
 - **🐧 Linux x64** - Fully tested and supported (Ubuntu, Debian, CentOS, etc.)
+- **🍎 macOS ARM** - Newly supported via runtime launcher on Apple Silicon
 
 ### **❌ Currently Unsupported Platforms**
-- **🍎 macOS** - Not supported at this time
 - **🪟 Windows** - Not supported at this time
 
-**Note**: SlackPolish is currently focused on Linux environments. macOS and Windows support may be added in future releases based on user demand.
+**Note**: the new macOS support uses a runtime launcher and leaves `Slack.app`
+untouched. Windows support has not been implemented yet.
 
 ### **�🔧 Troubleshooting Installation**
 
@@ -203,23 +234,21 @@ The installer automatically detects Slack in these locations:
 
 #### **macOS-Specific Troubleshooting:**
 
-**For Apple Silicon Macs (M1/M2/M3) or Slack 4.44.65+:**
+**Install the macOS runtime launcher with verbose output:**
 ```bash
-# Use the Mac-specific installer with verbose output
-sudo python3 install-slack-MAC-index-js -v
+python3 installers/install-slack-MAC-ARM.py -v
+```
 
-# If Slack path detection fails, specify manually
-sudo python3 install-slack-MAC-index-js --slack-path "/Applications/Slack.app"
-
-# If file validation fails, force installation
-sudo python3 install-slack-MAC-index-js --force
+**Launch SlackPolish with verbose runtime logs:**
+```bash
+python3 installers/launch-slackpolish-MAC-ARM.py --relaunch --launch-mode open -v
 ```
 
 **Common macOS Issues:**
-- **"No preload files found"** → Use `install-slack-MAC-index-js` (handles newer Slack versions with index.js)
-- **"Permission denied"** → Make sure to use `sudo`
-- **"asar tool not found"** → Install with `brew install node` then `npm install -g asar`
-- **Apple Silicon issues** → The Mac installer has ARM-specific detection and paths
+- **Slack opens without SlackPolish** → Launch Slack from `~/Desktop/SlackPolish.command`
+- **Slack is already open** → Use `~/Desktop/SlackPolish-Attach.command`
+- **Desktop launcher is missing** → Re-run `python3 installers/install-slack-MAC-ARM.py`
+- **Python is missing** → Install Python 3 and retry
 
 #### **If Slack installation is not found (Windows):**
 The installer checks these locations automatically:
@@ -243,14 +272,12 @@ The installer checks these locations automatically:
    ```
 
 #### **If permission errors occur:**
-- **Linux/macOS:** Ensure you're using `sudo`
+- **Linux:** Ensure you're using `sudo`
 - **Windows:** Run Command Prompt as Administrator
 
 ## 🗑️ Uninstallation
 
 ### **Complete Removal (All Platforms)**
-
-The installer automatically creates a backup of the original Slack files. To uninstall:
 
 #### **🐧 Linux Uninstallation**
 ```bash
@@ -266,15 +293,11 @@ ls -la app.asar*
 
 #### **🍎 macOS Uninstallation**
 ```bash
-# Navigate to Slack resources directory
-cd "/Applications/Slack.app/Contents/Resources"
-
-# Restore original file (requires sudo)
-sudo cp app.asar.backup app.asar
-
-# Verify restoration
-ls -la app.asar*
+python3 installers/uninstall-slack-MAC-ARM.py
 ```
+
+This removes the SlackPolish runtime files and Desktop launchers. It does not
+modify `Slack.app`.
 
 #### **🪟 Windows Uninstallation**
 **Run Command Prompt as Administrator**, then:
@@ -534,10 +557,10 @@ After:  "I need to finish this. Then I will start that. Finally I will rest"
 - 📱 **Compact UI** - Responsive settings menu that fits on laptop screens
 - 💾 **Persistent Settings** - Auto-save with corruption recovery and emergency reset (Ctrl+Shift+Alt+R)
 
-**Platform-Specific Installers with Safety Protection:**
+**Platform-Specific Installers:**
 - 🐧 **Linux x64** - ✅ Fully tested - Ubuntu, Debian, CentOS support with snap package detection
-- 🍎 **macOS ARM** - ⚠️ Untested with safety warnings - Apple Silicon (M1/M2/M3) with Homebrew integration
-- 🪟 **Windows x64** - ⚠️ Untested with safety warnings - Windows 10/11 with Administrator guidance
+- 🍎 **macOS ARM** - ✅ Supported via runtime launcher on Apple Silicon (M1/M2/M3)
+- 🪟 **Windows x64** - ⚠️ Not yet implemented
 
 **Safety Features:**
 - 🛡️ **Interactive Warnings** - Untested installers require explicit user confirmation (y/N)
@@ -567,16 +590,16 @@ Output: "That sounds perfect. I'll adjust my calendar for the 3 PM meeting."
 
 ### **v8.9.5 - Platform-Specific Installers**
 **Date:** July 17, 2025 - 14:00:00
-**Status:** ✅ **PRODUCTION READY WITH PLATFORM-OPTIMIZED INSTALLERS**
+**Status:** Historical entry. The macOS details below describe the older ASAR-based path and are no longer the recommended macOS approach.
 
 **Major Features Added:**
 - 🎯 **Platform-Specific Installers** - Dedicated installers for each platform and architecture
-- 🍎 **macOS ARM Installer** - `install-slack-MAC-ARM.py` optimized for Apple Silicon (M1/M2/M3)
+- 🍎 **macOS ARM Installer** - superseded by the runtime launcher flow
 - 🐧 **Linux x64 Installer** - `install-slack-LINUX-X64.py` optimized for Linux distributions
 - 🪟 **Windows x64 Installer** - `install-slack-WINDOWS-X64.py` optimized for Windows 10/11
 
 **Platform Optimizations:**
-- **macOS ARM**: Homebrew paths, ARM-specific Node.js detection, index.js support for newer Slack versions
+- **macOS ARM**: historical ASAR-based approach, now replaced by the runtime launcher
 - **Linux x64**: Distribution detection, snap package support, comprehensive path searching
 - **Windows x64**: Windows-specific paths, .cmd file handling, Administrator privilege guidance
 
@@ -589,24 +612,24 @@ Output: "That sounds perfect. I'll adjust my calendar for the 3 PM meeting."
 
 **🛠️ Quick Installation:**
 
-⚠️ **IMPORTANT TESTING STATUS:**
+Historical status at the time of this release:
 - ✅ **Linux x64**: Fully tested and verified on Ubuntu/Debian systems
-- ⚠️ **macOS ARM**: Not tested - may break your Slack installation
+- ⚠️ **macOS ARM**: legacy ASAR-based path, now deprecated
 - ⚠️ **Windows x64**: Not tested - may break your Slack installation
 
 ```bash
 # Linux x64 (Ubuntu/Debian/CentOS) - TESTED ✅
 sudo python3 install-slack-LINUX-X64.py
 
-# macOS Apple Silicon (M1/M2/M3) - UNTESTED ⚠️
-sudo python3 install-slack-MAC-ARM.py
+# macOS Apple Silicon (M1/M2/M3) - CURRENT RUNTIME PATH
+python3 installers/install-slack-MAC-ARM.py
 
 # Windows x64 (Run as Administrator) - UNTESTED ⚠️
 python install-slack-WINDOWS-X64.py
 ```
 
-**⚠️ Risk Warning for macOS and Windows:**
-The macOS and Windows installers have not been tested and may damage your Slack installation. Only the Linux installer has been verified to work safely. Use macOS/Windows installers at your own risk and ensure you have backups.
+**macOS Note:**
+The current macOS installer does not modify Slack.app. It installs a runtime launcher and supporting files in the user's home directory.
 
 **⚙️ Settings & Features Access:**
 - Press **F12** in Slack to open settings menu (with version display)
