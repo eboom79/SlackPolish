@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.4.2",
-    BUILD: 2,
-    BUILD_DATE: "2026-04-08",
-    DESCRIPTION: "macOS channel summary support via runtime launcher",
+    VERSION: "1.5.0",
+    BUILD: 0,
+    BUILD_DATE: "2026-04-09",
+    DESCRIPTION: "English language variants and improved macOS launcher path detection",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
