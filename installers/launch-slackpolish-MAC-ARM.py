@@ -36,6 +36,7 @@ RESET = "\033[0m"
 
 VERBOSE = False
 SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
 LOCK_PATH = Path.home() / "Library" / "Application Support" / "SlackPolish Runtime" / "mac-arm-runtime" / "launcher.lock"
 
 
@@ -96,13 +97,13 @@ def build_runtime_payload():
         ("slack-channel-summary.js", "channel summary"),
     ]
 
-    missing = [name for name, _ in file_map if not (SCRIPT_DIR / name).exists()]
+    missing = [name for name, _ in file_map if not (REPO_ROOT / name).exists()]
     if missing:
         raise FileNotFoundError(f"Missing required SlackPolish files: {', '.join(missing)}")
 
     parts = []
     for path, label in file_map:
-        with open(SCRIPT_DIR / path, "r", encoding="utf-8") as handle:
+        with open(REPO_ROOT / path, "r", encoding="utf-8") as handle:
             script = handle.read().strip()
         if not script.endswith(";"):
             script += ";"
