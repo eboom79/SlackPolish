@@ -9,7 +9,7 @@
         OPENAI_API_KEY: '',
         MODEL: 'gpt-4-turbo',
         STYLE: 'professional',
-        LANGUAGE: 'English',
+        LANGUAGE: 'English (USA)',
         CUSTOM_INSTRUCTIONS: '',
         HOTKEY: 'Ctrl+Shift',
         DEBUG_MODE: false,
@@ -106,7 +106,8 @@
                 if (settings.language) {
                     // Map language codes to display names
                     const languageMap = {
-                        'ENGLISH': 'English',
+                        'ENGLISH_USA': 'English (USA)',
+                        'ENGLISH_UK': 'English (UK)',
                         'SPANISH': 'Spanish',
                         'FRENCH': 'French',
                         'GERMAN': 'German',
@@ -1549,8 +1550,28 @@ Recent conversation context (last ${contextMessages.length} messages):
             let styleInstruction = `please improve ONLY the following message to be more ${CONFIG.STYLE} in ${CONFIG.LANGUAGE}`;
 
             if (window.SLACKPOLISH_CONFIG && window.SLACKPOLISH_CONFIG.PROMPTS && window.SLACKPOLISH_CONFIG.PROMPTS.STYLES) {
-                const detailedPrompt = window.SLACKPOLISH_CONFIG.PROMPTS.STYLES[CONFIG.STYLE];
+                let detailedPrompt = window.SLACKPOLISH_CONFIG.PROMPTS.STYLES[CONFIG.STYLE];
                 if (detailedPrompt) {
+                    // For TONE_POLISH, add language-specific instructions
+                    if (CONFIG.STYLE === 'TONE_POLISH') {
+                        if (CONFIG.LANGUAGE === 'English (USA)') {
+                            detailedPrompt = detailedPrompt.replace(
+                                'sound like a native English speaker',
+                                'sound like a native American English speaker'
+                            ).replace(
+                                'Use natural English expressions',
+                                'Use natural American English expressions'
+                            );
+                        } else if (CONFIG.LANGUAGE === 'English (UK)') {
+                            detailedPrompt = detailedPrompt.replace(
+                                'sound like a native English speaker',
+                                'sound like a native British English speaker'
+                            ).replace(
+                                'Use natural English expressions',
+                                'Use natural British English expressions'
+                            );
+                        }
+                    }
                     styleInstruction = detailedPrompt;
                 }
             }

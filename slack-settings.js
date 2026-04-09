@@ -122,7 +122,8 @@
             }
             // Fallback options
             return {
-                ENGLISH: { name: 'English', flag: '🇺🇸', displayName: 'English' },
+                ENGLISH_USA: { name: 'English (USA)', flag: '🇺🇸', displayName: 'English (USA)' },
+                ENGLISH_UK: { name: 'English (UK)', flag: '🇬🇧', displayName: 'English (UK)' },
                 SPANISH: { name: 'Spanish', flag: '🇪🇸', displayName: 'Spanish' },
                 FRENCH: { name: 'French', flag: '🇫🇷', displayName: 'French' },
                 GERMAN: { name: 'German', flag: '🇩🇪', displayName: 'German' },
