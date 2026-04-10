@@ -83,6 +83,7 @@ python3 installers/install-slack-MAC-ARM.py
 ## Backward Compatibility
 
 - Default language remains English (USA) - existing users see familiar behavior
+- Legacy `ENGLISH` config alias is preserved alongside `ENGLISH_USA` and `ENGLISH_UK` for backward compatibility
 - All existing features (text improvement, settings, channel summary) work unchanged
 - No breaking changes to API or configuration format
 
