@@ -197,11 +197,7 @@ def build_app_shell_command(runtime_dir):
     launcher_path = runtime_dir / "launch-slackpolish-MAC-ARM.py"
     return (
         f"cd {shell_quote(str(runtime_dir))} && "
-        "if pgrep -x Slack >/dev/null 2>&1; then "
-        f"nohup python3 {shell_quote(str(launcher_path))} --attach-only --launch-mode open -v >/dev/null 2>&1 & "
-        "else "
-        f"nohup python3 {shell_quote(str(launcher_path))} --relaunch --launch-mode open -v >/dev/null 2>&1 & "
-        "fi"
+        f"nohup python3 {shell_quote(str(launcher_path))} --attach-or-relaunch --launch-mode open -v >/dev/null 2>&1 & "
     )
 
 
@@ -213,11 +209,12 @@ def write_jxa_app(app_path, shell_command):
     if app_path.exists():
         shutil.rmtree(app_path)
 
+    wrapped_shell_command = "/bin/zsh -lc " + shell_quote(shell_command)
     jxa_source = "\n".join([
         "function run() {",
         "  var app = Application.currentApplication();",
         "  app.includeStandardAdditions = true;",
-        f'  return app.doShellScript({json_string_literal("/bin/zsh -lc " + shell_command)});',
+        f'  return app.doShellScript({json_string_literal(wrapped_shell_command)});',
         "}",
         "",
     ])

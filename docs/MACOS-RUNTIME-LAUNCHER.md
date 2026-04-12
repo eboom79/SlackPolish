@@ -55,6 +55,13 @@ Attach to an already-running Slack debug port without launching Slack:
 python3 installers/launch-slackpolish-MAC-ARM.py --attach-only --debug-port 9222 -v
 ```
 
+Use the smart mode that attaches when possible and relaunches Slack when the
+running Slack instance was started without the debug port:
+
+```bash
+python3 installers/launch-slackpolish-MAC-ARM.py --attach-or-relaunch --debug-port 9222 -v
+```
+
 Use a specific Slack app path:
 
 ```bash
@@ -79,6 +86,7 @@ The runtime payload currently loads:
 - Closing the launcher stops future target attachment.
 - Restarting Slack normally without the launcher will run Slack without SlackPolish.
 - The installed `SlackPolish.app` should be a Desktop symlink to the real app bundle stored under SlackPolish Runtime.
+- `SlackPolish.app` now uses smart attach-or-relaunch behavior, so it can recover when Slack is already open without SlackPolish's debug port.
 - The `.command` launchers remain available as fallback entry points.
 
 ## Status

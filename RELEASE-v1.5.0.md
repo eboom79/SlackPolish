@@ -22,6 +22,7 @@ This release introduces American English (USA) and British English (UK) as separ
 - **Smart Path Detection** - Launcher auto-detects whether running from source or runtime directory
 - **Fixed DevTools Integration** - Corrects file path resolution for macOS runtime injection
 - **Robust Fallback Logic** - Checks local directory first, falls back to repository root
+- **Smart Attach Recovery** - `SlackPolish.app` now relaunches Slack with the debug port if Slack is already open without SlackPolish attached
 
 ## Technical Changes
 

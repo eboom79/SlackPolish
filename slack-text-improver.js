@@ -1231,6 +1231,7 @@
             }
 
             this.isProcessing = true;
+            setStatusBadgeState('busy', 'SlackPolish Improving');
             utils.log('Starting text improvement...');
             utils.debug('Text improvement started', {
                 originalLength: originalText.length,
@@ -1344,6 +1345,7 @@
                 this.isProcessing = false;
                 // Hide loading indicator
                 hideLoadingIndicator();
+                setStatusBadgeState('active', 'SlackPolish Active');
                 utils.debug('Text improvement process completed', { isProcessing: this.isProcessing });
             }
         },
@@ -2383,8 +2385,127 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
         return logoImg;
     }
 
+    const STATUS_BADGE_ID = 'slackpolish-runtime-status';
+    let statusBadgeTimeout = null;
+
+    function ensureStatusBadge() {
+        if (!document.body) return null;
+
+        let badge = document.getElementById(STATUS_BADGE_ID);
+        if (badge) return badge;
+
+        badge = document.createElement('div');
+        badge.id = STATUS_BADGE_ID;
+        badge.innerHTML = `
+            <div id="slackpolish-runtime-status-dot"></div>
+            <div id="slackpolish-runtime-status-label">SlackPolish Active</div>
+        `;
+        badge.style.cssText = `
+            position: fixed;
+            left: 20px;
+            bottom: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(18, 100, 163, 0.92);
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 9999;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.22);
+            border: 1px solid rgba(255,255,255,0.18);
+            backdrop-filter: blur(10px);
+            pointer-events: none;
+            transition: opacity 0.25s ease, transform 0.25s ease, background 0.25s ease;
+            opacity: 0.95;
+        `;
+
+        const dot = badge.querySelector('#slackpolish-runtime-status-dot');
+        dot.style.cssText = `
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #8df7c8;
+            box-shadow: 0 0 0 4px rgba(141,247,200,0.18);
+            flex: 0 0 auto;
+        `;
+
+        document.body.appendChild(badge);
+        return badge;
+    }
+
+    function scheduleStatusBadgeFade() {
+        if (statusBadgeTimeout) {
+            clearTimeout(statusBadgeTimeout);
+        }
+
+        statusBadgeTimeout = setTimeout(() => {
+            const badge = document.getElementById(STATUS_BADGE_ID);
+            if (badge && badge.dataset.state === 'active') {
+                badge.style.opacity = '0.58';
+                badge.style.transform = 'translateY(2px)';
+            }
+        }, 5000);
+    }
+
+    function setStatusBadgeState(state, label) {
+        const badge = ensureStatusBadge();
+        if (!badge) return;
+
+        const dot = badge.querySelector('#slackpolish-runtime-status-dot');
+        const text = badge.querySelector('#slackpolish-runtime-status-label');
+        const stateStyles = {
+            active: {
+                background: 'rgba(18, 100, 163, 0.92)',
+                dot: '#8df7c8',
+                glow: 'rgba(141,247,200,0.18)',
+                label: label || 'SlackPolish Active'
+            },
+            busy: {
+                background: 'rgba(46, 182, 125, 0.94)',
+                dot: '#ffffff',
+                glow: 'rgba(255,255,255,0.22)',
+                label: label || 'SlackPolish Improving'
+            },
+            error: {
+                background: 'rgba(217, 48, 37, 0.94)',
+                dot: '#ffd7d4',
+                glow: 'rgba(255,215,212,0.24)',
+                label: label || 'SlackPolish Needs Attention'
+            }
+        };
+
+        const nextState = stateStyles[state] || stateStyles.active;
+        badge.dataset.state = state;
+        badge.style.background = nextState.background;
+        badge.style.opacity = '0.95';
+        badge.style.transform = 'translateY(0)';
+        dot.style.background = nextState.dot;
+        dot.style.boxShadow = `0 0 0 4px ${nextState.glow}`;
+        text.textContent = nextState.label;
+
+        window.__SLACKPOLISH_STATUS__ = {
+            active: true,
+            state,
+            label: nextState.label,
+            href: window.location.href,
+            updatedAt: new Date().toISOString()
+        };
+
+        if (state === 'active') {
+            scheduleStatusBadgeFade();
+        } else if (statusBadgeTimeout) {
+            clearTimeout(statusBadgeTimeout);
+            statusBadgeTimeout = null;
+        }
+    }
+
     // Handle API errors and show appropriate popups
     function handleApiError(error) {
+        setStatusBadgeState('error', 'SlackPolish Check API');
         // Check if it's a fetch error (network/API issues)
         if (error.message && (
             error.message.includes('401') ||
@@ -3997,10 +4118,15 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
         setupSettingsListener();
 
         // Wait for DOM to be ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', setupEventListeners);
-        } else {
+        const initializeUi = () => {
             setupEventListeners();
+            setStatusBadgeState('active', 'SlackPolish Active');
+        };
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeUi);
+        } else {
+            initializeUi();
         }
 
         utils.log('SlackPolish Text Improver initialized successfully');

@@ -105,6 +105,23 @@ class UIElementsTests {
                hasPositioning && hasLogoInIndicator && hasGradientBackground;
     }
 
+    // Test 3b: Runtime status badge
+    testRuntimeStatusBadge() {
+        const scriptPath = path.join(this.rootDir, 'slack-text-improver.js');
+        const scriptContent = fs.readFileSync(scriptPath, 'utf8');
+
+        const hasBadgeId = scriptContent.includes('slackpolish-runtime-status');
+        const hasStatusSetter = scriptContent.includes('function setStatusBadgeState');
+        const hasWindowStatus = scriptContent.includes('window.__SLACKPOLISH_STATUS__');
+        const hasActiveLabel = scriptContent.includes('SlackPolish Active');
+        const hasBusyLabel = scriptContent.includes('SlackPolish Improving');
+
+        this.log(`Runtime badge: ID: ${hasBadgeId}, Setter: ${hasStatusSetter}, Window status: ${hasWindowStatus}`);
+        this.log(`Runtime badge labels: Active: ${hasActiveLabel}, Busy: ${hasBusyLabel}`);
+
+        return hasBadgeId && hasStatusSetter && hasWindowStatus && hasActiveLabel && hasBusyLabel;
+    }
+
     // Test 4: Error handling UI
     testErrorHandlingUI() {
         const scriptPath = path.join(this.rootDir, 'slack-text-improver.js');
@@ -255,6 +272,7 @@ class UIElementsTests {
             { name: 'Settings Menu Structure', fn: () => this.testSettingsMenuStructure() },
             { name: 'API Key Popup Structure', fn: () => this.testApiKeyPopupStructure() },
             { name: 'Loading Indicator', fn: () => this.testLoadingIndicator() },
+            { name: 'Runtime Status Badge', fn: () => this.testRuntimeStatusBadge() },
             { name: 'Error Handling UI', fn: () => this.testErrorHandlingUI() },
             { name: 'Developer Mode UI', fn: () => this.testDeveloperModeUI() },
             { name: 'Menu Styling and CSS', fn: () => this.testMenuStyling() },

@@ -41,7 +41,7 @@ REPO_ROOT = SCRIPT_DIR.parent
 # Runtime: slack-*.js files are in SCRIPT_DIR itself
 # Source: slack-*.js files are in SCRIPT_DIR (installers) parent
 FILE_DIR = SCRIPT_DIR if (SCRIPT_DIR / "slack-config.js").exists() else REPO_ROOT
-LOCK_PATH = Path.home() / "Library" / "Application Support" / "SlackPolish Runtime" / "mac-arm-runtime" / "launcher.lock"
+LOCK_PATH = Path("/tmp") / "slackpolish-mac-arm-launcher.lock"
 
 
 def print_header(text):
@@ -328,7 +328,17 @@ class SlackTargetSession:
 
 
 class SlackPolishMacLauncher:
-    def __init__(self, slack_executable, slack_app_path, debug_port, launch_slack, relaunch, inject_interval, launch_mode):
+    def __init__(
+        self,
+        slack_executable,
+        slack_app_path,
+        debug_port,
+        launch_slack,
+        relaunch,
+        inject_interval,
+        launch_mode,
+        attach_or_relaunch=False,
+    ):
         self.slack_executable = slack_executable
         self.slack_app_path = slack_app_path
         self.debug_port = debug_port
@@ -336,6 +346,7 @@ class SlackPolishMacLauncher:
         self.relaunch = relaunch
         self.inject_interval = inject_interval
         self.launch_mode = launch_mode
+        self.attach_or_relaunch = attach_or_relaunch
         self.runtime_payload = build_runtime_payload()
         self.payload_hash = hashlib.sha256(self.runtime_payload.encode("utf-8")).hexdigest()[:12]
         self.sessions = {}
@@ -346,31 +357,54 @@ class SlackPolishMacLauncher:
         print_success(f"Runtime payload prepared ({self.payload_hash})")
         self._acquire_single_instance_lock()
 
-        if self.relaunch:
-            self._quit_slack()
+        try:
+            if self.relaunch:
+                self._quit_slack()
 
-        if self.launch_slack:
-            self._launch_slack()
+            if self.launch_slack:
+                self._launch_slack()
 
+            self._connect_or_relaunch_if_needed()
+
+            print_info("Watching Slack page targets for workspace injection...")
+            while True:
+                try:
+                    self._poll_targets()
+                    time.sleep(self.inject_interval)
+                except KeyboardInterrupt:
+                    print_info("Stopping launcher...")
+                    break
+                except Exception as error:
+                    print_warning(f"Target polling error: {error}")
+                    time.sleep(self.inject_interval)
+        finally:
+            for session in self.sessions.values():
+                session.close()
+            self._release_single_instance_lock()
+
+    def _connect_or_relaunch_if_needed(self):
         print_info("Waiting for Slack DevTools endpoint...")
+        initial_timeout = 2 if self.attach_or_relaunch else 20
+
+        try:
+            self._wait_for_devtools(timeout=initial_timeout)
+            print_success(f"Connected to DevTools endpoint on port {self.debug_port}")
+            return
+        except TimeoutError:
+            if not self.attach_or_relaunch:
+                raise
+
+            print_warning(
+                "Slack DevTools endpoint was not detected quickly. "
+                "Relaunching Slack with SlackPolish runtime enabled..."
+            )
+
+        self._quit_slack()
+        self._launch_slack()
+
+        print_info("Waiting for Slack DevTools endpoint after relaunch...")
         self._wait_for_devtools()
-        print_success(f"Connected to DevTools endpoint on port {self.debug_port}")
-
-        print_info("Watching Slack page targets for workspace injection...")
-        while True:
-            try:
-                self._poll_targets()
-                time.sleep(self.inject_interval)
-            except KeyboardInterrupt:
-                print_info("Stopping launcher...")
-                break
-            except Exception as error:
-                print_warning(f"Target polling error: {error}")
-                time.sleep(self.inject_interval)
-
-        for session in self.sessions.values():
-            session.close()
-        self._release_single_instance_lock()
+        print_success(f"Connected to DevTools endpoint on port {self.debug_port} after relaunch")
 
     def _acquire_single_instance_lock(self):
         LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -491,6 +525,11 @@ def parse_args():
         help="Do not launch Slack, only attach to an already-running Slack debug port",
     )
     parser.add_argument(
+        "--attach-or-relaunch",
+        action="store_true",
+        help="Attach to running Slack when possible, otherwise relaunch Slack with the debug port",
+    )
+    parser.add_argument(
         "--relaunch",
         action="store_true",
         help="Quit Slack before launching it with the debug port",
@@ -538,10 +577,11 @@ def main():
         slack_executable=slack_executable,
         slack_app_path=slack_app_path,
         debug_port=args.debug_port,
-        launch_slack=not args.attach_only,
+        launch_slack=not (args.attach_only or args.attach_or_relaunch),
         relaunch=args.relaunch,
         inject_interval=args.poll_interval,
         launch_mode=args.launch_mode,
+        attach_or_relaunch=args.attach_or_relaunch,
     )
 
     try:
