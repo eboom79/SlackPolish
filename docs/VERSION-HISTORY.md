@@ -2,12 +2,14 @@
 
 ## 🎯 Current Stable Version
 
-**v1.4.2 - macOS Channel Summary Support**  
-**Release Date:** April 8, 2026  
+**v1.5.1 - macOS Launcher Reliability & Runtime Status**  
+**Release Date:** April 12, 2026  
 **Status:** ✅ **PRODUCTION READY**
 
 ### Key Features:
 - 🍎 New macOS Apple Silicon support via runtime launcher
+- 🚀 More reliable `SlackPolish.app` startup and relaunch behavior on macOS
+- 🟢 In-Slack runtime status badge confirms when SlackPolish is active
 - 📊 macOS channel summary support via runtime injection
 - 🐧 Linux support remains available
 - 🚫 No Slack app bundle mutation required on macOS
@@ -21,6 +23,16 @@
 ---
 
 ## 📋 Version History (Newest to Oldest)
+
+### **v1.5.1 - macOS Launcher Reliability & Runtime Status**
+**Date:** April 12, 2026  
+**Status:** ✅ Production Ready
+
+- Fixed the Desktop `SlackPolish.app` launcher wrapper on macOS
+- Added smart attach-or-relaunch behavior for already-running Slack instances
+- Moved the macOS launcher lock file to `/tmp` to avoid startup failures
+- Improved startup fallback timing so Slack relaunches faster
+- Added an in-Slack runtime status badge for attachment visibility
 
 ### **v1.4.2 - macOS Channel Summary Support**
 **Date:** April 8, 2026  
