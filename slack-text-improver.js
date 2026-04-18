@@ -323,6 +323,33 @@
             return text;
         },
 
+        getModelTextState: function(element, selectionInfo = null) {
+            const activeSelectionInfo = selectionInfo || this.getSelectionInfo(element);
+
+            if (element && element.classList.contains('ql-editor') && !(activeSelectionInfo && activeSelectionInfo.hasSelection)) {
+                const richTextState = this.extractTextStateWithMentions(element);
+                if (this.hasProtectedEntities(richTextState)) {
+                    return richTextState;
+                }
+            }
+
+            return {
+                text: this.getTextFromElement(element),
+                mentions: [],
+                links: []
+            };
+        },
+
+        hasProtectedEntities: function(textState) {
+            if (!textState) {
+                return false;
+            }
+
+            const mentionCount = Array.isArray(textState.mentions) ? textState.mentions.length : 0;
+            const linkCount = Array.isArray(textState.links) ? textState.links.length : 0;
+            return mentionCount > 0 || linkCount > 0;
+        },
+
         getSelectionInfo: function(element) {
             if (!element) return { hasSelection: false };
 
@@ -438,7 +465,285 @@
             return '';
         },
 
-        setTextWithFormatting: function(element, text) {
+        extractTextStateWithMentions: function(element) {
+            const state = {
+                text: '',
+                mentions: [],
+                links: [],
+                nextMentionId: 1,
+                nextLinkId: 1
+            };
+            let listCounter = 1;
+
+            const processNode = (node) => {
+                if (!node) {
+                    return '';
+                }
+
+                if (node.nodeType === Node.TEXT_NODE) {
+                    return node.textContent;
+                }
+
+                if (node.nodeType !== Node.ELEMENT_NODE) {
+                    return '';
+                }
+
+                if (this.isTopLevelProtectedNode(node, 'mention')) {
+                    return this.captureMentionToken(node, state);
+                }
+
+                if (this.isTopLevelProtectedNode(node, 'link')) {
+                    return this.captureLinkToken(node, state);
+                }
+
+                const tagName = node.tagName.toLowerCase();
+
+                if (tagName === 'ol') {
+                    listCounter = 1;
+                    let listText = '';
+                    for (const li of node.children) {
+                        if (li.tagName.toLowerCase() === 'li') {
+                            const liText = this.getEntityAwareTextFromNode(li, state);
+                            if (liText.trim()) {
+                                listText += `${listCounter}. ${liText.trim()}\n`;
+                                listCounter++;
+                            }
+                        }
+                    }
+                    return listText;
+                }
+
+                if (tagName === 'ul') {
+                    let listText = '';
+                    for (const li of node.children) {
+                        if (li.tagName.toLowerCase() === 'li') {
+                            const liText = this.getEntityAwareTextFromNode(li, state);
+                            if (liText.trim()) {
+                                listText += `• ${liText.trim()}\n`;
+                            }
+                        }
+                    }
+                    return listText;
+                }
+
+                if (tagName === 'p' || tagName === 'div') {
+                    const paragraphText = this.getEntityAwareTextFromNode(node, state);
+                    return paragraphText.trim() ? paragraphText.trim() + '\n' : '';
+                }
+
+                if (tagName === 'br') {
+                    return '\n';
+                }
+
+                return this.getEntityAwareTextFromNode(node, state);
+            };
+
+            for (const child of element.childNodes) {
+                state.text += processNode(child);
+            }
+
+            state.text = state.text.replace(/\n\s*\n+/g, '\n').trim();
+            return state;
+        },
+
+        getEntityAwareTextFromNode: function(node, state) {
+            if (!node) return '';
+
+            if (node.nodeType === Node.TEXT_NODE) {
+                return node.textContent;
+            }
+
+            if (node.nodeType !== Node.ELEMENT_NODE) {
+                return '';
+            }
+
+            if (this.isTopLevelProtectedNode(node, 'mention')) {
+                return this.captureMentionToken(node, state);
+            }
+
+            if (this.isTopLevelProtectedNode(node, 'link')) {
+                return this.captureLinkToken(node, state);
+            }
+
+            let text = '';
+            for (const child of node.childNodes) {
+                text += this.getEntityAwareTextFromNode(child, state);
+            }
+            return text;
+        },
+
+        isSlackMentionNode: function(node) {
+            if (!node || node.nodeType !== Node.ELEMENT_NODE) {
+                return false;
+            }
+
+            const text = (node.textContent || '').trim();
+            if (!text.startsWith('@')) {
+                return false;
+            }
+
+            const contentEditable = (node.getAttribute('contenteditable') || '').toLowerCase();
+            const dataQa = (node.getAttribute('data-qa') || '').toLowerCase();
+            const stringifyType = (node.getAttribute('data-stringify-type') || '').toLowerCase();
+            const className = String(node.className || '').toLowerCase();
+            const ariaLabel = (node.getAttribute('aria-label') || '').toLowerCase();
+
+            return (
+                contentEditable === 'false' ||
+                dataQa.includes('mention') ||
+                stringifyType.includes('mention') ||
+                stringifyType.includes('user') ||
+                className.includes('mention') ||
+                ariaLabel.includes('mention')
+            );
+        },
+
+        isTopLevelProtectedNode: function(node, type) {
+            if (!node || node.nodeType !== Node.ELEMENT_NODE) {
+                return false;
+            }
+
+            const matcher = type === 'mention' ? this.isSlackMentionNode.bind(this) : this.isSlackLinkNode.bind(this);
+            if (!matcher(node)) {
+                return false;
+            }
+
+            const parent = node.parentElement;
+            return !parent || !matcher(parent);
+        },
+
+        isSlackLinkNode: function(node) {
+            if (!node || node.nodeType !== Node.ELEMENT_NODE) {
+                return false;
+            }
+
+            const text = (node.textContent || '').trim();
+            if (!text) {
+                return false;
+            }
+
+            const tagName = (node.tagName || '').toLowerCase();
+            const href = (node.getAttribute('href') || '').trim();
+            const dataQa = (node.getAttribute('data-qa') || '').toLowerCase();
+            const stringifyType = (node.getAttribute('data-stringify-type') || '').toLowerCase();
+            const className = String(node.className || '').toLowerCase();
+            const ariaLabel = (node.getAttribute('aria-label') || '').toLowerCase();
+
+            return (
+                tagName === 'a' ||
+                !!href ||
+                dataQa.includes('link') ||
+                stringifyType.includes('link') ||
+                stringifyType.includes('url') ||
+                className.includes('link') ||
+                ariaLabel.includes('link')
+            );
+        },
+
+        captureMentionToken: function(node, state) {
+            const token = `__SLACKPOLISH_MENTION_${state.nextMentionId}__`;
+            state.nextMentionId += 1;
+            state.mentions.push({
+                token,
+                text: (node.textContent || '').trim(),
+                node: node.cloneNode(true)
+            });
+            return token;
+        },
+
+        captureLinkToken: function(node, state) {
+            const token = `__SLACKPOLISH_LINK_${state.nextLinkId}__`;
+            state.nextLinkId += 1;
+            state.links.push({
+                token,
+                text: (node.textContent || '').trim(),
+                href: node.getAttribute('href') || '',
+                node: node.cloneNode(true)
+            });
+            return token;
+        },
+
+        getMentionByToken: function(token, textState) {
+            if (!textState || !textState.mentions) {
+                return null;
+            }
+            return textState.mentions.find(mention => mention.token === token) || null;
+        },
+
+        getLinkByToken: function(token, textState) {
+            if (!textState || !textState.links) {
+                return null;
+            }
+            return textState.links.find(link => link.token === token) || null;
+        },
+
+        restoreMissingProtectedTokens: function(text, textState) {
+            if (!this.hasProtectedEntities(textState) || !text) {
+                return text;
+            }
+
+            let restoredText = text;
+            const entities = [
+                ...(textState.mentions || []).map(entity => ({ ...entity, type: 'mention' })),
+                ...(textState.links || []).map(entity => ({ ...entity, type: 'link' }))
+            ];
+
+            entities.forEach(entity => {
+                if (restoredText.includes(entity.token)) {
+                    return;
+                }
+
+                const candidates = [];
+                if (entity.text) {
+                    candidates.push(entity.text);
+                }
+                if (entity.type === 'link' && entity.href && entity.href !== entity.text) {
+                    candidates.push(entity.href);
+                }
+
+                for (const candidate of candidates) {
+                    if (!candidate) {
+                        continue;
+                    }
+
+                    const escapedCandidate = candidate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const matches = restoredText.match(new RegExp(escapedCandidate, 'g')) || [];
+                    if (matches.length === 1) {
+                        restoredText = restoredText.replace(candidate, entity.token);
+                        break;
+                    }
+                }
+            });
+
+            return restoredText;
+        },
+
+        appendTextWithMentions: function(parent, text, textState) {
+            const tokenRegex = /(__SLACKPOLISH_MENTION_\d+__|__SLACKPOLISH_LINK_\d+__)/g;
+            const parts = text.split(tokenRegex);
+
+            parts.forEach(part => {
+                if (!part) {
+                    return;
+                }
+
+                const mention = this.getMentionByToken(part, textState);
+                if (mention) {
+                    parent.appendChild(mention.node.cloneNode(true));
+                    return;
+                }
+
+                const link = this.getLinkByToken(part, textState);
+                if (link) {
+                    parent.appendChild(link.node.cloneNode(true));
+                    return;
+                }
+
+                parent.appendChild(document.createTextNode(part));
+            });
+        },
+
+        setTextWithFormatting: function(element, text, textState = null) {
             // Clear the element
             element.innerHTML = '';
 
@@ -463,7 +768,7 @@
                     }
 
                     const li = document.createElement('li');
-                    li.textContent = content;
+                    this.appendTextWithMentions(li, content, textState);
                     currentList.appendChild(li);
                     return;
                 }
@@ -481,7 +786,7 @@
                     }
 
                     const li = document.createElement('li');
-                    li.textContent = content;
+                    this.appendTextWithMentions(li, content, textState);
                     currentList.appendChild(li);
                     return;
                 }
@@ -491,7 +796,7 @@
                 currentListType = null;
 
                 const p = document.createElement('p');
-                p.textContent = trimmedLine;
+                this.appendTextWithMentions(p, trimmedLine, textState);
                 element.appendChild(p);
             });
         },
@@ -546,7 +851,7 @@
             return isThread;
         },
 
-        setTextInElement: function(element, text, preservedSelectionInfo = null) {
+        setTextInElement: function(element, text, preservedSelectionInfo = null, textState = null) {
             if (!element) return;
 
             // Handle debug test markers
@@ -558,7 +863,7 @@
             // Check if we should replace selected text only
             // Use preserved selection info if available, otherwise check current selection
             const selectionInfo = preservedSelectionInfo || this.getSelectionInfo(element);
-            if (selectionInfo && selectionInfo.hasSelection) {
+            if (selectionInfo && selectionInfo.hasSelection && !this.hasProtectedEntities(textState)) {
                 this.replaceSelectedTextWithPreservedInfo(element, text, selectionInfo);
                 return;
             }
@@ -572,7 +877,7 @@
                     textLength: text.length
                 });
 
-                this.setTextWithFormatting(element, text);
+                this.setTextWithFormatting(element, this.restoreMissingProtectedTokens(text, textState), textState);
 
                 utils.debug('Final HTML structure in Slack', {
                     style: CONFIG.STYLE,
@@ -1203,7 +1508,7 @@
     const textImprover = {
         isProcessing: false,
 
-        async improveText(originalText) {
+        async improveText(originalText, textState = null) {
             utils.debug('improveText() called', {
                 originalText,
                 debugMode: CONFIG.DEBUG_MODE,
@@ -1246,7 +1551,7 @@
             showLoadingIndicator();
 
             try {
-                const prompt = await this.buildPrompt(originalText);
+                const prompt = await this.buildPrompt(originalText, textState);
 
                 // DEBUG: Log the complete prompt to SlackPolish debug system
                 utils.debug('FULL PROMPT SENT TO OPENAI', {
@@ -1513,7 +1818,7 @@ Available test commands (use in debug mode only):
             return helpText;
         },
 
-        async buildPrompt(text) {
+        async buildPrompt(text, textState = null) {
             utils.debug('Building prompt', {
                 textLength: text.length,
                 style: CONFIG.STYLE,
@@ -1568,6 +1873,14 @@ ${styleInstruction}:
 ${text}
 
 IMPORTANT: Respond with ONLY the improved text. Do not include any explanations, quotes, requirements, or additional text. Use ${CONFIG.LANGUAGE} language. Do NOT reference the conversation context.`;
+
+            if (utils.hasProtectedEntities(textState)) {
+                prompt += '\nIMPORTANT: Tokens like __SLACKPOLISH_MENTION_1__ and __SLACKPOLISH_LINK_1__ represent real Slack entities such as mentions and links. Preserve every such token exactly, without renaming, removing, reordering, or breaking it.';
+                utils.debug('Added protected entity preservation instructions', {
+                    mentionCount: textState?.mentions?.length || 0,
+                    linkCount: textState?.links?.length || 0
+                });
+            }
 
             if (CONFIG.CUSTOM_INSTRUCTIONS) {
                 prompt += `\n- Additional instructions: ${CONFIG.CUSTOM_INSTRUCTIONS}`;
@@ -2179,7 +2492,8 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
 
             // Capture selection info BEFORE getting text (selection might be lost during async operations)
             const selectionInfo = utils.getSelectionInfo(messageInput);
-            const originalText = utils.getTextFromElement(messageInput);
+            const textState = utils.getModelTextState(messageInput, selectionInfo);
+            const originalText = textState.text;
 
             utils.log(`Processing text improvement for: "${originalText}" (trigger-id: ${triggerCallId})`);
             utils.debug('Selection info captured', {
@@ -2202,7 +2516,7 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
             }
 
             utils.log(`Starting text improvement process (trigger-id: ${triggerCallId})`);
-            const improvedText = await textImprover.improveText(originalText);
+            const improvedText = await textImprover.improveText(originalText, textState);
 
             if (improvedText) {
                 // Add emoji signature if enabled
@@ -2210,6 +2524,8 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
                 if (CONFIG.ADD_EMOJI_SIGNATURE) {
                     finalText = improvedText + ' :slack_polish:';
                 }
+
+                finalText = utils.restoreMissingProtectedTokens(finalText, textState);
 
                 utils.log(`Text improvement completed successfully (trigger-id: ${triggerCallId})`);
                 utils.debug('Setting improved text', {
@@ -2223,7 +2539,7 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
                     setupId
                 });
 
-                utils.setTextInElement(messageInput, finalText, selectionInfo);
+                utils.setTextInElement(messageInput, finalText, selectionInfo, textState);
             } else {
                 utils.log(`Text improvement failed - no improved text received (trigger-id: ${triggerCallId})`);
                 utils.debug('No improved text received', {
@@ -2286,49 +2602,14 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
         return logoImg;
     }
 
-    // Show loading indicator (original design)
+    // Legacy loading toast intentionally disabled in favor of the runtime status badge.
     function showLoadingIndicator() {
-        const existing = document.getElementById('slack-text-improver-loading');
-        if (existing) existing.remove();
-
-        const indicator = document.createElement('div');
-        indicator.id = 'slack-text-improver-loading';
-        const logoContainer = document.createElement('div');
-        logoContainer.style.cssText = 'background: white; border-radius: 6px; padding: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center;';
-        logoContainer.appendChild(createSlackPolishLogo(28));
-
-        const textContainer = document.createElement('div');
-        textContainer.innerHTML = `
-            <div style="font-size: 14px; opacity: 0.9;">Improving your text...</div>
-        `;
-
-        const mainContainer = document.createElement('div');
-        mainContainer.style.cssText = 'display: flex; align-items: center; gap: 12px;';
-        mainContainer.appendChild(logoContainer);
-        mainContainer.appendChild(textContainer);
-
-        indicator.appendChild(mainContainer);
-        indicator.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: linear-gradient(135deg, #1264a3 0%, #0d5aa7 100%);
-            color: white;
-            padding: 12px 16px;
-            border-radius: 8px;
-            font-size: 14px;
-            z-index: 10000;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.2);
-            backdrop-filter: blur(10px);
-        `;
-        document.body.appendChild(indicator);
+        return;
     }
 
-    // Hide loading indicator
+    // Legacy loading toast intentionally disabled in favor of the runtime status badge.
     function hideLoadingIndicator() {
-        const indicator = document.getElementById('slack-text-improver-loading');
-        if (indicator) indicator.remove();
+        return;
     }
 
     // Show simple error notification (original design)

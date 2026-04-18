@@ -1,8 +1,8 @@
 {
     "major": 1,
     "minor": 5,
-    "build": 2,
-    "version_string": "1.5.2",
-    "description": "Human voice tuning and launcher recovery improvements",
+    "build": 3,
+    "version_string": "1.5.3",
+    "description": "Slack entity preservation and simplified status UI",
     "date": "2026-04-18"
 }

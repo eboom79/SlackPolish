@@ -109,18 +109,18 @@ class BrandingIntegrationTests {
         return hasExternalLogoRef && hasFallbackLogo && hasLogoFunction;
     }
 
-    // Test 6: Loading indicator branding
+    // Test 6: Runtime badge branding
     testLoadingIndicatorBranding() {
         const scriptPath = path.join(this.rootDir, 'slack-text-improver.js');
         const scriptContent = fs.readFileSync(scriptPath, 'utf8');
-        
-        const hasNewIndicator = scriptContent.includes('Improving your text...');
-        const hasLogoInIndicator = scriptContent.includes('createSlackPolishLogo');
-        const hasIndicatorFunction = scriptContent.includes('showLoadingIndicator');
 
-        this.log(`Loading indicator: New text found: ${hasNewIndicator}, Logo: ${hasLogoInIndicator}, Function: ${hasIndicatorFunction}`);
+        const hasRuntimeBadge = scriptContent.includes('slackpolish-runtime-status');
+        const hasActiveLabel = scriptContent.includes('SlackPolish Active');
+        const removedToastText = !scriptContent.includes('Improving your text...');
 
-        return hasNewIndicator && hasLogoInIndicator && hasIndicatorFunction;
+        this.log(`Runtime badge branding: Badge: ${hasRuntimeBadge}, Label: ${hasActiveLabel}, Toast removed: ${removedToastText}`);
+
+        return hasRuntimeBadge && hasActiveLabel && removedToastText;
     }
 
     // Test 7: Console log branding

@@ -79,6 +79,16 @@ const tests = [
         }
     },
     {
+        name: 'Does not invent greetings or openers',
+        test: () => {
+            assert.ok(
+                tonePolishPrompt.toLowerCase().includes('do not add greetings') ||
+                tonePolishPrompt.toLowerCase().includes('do not add greetings, salutations'),
+                'Prompt should explicitly forbid adding new greetings/openers'
+            );
+        }
+    },
+    {
         name: 'Preserves line structure',
         test: () => {
             assert.ok(

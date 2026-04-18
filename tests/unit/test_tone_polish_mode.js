@@ -18,7 +18,7 @@ const mockConfig = {
             PROFESSIONAL: 'Please rewrite the following text in a professional, business-appropriate tone while maintaining the original meaning and key information',
             CASUAL: 'Please rewrite the following text in a casual, friendly tone while keeping the main message clear',
             CONCISE: 'Please rewrite the following text to be more concise and to the point while preserving all important information',
-            TONE_POLISH: 'Fix grammar and improve clarity while preserving the original tone, rhythm, and message length. Make only the smallest edits needed. Keep the wording conversational and specific to the writer. If the text is already clear, stay very close to the original. Do not add emojis, buzzwords, corporate speak, polished AI phrasing, or generic transition words like "furthermore" or "additionally" unless they already fit the writer voice. Avoid making the message sound formal, salesy, or overly polished',
+            TONE_POLISH: 'Fix grammar and improve clarity while preserving the original tone, rhythm, and message length. Make only the smallest edits needed. Keep the wording conversational and specific to the writer. If the text is already clear, stay very close to the original. Do not add greetings, salutations, or openers like "Hey," "Hi," or "Hello" unless they already appear in the original text. Do not add emojis, buzzwords, corporate speak, polished AI phrasing, or generic transition words like "furthermore" or "additionally" unless they already fit the writer voice. Avoid making the message sound formal, salesy, or overly polished',
             GRAMMAR: 'Please correct any grammar, spelling, and punctuation errors in the following text while maintaining the original tone and meaning exactly as written',
             TRANSLATE: 'Please translate the following text accurately while preserving the original tone and meaning'
         }
@@ -84,6 +84,22 @@ function testTonePolishPromptExists() {
     return true;
 }
 
+function testNoInventedGreetingInstruction() {
+    console.log('🧪 Testing: Tone Polish prompt forbids invented greetings');
+
+    const tonePolishPrompt = mockConfig.PROMPTS.STYLES.TONE_POLISH;
+
+    if (!tonePolishPrompt.toLowerCase().includes('do not add greetings') &&
+        !tonePolishPrompt.toLowerCase().includes('do not add greetings, salutations')) {
+        console.error('❌ FAIL: TONE_POLISH prompt should forbid invented greetings/openers');
+        console.error('Prompt:', tonePolishPrompt);
+        return false;
+    }
+
+    console.log('✅ PASS: TONE_POLISH prompt forbids invented greetings');
+    return true;
+}
+
 function testTonePolishPromptDifference() {
     console.log('🧪 Testing: Tone Polish prompt is different from Concise mode');
     
@@ -144,6 +160,7 @@ function runAllTests() {
     const tests = [
         testTonePolishStyleExists,
         testTonePolishPromptExists,
+        testNoInventedGreetingInstruction,
         testTonePolishPromptDifference,
         testStyleOrder
     ];

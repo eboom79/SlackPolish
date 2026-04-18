@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.5.2",
-    BUILD: 2,
+    VERSION: "1.5.3",
+    BUILD: 3,
     BUILD_DATE: "2026-04-18",
-    DESCRIPTION: "Human voice tuning and launcher recovery improvements",
+    DESCRIPTION: "Slack entity preservation and simplified status UI",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
@@ -147,12 +147,12 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     PROMPTS: {
         STYLES: {
-            PROFESSIONAL: 'Rewrite the following text in a professional, business-appropriate tone while maintaining the original meaning and key information. Return ONLY the improved text, nothing else.',
-            CASUAL: 'Rewrite the following text in a casual, friendly tone while keeping the main message clear. Return ONLY the improved text, nothing else.',
-            CONCISE: 'Rewrite the following text to be more concise and to the point while preserving all important information. Return ONLY the improved text, nothing else.',
-            TONE_POLISH: 'Fix grammar and improve clarity while preserving the original tone, rhythm, and message length. Make only the smallest edits needed. Keep the wording conversational and specific to the writer. If the text is already clear, stay very close to the original. Do not add emojis, buzzwords, corporate speak, polished AI phrasing, or generic transition words like "furthermore" or "additionally" unless they already fit the writer voice. Avoid making the message sound formal, salesy, or overly polished. CRITICAL: Do not add any empty lines or line breaks. Keep the exact same line structure as the input. If the input has text on consecutive lines without empty lines between them, your output must also have text on consecutive lines without empty lines. Return ONLY the improved text, nothing else.',
-            GRAMMAR: 'Correct any grammar, spelling, and punctuation errors in the following text while maintaining the original tone and meaning exactly as written. Return ONLY the corrected text, nothing else.',
-            TRANSLATE: 'Translate the following text accurately while preserving the original tone and meaning. Return ONLY the translated text, nothing else.'
+            PROFESSIONAL: 'Rewrite the following text in a professional, business-appropriate tone while maintaining the original meaning and key information. Do not add greetings, salutations, or openers like "Hey," "Hi," or "Hello" unless they already appear in the original text. Return ONLY the improved text, nothing else.',
+            CASUAL: 'Rewrite the following text in a casual, friendly tone while keeping the main message clear. Do not add greetings, salutations, or openers like "Hey," "Hi," or "Hello" unless they already appear in the original text. Return ONLY the improved text, nothing else.',
+            CONCISE: 'Rewrite the following text to be more concise and to the point while preserving all important information. Do not add greetings, salutations, or openers like "Hey," "Hi," or "Hello" unless they already appear in the original text. Return ONLY the improved text, nothing else.',
+            TONE_POLISH: 'Fix grammar and improve clarity while preserving the original tone, rhythm, and message length. Make only the smallest edits needed. Keep the wording conversational and specific to the writer. If the text is already clear, stay very close to the original. Do not add greetings, salutations, or openers like "Hey," "Hi," or "Hello" unless they already appear in the original text. Do not add emojis, buzzwords, corporate speak, polished AI phrasing, or generic transition words like "furthermore" or "additionally" unless they already fit the writer voice. Avoid making the message sound formal, salesy, or overly polished. CRITICAL: Do not add any empty lines or line breaks. Keep the exact same line structure as the input. If the input has text on consecutive lines without empty lines between them, your output must also have text on consecutive lines without empty lines. Return ONLY the improved text, nothing else.',
+            GRAMMAR: 'Correct any grammar, spelling, and punctuation errors in the following text while maintaining the original tone and meaning exactly as written. Do not add greetings, salutations, or openers like "Hey," "Hi," or "Hello" unless they already appear in the original text. Return ONLY the corrected text, nothing else.',
+            TRANSLATE: 'Translate the following text accurately while preserving the original tone and meaning. Do not add greetings, salutations, or openers like "Hey," "Hi," or "Hello" unless they already appear in the original text. Return ONLY the translated text, nothing else.'
         }
     },
 

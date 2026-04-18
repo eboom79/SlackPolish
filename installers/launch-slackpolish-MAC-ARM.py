@@ -171,9 +171,14 @@ def build_runtime_payload():
         build: '{payload_hash}',
         activatedAt: Date.now()
     }};
+    const previousRuntime = window.__SLACKPOLISH_RUNTIME_ACTIVE__ || null;
     window.__SLACKPOLISH_RUNTIME_ACTIVE__ = runtimeState;
 
-    if (window.__SLACKPOLISH_RUNTIME_URL__ === href) {{
+    if (
+        window.__SLACKPOLISH_RUNTIME_URL__ === href &&
+        previousRuntime &&
+        previousRuntime.build === runtimeState.build
+    ) {{
         return;
     }}
     window.__SLACKPOLISH_RUNTIME_URL__ = href;

@@ -81,28 +81,22 @@ class UIElementsTests {
                hasCancelButton && hasSaveButton && hasValidation;
     }
 
-    // Test 3: Loading indicator
+    // Test 3: Legacy loading hook
     testLoadingIndicator() {
         const scriptPath = path.join(this.rootDir, 'slack-text-improver.js');
         const scriptContent = fs.readFileSync(scriptPath, 'utf8');
 
         const hasShowFunction = scriptContent.includes('function showLoadingIndicator()');
         const hasHideFunction = scriptContent.includes('function hideLoadingIndicator()');
-        const hasIndicatorId = scriptContent.includes('slack-text-improver-loading');
-        const hasPositioning = scriptContent.includes('position: fixed') &&
-                              scriptContent.includes('top: 20px') &&
-                              scriptContent.includes('right: 20px');
-        const hasLogoInIndicator = scriptContent.includes('SlackPolish') &&
-                                  scriptContent.includes('Improving your text');
-        const hasGradientBackground = scriptContent.includes('linear-gradient') &&
-                                     scriptContent.includes('#1264a3');
+        const hasDisabledComment = scriptContent.includes('Legacy loading toast intentionally disabled');
+        const removedToastText = !scriptContent.includes('Improving your text...');
+        const removedToastId = !scriptContent.includes('slack-text-improver-loading');
 
-        this.log(`Loading indicator: Show: ${hasShowFunction}, Hide: ${hasHideFunction}`);
-        this.log(`Structure: ID: ${hasIndicatorId}, Positioning: ${hasPositioning}`);
-        this.log(`Branding: Logo text: ${hasLogoInIndicator}, Gradient: ${hasGradientBackground}`);
+        this.log(`Loading hook: Show: ${hasShowFunction}, Hide: ${hasHideFunction}`);
+        this.log(`Disabled: Comment: ${hasDisabledComment}, Text removed: ${removedToastText}, ID removed: ${removedToastId}`);
 
-        return hasShowFunction && hasHideFunction && hasIndicatorId &&
-               hasPositioning && hasLogoInIndicator && hasGradientBackground;
+        return hasShowFunction && hasHideFunction && hasDisabledComment &&
+               removedToastText && removedToastId;
     }
 
     // Test 3b: Runtime status badge

@@ -2,16 +2,16 @@
 
 ## 🎯 Current Stable Version
 
-**v1.5.2 - Human Voice Tuning & Launcher Recovery**  
+**v1.5.3 - Entity Preservation & Simpler Status UI**  
 **Release Date:** April 18, 2026  
 **Status:** ✅ **PRODUCTION READY**
 
 ### Key Features:
-- 🗣️ Tone Polish now keeps the writer's original voice with more conservative edits
-- 🚫 Explicit guardrails against polished AI phrasing, corporate speak, and over-smoothing
-- 🌡️ Lower text-improvement temperature for more natural Slack output
-- 🍎 More resilient macOS launcher recovery with health/status logging
-- 📄 Runtime status and launcher logs for faster troubleshooting on macOS
+- 🔗 Slack links are now preserved during text polishing instead of flattening into plain text
+- @ Mentions are preserved as real Slack entities during full-message polishing
+- 🗣️ Prompt guardrails now avoid inventing greetings like `Hey,` when they were not in the original message
+- 🟢 The bottom-left runtime badge is now the single visible improvement indicator
+- 🍎 Runtime reinjection is more reliable after launcher updates and full Slack restarts
 - 🟢 In-Slack runtime status badge confirms when SlackPolish is active
 - 📊 macOS channel summary support via runtime injection
 - 🐧 Linux support remains available
@@ -26,6 +26,17 @@
 ---
 
 ## 📋 Version History (Newest to Oldest)
+
+### **v1.5.3 - Entity Preservation & Simpler Status UI**
+**Date:** April 18, 2026  
+**Status:** ✅ Production Ready
+
+- Preserved real Slack mentions during full-message polishing
+- Preserved Slack link entities instead of falling back to plain text
+- Added protected-entity placeholder and restoration logic for mentions and links
+- Added guardrails to stop inventing greetings and openers like `Hey,`
+- Removed the upper-right loading toast and kept the bottom-left runtime badge as the single status indicator
+- Improved macOS runtime reinjection so updated builds replace stale in-page SlackPolish code more reliably
 
 ### **v1.5.2 - Human Voice Tuning & Launcher Recovery**
 **Date:** April 18, 2026  
