@@ -2,13 +2,16 @@
 
 ## 🎯 Current Stable Version
 
-**v1.5.1 - macOS Launcher Reliability & Runtime Status**  
-**Release Date:** April 12, 2026  
+**v1.5.2 - Human Voice Tuning & Launcher Recovery**  
+**Release Date:** April 18, 2026  
 **Status:** ✅ **PRODUCTION READY**
 
 ### Key Features:
-- 🍎 New macOS Apple Silicon support via runtime launcher
-- 🚀 More reliable `SlackPolish.app` startup and relaunch behavior on macOS
+- 🗣️ Tone Polish now keeps the writer's original voice with more conservative edits
+- 🚫 Explicit guardrails against polished AI phrasing, corporate speak, and over-smoothing
+- 🌡️ Lower text-improvement temperature for more natural Slack output
+- 🍎 More resilient macOS launcher recovery with health/status logging
+- 📄 Runtime status and launcher logs for faster troubleshooting on macOS
 - 🟢 In-Slack runtime status badge confirms when SlackPolish is active
 - 📊 macOS channel summary support via runtime injection
 - 🐧 Linux support remains available
@@ -23,6 +26,16 @@
 ---
 
 ## 📋 Version History (Newest to Oldest)
+
+### **v1.5.2 - Human Voice Tuning & Launcher Recovery**
+**Date:** April 18, 2026  
+**Status:** ✅ Production Ready
+
+- Reworked `TONE_POLISH` to preserve the original writer voice with minimal edits
+- Added explicit prompt guardrails against AI-sounding, overly polished Slack phrasing
+- Lowered text-improvement temperature to reduce generic ChatGPT-style rewrites
+- Added macOS launcher health/status files and persistent launcher logging
+- Added stale-launcher recovery and duplicate-launcher cleanup for more reliable relaunch behavior
 
 ### **v1.5.1 - macOS Launcher Reliability & Runtime Status**
 **Date:** April 12, 2026  

@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import socket
 import struct
 import subprocess
@@ -42,33 +43,62 @@ REPO_ROOT = SCRIPT_DIR.parent
 # Source: slack-*.js files are in SCRIPT_DIR (installers) parent
 FILE_DIR = SCRIPT_DIR if (SCRIPT_DIR / "slack-config.js").exists() else REPO_ROOT
 LOCK_PATH = Path("/tmp") / "slackpolish-mac-arm-launcher.lock"
+STATE_DIR = Path.home() / "Library" / "Application Support" / "SlackPolish Runtime" / "mac-arm-runtime" / "state"
+STATUS_PATH = STATE_DIR / "launcher-status.json"
+LOG_PATH = STATE_DIR / "launcher.log"
+ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def append_log_line(text):
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        with open(LOG_PATH, "a", encoding="utf-8") as handle:
+            handle.write(ANSI_ESCAPE_RE.sub("", text) + "\n")
+    except Exception:
+        pass
 
 
 def print_header(text):
-    print(f"\n{BLUE}==================================================", flush=True)
-    print(text, flush=True)
-    print(f"=================================================={RESET}\n", flush=True)
+    line_one = f"\n{BLUE}=================================================="
+    line_two = text
+    line_three = f"=================================================={RESET}\n"
+    print(line_one, flush=True)
+    print(line_two, flush=True)
+    print(line_three, flush=True)
+    append_log_line(line_one)
+    append_log_line(line_two)
+    append_log_line(line_three)
 
 
 def print_success(text):
-    print(f"{GREEN}✅ {text}{RESET}", flush=True)
+    line = f"{GREEN}✅ {text}{RESET}"
+    print(line, flush=True)
+    append_log_line(line)
 
 
 def print_warning(text):
-    print(f"{YELLOW}⚠️ {text}{RESET}", flush=True)
+    line = f"{YELLOW}⚠️ {text}{RESET}"
+    print(line, flush=True)
+    append_log_line(line)
 
 
 def print_error(text):
-    print(f"{RED}❌ {text}{RESET}", flush=True)
+    line = f"{RED}❌ {text}{RESET}"
+    print(line, flush=True)
+    append_log_line(line)
 
 
 def print_info(text):
-    print(f"{BLUE}🔍 {text}{RESET}", flush=True)
+    line = f"{BLUE}🔍 {text}{RESET}"
+    print(line, flush=True)
+    append_log_line(line)
 
 
 def print_verbose(text):
     if VERBOSE:
-        print(f"{BLUE}🔍 [VERBOSE] {text}{RESET}", flush=True)
+        line = f"{BLUE}🔍 [VERBOSE] {text}{RESET}"
+        print(line, flush=True)
+        append_log_line(line)
 
 
 def normalize_slack_app_path(path):
@@ -351,35 +381,60 @@ class SlackPolishMacLauncher:
         self.payload_hash = hashlib.sha256(self.runtime_payload.encode("utf-8")).hexdigest()[:12]
         self.sessions = {}
         self.lock_handle = None
+        self.last_heartbeat = 0
+        self.status = {
+            "pid": os.getpid(),
+            "started_at": int(time.time()),
+            "last_heartbeat": int(time.time()),
+            "phase": "starting",
+            "debug_port": self.debug_port,
+            "payload_hash": self.payload_hash,
+            "launch_mode": self.launch_mode,
+            "attach_or_relaunch": self.attach_or_relaunch,
+            "relaunch": self.relaunch,
+            "slack_executable": self.slack_executable,
+            "last_error": None,
+            "session_count": 0,
+        }
 
     def run(self):
         print_header("🍎 SlackPolish Runtime Launcher for macOS ARM")
         print_success(f"Runtime payload prepared ({self.payload_hash})")
-        self._acquire_single_instance_lock()
+        self._acquire_or_recover_single_instance_lock()
+        self._terminate_legacy_launchers()
+        self._update_status(phase="lock-acquired")
 
         try:
             if self.relaunch:
+                self._update_status(phase="relaunching-slack")
                 self._quit_slack()
 
             if self.launch_slack:
+                self._update_status(phase="launching-slack")
                 self._launch_slack()
 
+            self._update_status(phase="connecting-devtools")
             self._connect_or_relaunch_if_needed()
 
             print_info("Watching Slack page targets for workspace injection...")
+            self._update_status(phase="watching-targets", last_error=None)
             while True:
                 try:
                     self._poll_targets()
+                    self._heartbeat()
                     time.sleep(self.inject_interval)
                 except KeyboardInterrupt:
                     print_info("Stopping launcher...")
+                    self._update_status(phase="stopped")
                     break
                 except Exception as error:
                     print_warning(f"Target polling error: {error}")
+                    self._update_status(phase="poll-error", last_error=str(error))
                     time.sleep(self.inject_interval)
         finally:
             for session in self.sessions.values():
                 session.close()
+            self._update_status(phase="stopped", session_count=0)
             self._release_single_instance_lock()
 
     def _connect_or_relaunch_if_needed(self):
@@ -419,6 +474,23 @@ class SlackPolishMacLauncher:
         self.lock_handle.write(str(os.getpid()))
         self.lock_handle.flush()
 
+    def _acquire_or_recover_single_instance_lock(self):
+        try:
+            self._acquire_single_instance_lock()
+            return
+        except RuntimeError:
+            status = self._read_status()
+            lock_pid = self._read_lock_pid()
+            if self._can_recover_stuck_launcher(lock_pid, status):
+                self._terminate_process(lock_pid, reason="stale launcher")
+                time.sleep(1)
+                self._acquire_single_instance_lock()
+                print_warning("Recovered from a stale SlackPolish launcher process")
+                return
+
+            self._bring_slack_to_front()
+            raise RuntimeError(f"SlackPolish is already running. Logs: {LOG_PATH}")
+
     def _release_single_instance_lock(self):
         if not self.lock_handle:
             return
@@ -429,6 +501,115 @@ class SlackPolishMacLauncher:
         finally:
             self.lock_handle.close()
             self.lock_handle = None
+
+    def _read_lock_pid(self):
+        try:
+            return int(LOCK_PATH.read_text(encoding="utf-8").strip())
+        except Exception:
+            return None
+
+    def _read_status(self):
+        try:
+            with open(STATUS_PATH, "r", encoding="utf-8") as handle:
+                return json.load(handle)
+        except Exception:
+            return None
+
+    def _write_status(self):
+        try:
+            STATE_DIR.mkdir(parents=True, exist_ok=True)
+            with open(STATUS_PATH, "w", encoding="utf-8") as handle:
+                json.dump(self.status, handle, indent=2, sort_keys=True)
+        except Exception as error:
+            print_verbose(f"Could not write launcher status: {error}")
+
+    def _update_status(self, **updates):
+        self.status.update(updates)
+        self.status["pid"] = os.getpid()
+        self.status["last_heartbeat"] = int(time.time())
+        self.status["session_count"] = len(self.sessions)
+        self._write_status()
+
+    def _heartbeat(self):
+        now = time.time()
+        if now - self.last_heartbeat < 2:
+            return
+        self.last_heartbeat = now
+        self._update_status()
+
+    def _process_exists(self, pid):
+        if not pid:
+            return False
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
+
+    def _can_recover_stuck_launcher(self, lock_pid, status):
+        if not lock_pid or not self._process_exists(lock_pid):
+            return False
+
+        if not status or status.get("pid") != lock_pid:
+            return False
+
+        heartbeat_age = time.time() - float(status.get("last_heartbeat") or 0)
+        if heartbeat_age < 15:
+            return False
+
+        try:
+            self._fetch_json("/json/version")
+            return False
+        except Exception:
+            return True
+
+    def _terminate_process(self, pid, reason):
+        if not pid or pid == os.getpid():
+            return
+        print_warning(f"Stopping {reason} process {pid}")
+        try:
+            os.kill(pid, 15)
+        except OSError:
+            return
+
+    def _bring_slack_to_front(self):
+        app_target = self.slack_app_path or "/Applications/Slack.app"
+        try:
+            subprocess.run(
+                ["open", "-a", app_target],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception as error:
+            print_verbose(f"Could not bring Slack to the foreground: {error}")
+
+    def _terminate_legacy_launchers(self):
+        try:
+            result = subprocess.run(
+                ["ps", "-ax", "-o", "pid=", "-o", "command="],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except Exception as error:
+            print_verbose(f"Could not scan for duplicate launchers: {error}")
+            return
+
+        for raw_line in result.stdout.splitlines():
+            line = raw_line.strip()
+            if "launch-slackpolish-MAC-ARM.py" not in line:
+                continue
+            parts = line.split(None, 1)
+            if len(parts) != 2:
+                continue
+            try:
+                pid = int(parts[0])
+            except ValueError:
+                continue
+            if pid == os.getpid():
+                continue
+            self._terminate_process(pid, reason="legacy duplicate launcher")
 
     def _quit_slack(self):
         subprocess.run(["pkill", "-x", "Slack"], check=False)
@@ -487,6 +668,7 @@ class SlackPolishMacLauncher:
         for key in stale:
             self.sessions[key].close()
             del self.sessions[key]
+        self._update_status(phase="watching-targets", last_error=None)
 
     def _attach_target(self, target):
         session = SlackTargetSession(target)
@@ -559,6 +741,8 @@ def main():
     global VERBOSE
     args = parse_args()
     VERBOSE = args.verbose
+    append_log_line("")
+    append_log_line(f"=== launcher start {time.strftime('%Y-%m-%d %H:%M:%S')} pid={os.getpid()} ===")
 
     slack_executable = normalize_slack_app_path(args.slack_path) if args.slack_path else find_slack_executable()
     slack_app_path = None

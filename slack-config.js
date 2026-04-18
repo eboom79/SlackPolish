@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.5.1",
-    BUILD: 1,
-    BUILD_DATE: "2026-04-12",
-    DESCRIPTION: "macOS launcher reliability fixes and runtime status indicator",
+    VERSION: "1.5.2",
+    BUILD: 2,
+    BUILD_DATE: "2026-04-18",
+    DESCRIPTION: "Human voice tuning and launcher recovery improvements",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
@@ -61,7 +61,7 @@ window.SLACKPOLISH_CONFIG = {
                                      //
                                      // Recommended: 500 for most text improvements (good balance of cost/quality)
 
-    OPENAI_TEMPERATURE: 0.7,         // Creativity level for text improvement (0.0 = deterministic, 1.0 = creative)
+    OPENAI_TEMPERATURE: 0.3,         // Creativity level for text improvement (0.0 = deterministic, 1.0 = creative)
                                      //
                                      // Trade-offs:
                                      // • Lower (0.0-0.3): More consistent, predictable, formal responses
@@ -150,7 +150,7 @@ window.SLACKPOLISH_CONFIG = {
             PROFESSIONAL: 'Rewrite the following text in a professional, business-appropriate tone while maintaining the original meaning and key information. Return ONLY the improved text, nothing else.',
             CASUAL: 'Rewrite the following text in a casual, friendly tone while keeping the main message clear. Return ONLY the improved text, nothing else.',
             CONCISE: 'Rewrite the following text to be more concise and to the point while preserving all important information. Return ONLY the improved text, nothing else.',
-            TONE_POLISH: 'Fix grammar and improve word choice to sound like a native English speaker. Use natural English expressions, idioms, and phrasing that native speakers would use. Make the text sound fluent and natural. Preserve the original tone and message length. CRITICAL: Do not add any empty lines or line breaks. Keep the exact same line structure as the input. If the input has text on consecutive lines without empty lines between them, your output must also have text on consecutive lines without empty lines. Return ONLY the improved text, nothing else.',
+            TONE_POLISH: 'Fix grammar and improve clarity while preserving the original tone, rhythm, and message length. Make only the smallest edits needed. Keep the wording conversational and specific to the writer. If the text is already clear, stay very close to the original. Do not add emojis, buzzwords, corporate speak, polished AI phrasing, or generic transition words like "furthermore" or "additionally" unless they already fit the writer voice. Avoid making the message sound formal, salesy, or overly polished. CRITICAL: Do not add any empty lines or line breaks. Keep the exact same line structure as the input. If the input has text on consecutive lines without empty lines between them, your output must also have text on consecutive lines without empty lines. Return ONLY the improved text, nothing else.',
             GRAMMAR: 'Correct any grammar, spelling, and punctuation errors in the following text while maintaining the original tone and meaning exactly as written. Return ONLY the corrected text, nothing else.',
             TRANSLATE: 'Translate the following text accurately while preserving the original tone and meaning. Return ONLY the translated text, nothing else.'
         }

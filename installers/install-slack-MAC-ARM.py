@@ -195,9 +195,12 @@ def apply_custom_finder_icon(target_path, png_path):
 
 def build_app_shell_command(runtime_dir):
     launcher_path = runtime_dir / "launch-slackpolish-MAC-ARM.py"
+    log_dir = Path.home() / "Library" / "Application Support" / "SlackPolish Runtime" / "mac-arm-runtime" / "state"
+    log_path = log_dir / "launcher.log"
     return (
+        f"mkdir -p {shell_quote(str(log_dir))} && "
         f"cd {shell_quote(str(runtime_dir))} && "
-        f"nohup python3 {shell_quote(str(launcher_path))} --attach-or-relaunch --launch-mode open -v >/dev/null 2>&1 & "
+        f"nohup python3 {shell_quote(str(launcher_path))} --attach-or-relaunch --launch-mode open -v >>{shell_quote(str(log_path))} 2>&1 & "
     )
 
 

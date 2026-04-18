@@ -1260,7 +1260,10 @@
                     response = await window.SlackPolishOpenAI.improveText(
                         CONFIG.OPENAI_API_KEY,
                         CONFIG.MODEL,
-                        prompt
+                        prompt,
+                        {
+                            temperature: this.getImprovementTemperature()
+                        }
                     );
                 } else {
                     response = await this.callOpenAI(prompt);
@@ -1554,26 +1557,6 @@ Recent conversation context (last ${contextMessages.length} messages):
             if (window.SLACKPOLISH_CONFIG && window.SLACKPOLISH_CONFIG.PROMPTS && window.SLACKPOLISH_CONFIG.PROMPTS.STYLES) {
                 let detailedPrompt = window.SLACKPOLISH_CONFIG.PROMPTS.STYLES[CONFIG.STYLE];
                 if (detailedPrompt) {
-                    // For TONE_POLISH, add language-specific instructions
-                    if (CONFIG.STYLE === 'TONE_POLISH') {
-                        if (CONFIG.LANGUAGE === 'English (USA)') {
-                            detailedPrompt = detailedPrompt.replace(
-                                'sound like a native English speaker',
-                                'sound like a native American English speaker'
-                            ).replace(
-                                'Use natural English expressions',
-                                'Use natural American English expressions'
-                            );
-                        } else if (CONFIG.LANGUAGE === 'English (UK)') {
-                            detailedPrompt = detailedPrompt.replace(
-                                'sound like a native English speaker',
-                                'sound like a native British English speaker'
-                            ).replace(
-                                'Use natural English expressions',
-                                'Use natural British English expressions'
-                            );
-                        }
-                    }
                     styleInstruction = detailedPrompt;
                 }
             }
@@ -1593,6 +1576,20 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
 
             utils.debug('Prompt built', { promptLength: prompt.length });
             return prompt;
+        },
+
+        getImprovementTemperature() {
+            const configuredTemperature = window.SLACKPOLISH_CONFIG?.OPENAI_TEMPERATURE || 0.3;
+
+            if (CONFIG.STYLE === 'GRAMMAR') {
+                return Math.min(configuredTemperature, 0.1);
+            }
+
+            if (CONFIG.STYLE === 'TONE_POLISH') {
+                return Math.min(configuredTemperature, 0.2);
+            }
+
+            return configuredTemperature;
         },
 
         async getSmartContext() {
@@ -1868,7 +1865,7 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
                     }
                 ],
                 max_tokens: window.SLACKPOLISH_CONFIG?.OPENAI_MAX_TOKENS || 500,
-                temperature: window.SLACKPOLISH_CONFIG?.OPENAI_TEMPERATURE || 0.7
+                temperature: this.getImprovementTemperature()
             };
 
             utils.debug('API request body', requestBody);
