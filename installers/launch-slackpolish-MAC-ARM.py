@@ -196,6 +196,10 @@ class DevToolsProtocolError(RuntimeError):
     pass
 
 
+class AlreadyRunningAndFocused(RuntimeError):
+    pass
+
+
 class SimpleWebSocketClient:
     def __init__(self, websocket_url):
         parsed = urllib.parse.urlparse(websocket_url)
@@ -354,6 +358,16 @@ class SlackTargetSession:
             },
         )
 
+    def evaluate_expression(self, expression):
+        return self._command(
+            "Runtime.evaluate",
+            {
+                "expression": expression,
+                "awaitPromise": False,
+                "returnByValue": True,
+            },
+        )
+
     def close(self):
         self.websocket.close()
 
@@ -493,6 +507,11 @@ class SlackPolishMacLauncher:
                 print_warning("Recovered from a stale SlackPolish launcher process")
                 return
 
+            if self._devtools_available():
+                self._bring_slack_to_front()
+                print_success("SlackPolish is already running. Brought Slack to the foreground.")
+                raise AlreadyRunningAndFocused()
+
             self._bring_slack_to_front()
             raise RuntimeError(f"SlackPolish is already running. Logs: {LOG_PATH}")
 
@@ -579,15 +598,25 @@ class SlackPolishMacLauncher:
 
     def _bring_slack_to_front(self):
         app_target = self.slack_app_path or "/Applications/Slack.app"
-        try:
-            subprocess.run(
-                ["open", "-a", app_target],
-                check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        except Exception as error:
-            print_verbose(f"Could not bring Slack to the foreground: {error}")
+        commands = [
+            ["open", "-a", app_target],
+            ["osascript", "-e", 'tell application "Slack" to activate'],
+            ["osascript", "-e", 'tell application id "com.tinyspeck.slackmacgap" to activate'],
+        ]
+        for command in commands:
+            try:
+                subprocess.run(
+                    command,
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            except Exception as error:
+                print_verbose(
+                    "Could not run foreground command "
+                    + " ".join(command)
+                    + f": {error}"
+                )
 
     def _terminate_legacy_launchers(self):
         try:
@@ -665,6 +694,7 @@ class SlackPolishMacLauncher:
 
             current_keys.add(websocket_url)
             if websocket_url in self.sessions:
+                self._refresh_target(target, websocket_url)
                 continue
 
             self._attach_target(target)
@@ -674,6 +704,33 @@ class SlackPolishMacLauncher:
             self.sessions[key].close()
             del self.sessions[key]
         self._update_status(phase="watching-targets", last_error=None)
+
+    def _refresh_target(self, target, websocket_url):
+        session = self.sessions.get(websocket_url)
+        if not session:
+            return
+
+        session.target = target
+
+        try:
+            if self._target_needs_runtime_reinject(session):
+                print_warning(
+                    "SlackPolish runtime was missing from target. Re-injecting: "
+                    + f"{target.get('title') or '(untitled)'} | {target.get('url')}"
+                )
+                session.install_script(self.runtime_payload)
+                session.evaluate(self.runtime_payload)
+                print_success(
+                    "Re-injected SlackPolish into target: "
+                    + f"{target.get('title') or '(untitled)'} | {target.get('url')}"
+                )
+        except Exception as error:
+            print_warning(f"Target session became unhealthy, reattaching: {error}")
+            try:
+                session.close()
+            finally:
+                del self.sessions[websocket_url]
+            self._attach_target(target)
 
     def _attach_target(self, target):
         session = SlackTargetSession(target)
@@ -686,10 +743,45 @@ class SlackPolishMacLauncher:
             + f"{target.get('title') or '(untitled)'} | {target.get('url')}"
         )
 
+    def _target_needs_runtime_reinject(self, session):
+        result = session.evaluate_expression(
+            """
+(() => {
+    const href = String(window.location.href || '');
+    const runtime = window.__SLACKPOLISH_RUNTIME_ACTIVE__;
+    const badge = document.getElementById('slackpolish-runtime-status');
+    return {
+        href,
+        hasRuntime: !!runtime,
+        hasBadge: !!badge,
+        runtimeHref: runtime && runtime.href ? String(runtime.href) : null
+    };
+})()
+""".strip()
+        )
+        value = result.get("result", {}).get("value") or {}
+
+        href = str(value.get("href") or "")
+        has_runtime = bool(value.get("hasRuntime"))
+        has_badge = bool(value.get("hasBadge"))
+        runtime_href = str(value.get("runtimeHref") or "")
+
+        if not href.startswith("https://app.slack.com/client/"):
+            return False
+
+        return not has_runtime or not has_badge or runtime_href != href
+
     def _fetch_json(self, path):
         url = f"http://127.0.0.1:{self.debug_port}{path}"
         with urllib.request.urlopen(url, timeout=3) as response:
             return json.load(response)
+
+    def _devtools_available(self):
+        try:
+            self._fetch_json("/json/version")
+            return True
+        except Exception:
+            return False
 
 
 def parse_args():
@@ -775,6 +867,8 @@ def main():
 
     try:
         launcher.run()
+        return 0
+    except AlreadyRunningAndFocused:
         return 0
     except KeyboardInterrupt:
         return 0

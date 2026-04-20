@@ -743,9 +743,8 @@
             });
         },
 
-        setTextWithFormatting: function(element, text, textState = null) {
-            // Clear the element
-            element.innerHTML = '';
+        buildFormattedFragment: function(text, textState = null) {
+            const fragment = document.createDocumentFragment();
 
             const lines = text.split('\n');
             let currentList = null;
@@ -764,7 +763,7 @@
                     if (!currentList || currentListType !== 'ol') {
                         currentList = document.createElement('ol');
                         currentListType = 'ol';
-                        element.appendChild(currentList);
+                        fragment.appendChild(currentList);
                     }
 
                     const li = document.createElement('li');
@@ -782,7 +781,7 @@
                     if (!currentList || currentListType !== 'ul') {
                         currentList = document.createElement('ul');
                         currentListType = 'ul';
-                        element.appendChild(currentList);
+                        fragment.appendChild(currentList);
                     }
 
                     const li = document.createElement('li');
@@ -797,8 +796,31 @@
 
                 const p = document.createElement('p');
                 this.appendTextWithMentions(p, trimmedLine, textState);
-                element.appendChild(p);
+                fragment.appendChild(p);
             });
+
+            return fragment;
+        },
+
+        setTextWithFormatting: function(element, text, textState = null) {
+            const fragment = this.buildFormattedFragment(text, textState);
+            element.replaceChildren(fragment);
+        },
+
+        notifySlackDraftChanged: function(element) {
+            try {
+                element.dispatchEvent(new InputEvent('input', {
+                    bubbles: true,
+                    cancelable: false,
+                    data: null,
+                    inputType: 'insertReplacementText'
+                }));
+            } catch (error) {
+                utils.debug('Falling back to plain input event dispatch', {
+                    error: error.message
+                });
+                element.dispatchEvent(new Event('input', { bubbles: true }));
+            }
         },
 
         isInThread: function() {
@@ -891,12 +913,7 @@
                 element.innerText = text;
             }
 
-            // Trigger input events to notify Slack
-            const events = ['input', 'change', 'keyup'];
-            events.forEach(eventType => {
-                const event = new Event(eventType, { bubbles: true });
-                element.dispatchEvent(event);
-            });
+            this.notifySlackDraftChanged(element);
         },
 
         replaceSelectedText: function(element, improvedText, selectionInfo) {
@@ -920,11 +937,10 @@
                 // Insert the improved text
                 range.insertNode(textNode);
 
-                // Create a new range to select the inserted text
+                // Collapse the caret after the inserted text to avoid visible reselection flicker
                 const newRange = document.createRange();
-                newRange.selectNodeContents(textNode);
-
-                // Clear current selection and select the new text
+                newRange.setStartAfter(textNode);
+                newRange.collapse(true);
                 selection.removeAllRanges();
                 selection.addRange(newRange);
 
@@ -933,12 +949,7 @@
                     elementContent: element.innerText
                 });
 
-                // Trigger input events to notify Slack
-                const events = ['input', 'change', 'keyup'];
-                events.forEach(eventType => {
-                    const event = new Event(eventType, { bubbles: true });
-                    element.dispatchEvent(event);
-                });
+                this.notifySlackDraftChanged(element);
 
             } catch (error) {
                 utils.debug('❌ Error replacing selected text:', error);
@@ -1056,25 +1067,13 @@
                     const textNode = document.createTextNode(improvedText);
                     range.insertNode(textNode);
 
-                    // Trigger input events to notify Slack FIRST
-                    const events = ['input', 'change', 'keyup'];
-                    events.forEach(eventType => {
-                        const event = new Event(eventType, { bubbles: true });
-                        element.dispatchEvent(event);
-                    });
+                    this.notifySlackDraftChanged(element);
 
-                    // Then select the newly inserted text after a small delay
-                    setTimeout(() => {
-                        const newRange = document.createRange();
-                        newRange.selectNodeContents(textNode);
-                        selection.removeAllRanges();
-                        selection.addRange(newRange);
-
-                        console.log('✅ Selection applied after delay:', {
-                            selectedText: selection.toString(),
-                            rangeCount: selection.rangeCount
-                        });
-                    }, 100);
+                    const newRange = document.createRange();
+                    newRange.setStartAfter(textNode);
+                    newRange.collapse(true);
+                    selection.removeAllRanges();
+                    selection.addRange(newRange);
 
                     utils.debug('✅ Selected text replacement with preserved info completed');
                 } else {
@@ -1090,17 +1089,9 @@
                         element.innerText = newFullText;
                     }
 
-                    // Trigger input events to notify Slack
-                    const events = ['input', 'change', 'keyup'];
-                    events.forEach(eventType => {
-                        const event = new Event(eventType, { bubbles: true });
-                        element.dispatchEvent(event);
-                    });
+                    this.notifySlackDraftChanged(element);
 
-                    // Try to select the improved text portion after DOM settles
-                    setTimeout(() => {
-                        this.selectTextRange(element, selectionIndex, selectionIndex + improvedText.length);
-                    }, 100);
+                    this.placeCaretAtTextPosition(element, selectionIndex + improvedText.length);
                 }
 
             } catch (error) {
@@ -1262,6 +1253,46 @@
             }
         },
 
+        placeCaretAtTextPosition: function(element, textIndex) {
+            try {
+                const selection = window.getSelection();
+                const range = document.createRange();
+                const walker = document.createTreeWalker(
+                    element,
+                    NodeFilter.SHOW_TEXT,
+                    null,
+                    false
+                );
+
+                let currentIndex = 0;
+                let targetNode = null;
+                let targetOffset = 0;
+                let node;
+
+                while (node = walker.nextNode()) {
+                    const nodeLength = node.textContent.length;
+                    if (currentIndex + nodeLength >= textIndex) {
+                        targetNode = node;
+                        targetOffset = Math.max(0, textIndex - currentIndex);
+                        break;
+                    }
+                    currentIndex += nodeLength;
+                }
+
+                if (!targetNode) {
+                    targetNode = element;
+                    targetOffset = element.childNodes.length;
+                }
+
+                range.setStart(targetNode, targetOffset);
+                range.collapse(true);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            } catch (error) {
+                utils.debug('❌ Error placing caret at text position:', error);
+            }
+        },
+
         handleDebugInsertion: function(element, markedText) {
             // Parse debug marker
             const markerEnd = markedText.indexOf(']');
@@ -1353,12 +1384,7 @@
 
             element.innerText = text;
 
-            // Trigger events
-            const events = ['input', 'change', 'keyup'];
-            events.forEach(eventType => {
-                const event = new Event(eventType, { bubbles: true });
-                element.dispatchEvent(event);
-            });
+            this.notifySlackDraftChanged(element);
 
             utils.debug('Instant insertion completed', { finalText: element.innerText });
         },
@@ -1508,6 +1534,36 @@
     const textImprover = {
         isProcessing: false,
 
+        preserveLeadingGreeting(originalText, improvedText) {
+            if (!originalText || !improvedText) {
+                return improvedText;
+            }
+
+            const greetingMatch = originalText.match(
+                /^(\s*(?:hi|hello|hey|dear|good morning|good afternoon|good evening)\b[^\n]{0,80})(\n|$)/i
+            );
+            if (!greetingMatch) {
+                return improvedText;
+            }
+
+            const originalGreeting = greetingMatch[1];
+            const originalSuffix = greetingMatch[2] || '';
+            const normalizedOriginalGreeting = originalGreeting.trim().toLowerCase();
+            const normalizedImprovedStart = improvedText.trim().slice(0, originalGreeting.trim().length + 10).toLowerCase();
+
+            if (normalizedImprovedStart.startsWith(normalizedOriginalGreeting)) {
+                return improvedText;
+            }
+
+            const separator = originalSuffix === '\n' ? '\n' : ' ';
+            utils.debug('Restoring dropped leading greeting', {
+                originalGreeting,
+                originalText,
+                improvedText
+            });
+            return `${originalGreeting}${separator}${improvedText.trimStart()}`;
+        },
+
         async improveText(originalText, textState = null) {
             utils.debug('improveText() called', {
                 originalText,
@@ -1626,6 +1682,8 @@
                             removedExtraLineBreaks: response.trim() !== processedResponse
                         });
                     }
+
+                    processedResponse = this.preserveLeadingGreeting(originalText, processedResponse);
 
                     utils.debug('Text improvement successful', {
                         originalLength: originalText.length,
@@ -2234,14 +2292,91 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
     let currentKeyupListener = null;
     let currentFocusListener = null;
     let currentBlurListener = null;
+    let currentStorageListener = null;
+    let currentCustomSettingsListener = null;
+
+    function getGlobalListenerState() {
+        if (!window.__SLACKPOLISH_LISTENER_STATE__) {
+            window.__SLACKPOLISH_LISTENER_STATE__ = {
+                keydown: null,
+                keyup: null,
+                focus: null,
+                blur: null,
+                storage: null,
+                settingsCustom: null,
+                activeSetupId: null,
+                isProcessing: false,
+                lastSuccessfulTriggerTime: 0,
+                hotkeyPressedOnce: false
+            };
+        }
+        return window.__SLACKPOLISH_LISTENER_STATE__;
+    }
+
+    function teardownRuntime() {
+        const globalListenerState = getGlobalListenerState();
+
+        try {
+            if (globalListenerState.keydown) {
+                document.removeEventListener('keydown', globalListenerState.keydown);
+            }
+            if (globalListenerState.keyup) {
+                document.removeEventListener('keyup', globalListenerState.keyup);
+            }
+            if (globalListenerState.focus) {
+                window.removeEventListener('focus', globalListenerState.focus);
+            }
+            if (globalListenerState.blur) {
+                window.removeEventListener('blur', globalListenerState.blur);
+            }
+            if (globalListenerState.storage) {
+                window.removeEventListener('storage', globalListenerState.storage);
+            }
+            if (globalListenerState.settingsCustom) {
+                window.removeEventListener('slackpolish-settings-updated', globalListenerState.settingsCustom);
+            }
+        } catch (error) {
+            console.log('🔧 SLACKPOLISH: Runtime teardown warning:', error.message);
+        }
+
+        currentKeydownListener = null;
+        currentKeyupListener = null;
+        currentFocusListener = null;
+        currentBlurListener = null;
+        currentStorageListener = null;
+        currentCustomSettingsListener = null;
+
+        globalListenerState.keydown = null;
+        globalListenerState.keyup = null;
+        globalListenerState.focus = null;
+        globalListenerState.blur = null;
+        globalListenerState.storage = null;
+        globalListenerState.settingsCustom = null;
+        globalListenerState.isProcessing = false;
+        globalListenerState.hotkeyPressedOnce = false;
+    }
 
     // Event handlers
     function setupEventListeners() {
         const setupId = Date.now(); // Unique ID for this setup call
+        const globalListenerState = getGlobalListenerState();
         utils.log(`Setting up ${CONFIG.HOTKEY} event listener (setup-id: ${setupId})`);
 
         // Enhanced cleanup with defensive programming
         try {
+            if (globalListenerState.keydown) {
+                document.removeEventListener('keydown', globalListenerState.keydown);
+            }
+            if (globalListenerState.keyup) {
+                document.removeEventListener('keyup', globalListenerState.keyup);
+            }
+            if (globalListenerState.focus) {
+                window.removeEventListener('focus', globalListenerState.focus);
+            }
+            if (globalListenerState.blur) {
+                window.removeEventListener('blur', globalListenerState.blur);
+            }
+
             if (currentKeydownListener) {
                 document.removeEventListener('keydown', currentKeydownListener);
                 utils.debug('Removed previous keydown listener', { setupId });
@@ -2275,6 +2410,17 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
         currentKeyupListener = null;
         currentFocusListener = null;
         currentBlurListener = null;
+        currentStorageListener = null;
+        currentCustomSettingsListener = null;
+        globalListenerState.keydown = null;
+        globalListenerState.keyup = null;
+        globalListenerState.focus = null;
+        globalListenerState.blur = null;
+        globalListenerState.storage = null;
+        globalListenerState.settingsCustom = null;
+        globalListenerState.activeSetupId = setupId;
+        globalListenerState.isProcessing = false;
+        globalListenerState.hotkeyPressedOnce = false;
 
         const hotkey = parseHotkey(CONFIG.HOTKEY);
         utils.debug('Parsed hotkey configuration', {
@@ -2283,10 +2429,7 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
             setupId
         });
 
-        let isProcessing = false; // Flag to prevent double-triggers
-        let lastSuccessfulTriggerTime = 0;
         const MIN_TRIGGER_INTERVAL = 500; // Minimum 500ms between successful triggers
-        let hotkeyPressedOnce = false; // Track if hotkey was already detected in this key sequence
 
         // Helper function to check if hotkey matches using native browser properties
         // This is more reliable than manually tracking key states
@@ -2328,8 +2471,8 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
                     },
                     required: hotkey,
                     match: hotkeyMatch,
-                    isProcessing,
-                    hotkeyPressedOnce,
+                    isProcessing: globalListenerState.isProcessing,
+                    hotkeyPressedOnce: globalListenerState.hotkeyPressedOnce,
                     setupId
                 });
             }
@@ -2342,13 +2485,13 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
 
                 // Prevent multiple triggers from the same key sequence
                 // (e.g., when both Ctrl and Shift fire keydown events)
-                if (hotkeyPressedOnce) {
+                if (globalListenerState.hotkeyPressedOnce) {
                     utils.debug('Hotkey already detected in this sequence, ignoring duplicate', { setupId });
                     return;
                 }
 
                 // Prevent triggering while already processing
-                if (isProcessing) {
+                if (globalListenerState.isProcessing) {
                     utils.debug('Already processing a trigger, ignoring new hotkey press', { setupId });
                     return;
                 }
@@ -2357,9 +2500,9 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
 
                 // Rate limiting - only apply to successful triggers
                 // This allows rapid retries if the previous attempt failed
-                if (now - lastSuccessfulTriggerTime < MIN_TRIGGER_INTERVAL) {
+                if (now - globalListenerState.lastSuccessfulTriggerTime < MIN_TRIGGER_INTERVAL) {
                     utils.debug('Hotkey trigger rate limited', {
-                        timeSinceLastTrigger: now - lastSuccessfulTriggerTime,
+                        timeSinceLastTrigger: now - globalListenerState.lastSuccessfulTriggerTime,
                         minInterval: MIN_TRIGGER_INTERVAL,
                         setupId
                     });
@@ -2367,19 +2510,19 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
                 }
 
                 // Mark that we've detected the hotkey in this sequence
-                hotkeyPressedOnce = true;
+                globalListenerState.hotkeyPressedOnce = true;
 
                 utils.log(`${CONFIG.HOTKEY} combination pressed - triggering text improvement (setup-id: ${setupId})`);
 
                 // Trigger immediately without debounce delay
                 // This makes fast presses work reliably
-                isProcessing = true;
+                globalListenerState.isProcessing = true;
                 (async () => {
                     try {
                         utils.log(`${CONFIG.HOTKEY} triggered - starting text improvement (setup-id: ${setupId})`);
                         await triggerTextImprovement();
                         // Only update lastSuccessfulTriggerTime after successful completion
-                        lastSuccessfulTriggerTime = Date.now();
+                        globalListenerState.lastSuccessfulTriggerTime = Date.now();
                     } catch (error) {
                         utils.log(`Error in hotkey trigger: ${error.message}`);
                         utils.debug('Hotkey trigger error', {
@@ -2388,13 +2531,14 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
                             setupId
                         });
                     } finally {
-                        isProcessing = false;
+                        globalListenerState.isProcessing = false;
                     }
                 })();
             }
         };
 
         document.addEventListener('keydown', currentKeydownListener);
+        globalListenerState.keydown = currentKeydownListener;
 
         // Dynamic keyup handler - reset the sequence flag when keys are released
         currentKeyupListener = function(event) {
@@ -2406,7 +2550,7 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
 
             if (isRequiredKey) {
                 // Reset the flag so the next key sequence can trigger
-                hotkeyPressedOnce = false;
+                globalListenerState.hotkeyPressedOnce = false;
                 utils.debug('Required key released, reset sequence flag', {
                     releasedKey: event.key,
                     setupId
@@ -2415,21 +2559,24 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
         };
 
         document.addEventListener('keyup', currentKeyupListener);
+        globalListenerState.keyup = currentKeyupListener;
 
         // Focus/blur listeners to reset state when window loses/regains focus
         // This prevents stuck key states when user switches windows
         currentFocusListener = function(event) {
-            hotkeyPressedOnce = false;
+            globalListenerState.hotkeyPressedOnce = false;
             utils.debug('Window focus changed, reset sequence flag', { setupId });
         };
 
         currentBlurListener = function(event) {
-            hotkeyPressedOnce = false;
+            globalListenerState.hotkeyPressedOnce = false;
             utils.debug('Window blur, reset sequence flag', { setupId });
         };
 
         window.addEventListener('focus', currentFocusListener);
         window.addEventListener('blur', currentBlurListener);
+        globalListenerState.focus = currentFocusListener;
+        globalListenerState.blur = currentBlurListener;
 
         // Log successful setup completion
         utils.log(`Event listeners registered successfully for ${CONFIG.HOTKEY} (setup-id: ${setupId})`);
@@ -4412,6 +4559,15 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
 
     // Set up storage event listener for real-time settings updates
     function setupSettingsListener() {
+        const globalListenerState = getGlobalListenerState();
+
+        if (globalListenerState.storage) {
+            window.removeEventListener('storage', globalListenerState.storage);
+        }
+        if (globalListenerState.settingsCustom) {
+            window.removeEventListener('slackpolish-settings-updated', globalListenerState.settingsCustom);
+        }
+
         // Debouncing variables to prevent multiple rapid re-registrations
         let settingsUpdateTimeout = null;
         let settingsUpdateCount = 0;
@@ -4503,16 +4659,20 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
         }
 
         // Listen for localStorage changes from the settings script
-        window.addEventListener('storage', function(e) {
+        currentStorageListener = function(e) {
             if (e.key === 'slackpolish_settings' || e.key === 'slackpolish_openai_api_key') {
                 handleSettingsUpdate('storage', e.key);
             }
-        });
+        };
+        window.addEventListener('storage', currentStorageListener);
+        globalListenerState.storage = currentStorageListener;
 
         // Also listen for custom events (for same-tab updates)
-        window.addEventListener('slackpolish-settings-updated', function() {
+        currentCustomSettingsListener = function() {
             handleSettingsUpdate('custom-event');
-        });
+        };
+        window.addEventListener('slackpolish-settings-updated', currentCustomSettingsListener);
+        globalListenerState.settingsCustom = currentCustomSettingsListener;
 
         utils.log('Real-time settings listener initialized with debouncing');
         utils.debug('Settings listener configuration', {
@@ -4523,6 +4683,14 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
     }
 
     // Start the application
+    if (window.__SLACKPOLISH_RUNTIME_TEARDOWN__) {
+        try {
+            window.__SLACKPOLISH_RUNTIME_TEARDOWN__();
+        } catch (error) {
+            console.log('🔧 SLACKPOLISH: Previous runtime teardown failed:', error.message);
+        }
+    }
+    window.__SLACKPOLISH_RUNTIME_TEARDOWN__ = teardownRuntime;
     init();
 
 })();
