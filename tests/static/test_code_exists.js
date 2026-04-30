@@ -70,17 +70,18 @@ class StaticCodeAnalysisTests {
         const filePath = path.join(this.rootDir, 'slack-text-improver.js');
         const content = fs.readFileSync(filePath, 'utf8');
         
-        // Test core functions exist
+        // Test core functions exist. Match signatures loosely so adding
+        // optional parameters does not break this existence check.
         const requiredFunctions = [
-            'function loadSettings',
-            'improveText(originalText)',  // Method of textImprover object
-            'function init',
-            'function setupEventListeners'
+            { name: 'loadSettings', pattern: /function\s+loadSettings\s*\([^)]*\)\s*\{/ },
+            { name: 'textImprover.improveText', pattern: /(?:async\s+)?improveText\s*\(\s*originalText(?:\s*,[^)]*)?\)\s*\{/ },
+            { name: 'init', pattern: /function\s+init\s*\([^)]*\)\s*\{/ },
+            { name: 'setupEventListeners', pattern: /function\s+setupEventListeners\s*\([^)]*\)\s*\{/ }
         ];
-        
+
         requiredFunctions.forEach(func => {
-            assert(content.includes(func), 
-                `Critical function missing: ${func}`);
+            assert(func.pattern.test(content),
+                `Critical function missing: ${func.name}`);
         });
         
         console.log('✅ All critical functions exist');

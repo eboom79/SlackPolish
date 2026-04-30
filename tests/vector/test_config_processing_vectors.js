@@ -48,7 +48,7 @@ class ConfigProcessor {
             return {
                 success: false,
                 settings: { ...ConfigProcessor.defaultSettings },
-                error: error.message
+                error: error instanceof SyntaxError ? 'Invalid settings JSON' : error.message
             };
         }
     }
@@ -201,7 +201,7 @@ const parseSettingsTestVectors = [
         expected: {
             success: false,
             settings: ConfigProcessor.defaultSettings,
-            error: "Unexpected token i in JSON at position 0"
+            error: "Invalid settings JSON"
         }
     },
     {
