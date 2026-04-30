@@ -401,6 +401,8 @@ class SlackPolishMacLauncher:
         self.sessions = {}
         self.lock_handle = None
         self.last_heartbeat = 0
+        self.devtools_failure_count = 0
+        self.last_devtools_recovery = 0
         self.status = {
             "pid": os.getpid(),
             "started_at": int(time.time()),
@@ -414,6 +416,8 @@ class SlackPolishMacLauncher:
             "slack_executable": self.slack_executable,
             "last_error": None,
             "session_count": 0,
+            "devtools_failure_count": 0,
+            "last_devtools_recovery": None,
         }
 
     def run(self):
@@ -447,12 +451,11 @@ class SlackPolishMacLauncher:
                     self._update_status(phase="stopped")
                     break
                 except Exception as error:
-                    print_warning(f"Target polling error: {error}")
-                    self._update_status(phase="poll-error", last_error=str(error))
+                    if self._handle_target_poll_error(error):
+                        continue
                     time.sleep(self.inject_interval)
         finally:
-            for session in self.sessions.values():
-                session.close()
+            self._close_sessions()
             self._update_status(phase="stopped", session_count=0)
             self._release_single_instance_lock()
 
@@ -678,6 +681,7 @@ class SlackPolishMacLauncher:
 
     def _poll_targets(self):
         targets = self._fetch_json("/json/list")
+        self.devtools_failure_count = 0
         current_keys = set()
 
         for target in targets:
@@ -703,7 +707,86 @@ class SlackPolishMacLauncher:
         for key in stale:
             self.sessions[key].close()
             del self.sessions[key]
-        self._update_status(phase="watching-targets", last_error=None)
+        self._update_status(
+            phase="watching-targets",
+            last_error=None,
+            devtools_failure_count=self.devtools_failure_count,
+        )
+
+    def _handle_target_poll_error(self, error):
+        print_warning(f"Target polling error: {error}")
+
+        if self._devtools_available():
+            self.devtools_failure_count = 0
+            self._update_status(
+                phase="poll-error",
+                last_error=str(error),
+                devtools_failure_count=self.devtools_failure_count,
+            )
+            return False
+
+        self.devtools_failure_count += 1
+        self._update_status(
+            phase="poll-error",
+            last_error=str(error),
+            devtools_failure_count=self.devtools_failure_count,
+        )
+
+        if self.devtools_failure_count < 3:
+            return False
+
+        if not (self.attach_or_relaunch or self.launch_slack or self.relaunch):
+            print_warning(
+                "Slack DevTools endpoint is unavailable. Attach-only mode will keep waiting."
+            )
+            return False
+
+        now = time.time()
+        if now - self.last_devtools_recovery < 15:
+            return False
+
+        self.last_devtools_recovery = now
+        self._recover_lost_devtools_endpoint()
+        return True
+
+    def _recover_lost_devtools_endpoint(self):
+        print_warning(
+            "Slack DevTools endpoint appears to be gone. "
+            "Relaunching Slack with SlackPolish runtime enabled..."
+        )
+        self._close_sessions()
+        self._update_status(
+            phase="recovering-devtools",
+            last_error=None,
+            session_count=0,
+            last_devtools_recovery=int(self.last_devtools_recovery),
+        )
+
+        if self.attach_or_relaunch:
+            self._connect_or_relaunch_if_needed()
+        else:
+            self._quit_slack()
+            self._launch_slack()
+            print_info("Waiting for Slack DevTools endpoint after recovery relaunch...")
+            self._wait_for_devtools()
+            print_success(
+                f"Connected to DevTools endpoint on port {self.debug_port} after recovery relaunch"
+            )
+
+        self.devtools_failure_count = 0
+        self._update_status(
+            phase="watching-targets",
+            last_error=None,
+            devtools_failure_count=self.devtools_failure_count,
+        )
+
+    def _close_sessions(self):
+        for session in self.sessions.values():
+            try:
+                session.close()
+            except Exception:
+                pass
+        self.sessions.clear()
 
     def _refresh_target(self, target, websocket_url):
         session = self.sessions.get(websocket_url)
