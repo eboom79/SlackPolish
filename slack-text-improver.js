@@ -1534,34 +1534,84 @@
     const textImprover = {
         isProcessing: false,
 
+        extractStandaloneGreeting(text) {
+            if (!text) {
+                return null;
+            }
+
+            const greetingLineMatch = text.match(/^([^\n]*)(\n|$)/);
+            if (!greetingLineMatch) {
+                return null;
+            }
+
+            const greetingLine = greetingLineMatch[1];
+            const suffix = greetingLineMatch[2] || '';
+            const trimmedGreetingLine = greetingLine.trim();
+            const greetingPrefixMatch = trimmedGreetingLine.match(/^(hi|hello|hey|dear|good morning|good afternoon|good evening)\b/i);
+
+            if (!greetingPrefixMatch) {
+                return null;
+            }
+
+            const greetingRemainder = trimmedGreetingLine.slice(greetingPrefixMatch[0].length);
+            const isStandaloneGreeting = /^(?:[\s,]+(?:__SLACKPOLISH_MENTION_\d+__|@[A-Za-z0-9._-]+|[A-Z][A-Za-z0-9._-]*|all|team|everyone|folks)){0,6}[,:!]?\s*$/.test(greetingRemainder);
+
+            if (!isStandaloneGreeting) {
+                return null;
+            }
+
+            return {
+                text: greetingLine,
+                suffix
+            };
+        },
+
         preserveLeadingGreeting(originalText, improvedText) {
             if (!originalText || !improvedText) {
                 return improvedText;
             }
 
-            const greetingMatch = originalText.match(
-                /^(\s*(?:hi|hello|hey|dear|good morning|good afternoon|good evening)\b[^\n]{0,80})(\n|$)/i
-            );
-            if (!greetingMatch) {
+            const originalGreeting = this.extractStandaloneGreeting(originalText);
+            if (!originalGreeting) {
                 return improvedText;
             }
 
-            const originalGreeting = greetingMatch[1];
-            const originalSuffix = greetingMatch[2] || '';
-            const normalizedOriginalGreeting = originalGreeting.trim().toLowerCase();
-            const normalizedImprovedStart = improvedText.trim().slice(0, originalGreeting.trim().length + 10).toLowerCase();
+            const normalizedOriginalGreeting = originalGreeting.text.trim().toLowerCase();
+            const improvedGreeting = this.extractStandaloneGreeting(improvedText);
 
+            if (improvedGreeting) {
+                const normalizedImprovedGreeting = improvedGreeting.text.trim().toLowerCase();
+                if (normalizedImprovedGreeting === normalizedOriginalGreeting) {
+                    return improvedText;
+                }
+
+                const improvedRemainder = improvedText.slice(improvedGreeting.text.length + improvedGreeting.suffix.length).trimStart();
+                const separator = originalGreeting.suffix === '\n' || improvedGreeting.suffix === '\n' ? '\n' : ' ';
+                const restoredGreetingText = improvedRemainder
+                    ? `${originalGreeting.text}${separator}${improvedRemainder}`
+                    : originalGreeting.text;
+
+                utils.debug('Replacing rewritten leading greeting', {
+                    originalGreeting: originalGreeting.text,
+                    improvedGreeting: improvedGreeting.text,
+                    originalText,
+                    improvedText
+                });
+                return restoredGreetingText;
+            }
+
+            const normalizedImprovedStart = improvedText.trim().slice(0, originalGreeting.text.trim().length + 10).toLowerCase();
             if (normalizedImprovedStart.startsWith(normalizedOriginalGreeting)) {
                 return improvedText;
             }
 
-            const separator = originalSuffix === '\n' ? '\n' : ' ';
+            const separator = originalGreeting.suffix === '\n' ? '\n' : ' ';
             utils.debug('Restoring dropped leading greeting', {
-                originalGreeting,
+                originalGreeting: originalGreeting.text,
                 originalText,
                 improvedText
             });
-            return `${originalGreeting}${separator}${improvedText.trimStart()}`;
+            return `${originalGreeting.text}${separator}${improvedText.trimStart()}`;
         },
 
         async improveText(originalText, textState = null) {
