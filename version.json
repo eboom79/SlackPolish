@@ -1,8 +1,8 @@
 {
     "major": 1,
     "minor": 5,
-    "build": 3,
-    "version_string": "1.5.3",
-    "description": "Slack entity preservation and simplified status UI",
-    "date": "2026-04-18"
+    "build": 4,
+    "version_string": "1.5.4",
+    "description": "Runtime launcher recovery and standalone greeting preservation",
+    "date": "2026-04-30"
 }

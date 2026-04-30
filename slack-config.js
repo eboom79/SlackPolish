@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.5.3",
-    BUILD: 3,
-    BUILD_DATE: "2026-04-18",
-    DESCRIPTION: "Slack entity preservation and simplified status UI",
+    VERSION: "1.5.4",
+    BUILD: 4,
+    BUILD_DATE: "2026-04-30",
+    DESCRIPTION: "Runtime launcher recovery and standalone greeting preservation",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
