@@ -577,6 +577,11 @@
                 return false;
             }
 
+            const tagName = (node.tagName || '').toLowerCase();
+            if (tagName === 'ts-mention') {
+                return true;
+            }
+
             const text = (node.textContent || '').trim();
             if (!text.startsWith('@')) {
                 return false;
@@ -594,6 +599,7 @@
                 stringifyType.includes('mention') ||
                 stringifyType.includes('user') ||
                 className.includes('mention') ||
+                className.includes('member_slug') ||
                 ariaLabel.includes('mention')
             );
         },
@@ -617,12 +623,16 @@
                 return false;
             }
 
+            const tagName = (node.tagName || '').toLowerCase();
+            if (tagName === 'ts-mention') {
+                return false;
+            }
+
             const text = (node.textContent || '').trim();
             if (!text) {
                 return false;
             }
 
-            const tagName = (node.tagName || '').toLowerCase();
             const href = (node.getAttribute('href') || '').trim();
             const dataQa = (node.getAttribute('data-qa') || '').toLowerCase();
             const stringifyType = (node.getAttribute('data-stringify-type') || '').toLowerCase();
@@ -1937,8 +1947,8 @@ Available test commands (use in debug mode only):
 
             let prompt = `You are helping improve a Slack message.`;
 
-            // Add Smart Context if enabled (but skip for TONE_POLISH to avoid formatting confusion)
-            if (CONFIG.SMART_CONTEXT && CONFIG.SMART_CONTEXT.enabled && CONFIG.STYLE !== 'TONE_POLISH') {
+            // Add Smart Context if enabled
+            if (CONFIG.SMART_CONTEXT && CONFIG.SMART_CONTEXT.enabled && this.shouldUseSmartContext(text)) {
                 try {
                     const contextMessages = await this.getSmartContext();
                     if (contextMessages && contextMessages.length > 0) {
@@ -1980,7 +1990,7 @@ ${styleInstruction}:
 
 ${text}
 
-IMPORTANT: Respond with ONLY the improved text. Do not include any explanations, quotes, requirements, or additional text. Use ${CONFIG.LANGUAGE} language. Do NOT reference the conversation context.`;
+IMPORTANT: Respond with ONLY the improved text. Do not include any explanations, quotes, requirements, or additional text. Use ${CONFIG.LANGUAGE} language. Use the conversation context above only to understand the writer's intent, the topic, and the appropriate tone — do not quote it, summarize it, or address other participants. Improve only the message below.`;
 
             if (utils.hasProtectedEntities(textState)) {
                 prompt += '\nIMPORTANT: Tokens like __SLACKPOLISH_MENTION_1__ and __SLACKPOLISH_LINK_1__ represent real Slack entities such as mentions and links. Preserve every such token exactly, without renaming, removing, reordering, or breaking it.';
@@ -2013,6 +2023,25 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
             return configuredTemperature;
         },
 
+        shouldUseSmartContext(text) {
+            const enableForGreetings = !!(CONFIG.SMART_CONTEXT && CONFIG.SMART_CONTEXT.enableForGreetings);
+            if (enableForGreetings) {
+                return true;
+            }
+            const trimmed = (text || '').trim();
+            const greetingPattern = /^(hi+|hello+|hey+|good\s+(morning|afternoon|evening|night)|howdy|yo+|sup|gm|ty|thx|thanks|thank\s+you|ok|okay|ack|noted|got\s+it|sure|yes|no)[\s,!.?]*$/i;
+            return !greetingPattern.test(trimmed);
+        },
+
+        getSmartContextMessageCount() {
+            const raw = CONFIG.SMART_CONTEXT && CONFIG.SMART_CONTEXT.messageCount;
+            const parsed = Number.isFinite(raw) ? raw : parseInt(raw, 10);
+            if (!Number.isFinite(parsed)) {
+                return 5;
+            }
+            return Math.max(1, Math.min(10, Math.floor(parsed)));
+        },
+
         async getSmartContext() {
             try {
                 if (!window.SlackPolishChannelMessages) {
@@ -2020,7 +2049,8 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
                     return [];
                 }
 
-                utils.debug('Fetching smart context messages');
+                const count = this.getSmartContextMessageCount();
+                utils.debug('Fetching smart context messages', { count });
 
                 // Check if user is currently focused in a thread
                 const isInThreadInput = this.isUserInThreadInput();
@@ -2029,17 +2059,17 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
                 if (isInThreadInput) {
                     utils.debug('User is in thread input - fetching thread context');
                     try {
-                        result = await this.getThreadContext(5);
+                        result = await this.getThreadContext(count);
                     } catch (threadError) {
                         utils.debug('Thread context fetching failed, falling back to channel context', {
                             error: threadError.message
                         });
                         // Fall back to regular channel context if thread context fails
-                        result = await this.getChannelContext(5);
+                        result = await this.getChannelContext(count);
                     }
                 } else {
                     utils.debug('User is in main channel - fetching channel context');
-                    result = await this.getChannelContext(5);
+                    result = await this.getChannelContext(count);
                 }
 
                 if (!result || !result.messages || result.messages.length === 0) {
@@ -2056,7 +2086,7 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
                         timestamp: msg.timestamp,
                         isThreadReply: msg.isThreadReply || false
                     }))
-                    .slice(-5); // Ensure we only get last 5
+                    .slice(-count);
 
                 utils.debug('Smart context messages prepared', {
                     totalMessages: result.messages.length,

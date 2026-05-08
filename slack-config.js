@@ -192,7 +192,7 @@ window.SLACKPOLISH_CONFIG = {
     // Smart Context analyzes recent conversation messages to provide better text improvements
     // When enabled, it fetches the last few messages to understand conversation context
     SMART_CONTEXT: {
-        enabled: false,                       // Enable/disable Smart Context feature
+        enabled: true,                        // Enable/disable Smart Context feature
                                              //
                                              // When enabled: AI considers recent messages for context-aware improvements
                                              // When disabled: AI improves text without conversation context
@@ -213,18 +213,6 @@ window.SLACKPOLISH_CONFIG = {
                                              // Higher values (5-10): More context, better understanding, higher cost
                                              //
                                              // Recommendation: 3-5 messages for most use cases
-
-        minTextLength: 20,                   // Minimum text length to trigger Smart Context
-                                             //
-                                             // Smart Context only activates when your message is shorter than this
-                                             // This prevents context from interfering with longer, complete messages
-                                             //
-                                             // Examples:
-                                             // • 10: Very short messages only ("Hi", "Yes", "OK")
-                                             // • 20: Short messages and brief responses
-                                             // • 50: Medium-length messages that might benefit from context
-                                             //
-                                             // Recommendation: 20-30 characters to avoid unwanted context usage
 
         enableForGreetings: false,           // Enable Smart Context for greeting messages
                                              //
