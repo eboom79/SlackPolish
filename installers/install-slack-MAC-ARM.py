@@ -100,14 +100,6 @@ def get_current_runtime_dir():
     return get_runtime_root() / "current"
 
 
-def get_desktop_launcher_path():
-    return Path.home() / "Desktop" / "SlackPolish.command"
-
-
-def get_desktop_attach_path():
-    return Path.home() / "Desktop" / "SlackPolish-Attach.command"
-
-
 def get_desktop_app_path():
     return Path.home() / "Desktop" / "SlackPolish.app"
 
@@ -146,26 +138,6 @@ def copy_runtime_files(destination):
         print_verbose(f"Copied {source} -> {target}")
 
 
-def write_command_file(path, runtime_dir, attach_only=False):
-    launcher_path = runtime_dir / "launch-slackpolish-MAC-ARM.py"
-    args = ["--launch-mode", "open", "-v"]
-    if attach_only:
-        args.insert(0, "--attach-only")
-    else:
-        args.insert(0, "--relaunch")
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    script = "\n".join([
-        "#!/bin/zsh",
-        "set -e",
-        f"cd {shell_quote(str(runtime_dir))}",
-        f"python3 {shell_quote(str(launcher_path))} {' '.join(shell_quote(arg) for arg in args)}",
-        "",
-    ])
-    path.write_text(script, encoding="utf-8")
-    mode = path.stat().st_mode
-    path.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-
 
 def load_app_icon_png_bytes():
     icon_path = REPO_ROOT / "assets" / "logos" / "SlackPolish app icon.png"
@@ -191,6 +163,36 @@ def apply_custom_finder_icon(target_path, png_path):
     except Exception as exc:
         print_warning(f"Could not apply custom Finder icon automatically: {exc}")
         return False
+
+
+def convert_png_to_icns(png_path, icns_path):
+    """Convert a PNG to .icns using macOS iconutil (required for proper Dock icon display)."""
+    import tempfile
+    iconset_dir = Path(tempfile.mkdtemp()) / "AppIcon.iconset"
+    iconset_dir.mkdir()
+    sizes = [16, 32, 64, 128, 256, 512]
+    try:
+        for size in sizes:
+            for scale, suffix in ((1, ""), (2, "@2x")):
+                px = size * scale
+                out = iconset_dir / f"icon_{size}x{size}{suffix}.png"
+                subprocess.run(
+                    ["sips", "-z", str(px), str(px), str(png_path), "--out", str(out)],
+                    check=True,
+                    capture_output=True,
+                )
+        subprocess.run(
+            ["iconutil", "-c", "icns", str(iconset_dir), "-o", str(icns_path)],
+            check=True,
+            capture_output=True,
+        )
+        print_verbose(f"Created .icns icon: {icns_path}")
+        return True
+    except Exception as exc:
+        print_warning(f"Could not create .icns icon: {exc}")
+        return False
+    finally:
+        shutil.rmtree(str(iconset_dir.parent), ignore_errors=True)
 
 
 def build_app_shell_command(runtime_dir):
@@ -243,16 +245,20 @@ def write_app_wrapper(app_path, runtime_dir):
     resources_dir = contents / "Resources"
     resources_dir.mkdir(parents=True, exist_ok=True)
 
-    icon_path = resources_dir / "AppIcon.png"
-    icon_path.write_bytes(load_app_icon_png_bytes())
+    png_path = resources_dir / "AppIcon.png"
+    png_path.write_bytes(load_app_icon_png_bytes())
+
+    icns_path = resources_dir / "AppIcon.icns"
+    icns_ok = convert_png_to_icns(png_path, icns_path)
 
     plist_path = contents / "Info.plist"
     with open(plist_path, "rb") as handle:
         existing_plist = plistlib.load(handle)
 
+    icon_file = "AppIcon" if icns_ok else "AppIcon.png"
     existing_plist.update({
         "CFBundleDisplayName": "SlackPolish",
-        "CFBundleIconFile": "AppIcon.png",
+        "CFBundleIconFile": icon_file,
         "CFBundleIconName": "AppIcon",
         "CFBundleIdentifier": "local.slackpolish.attach",
         "CFBundleName": "SlackPolish",
@@ -265,7 +271,21 @@ def write_app_wrapper(app_path, runtime_dir):
     with open(plist_path, "wb") as handle:
         plistlib.dump(existing_plist, handle)
 
-    apply_custom_finder_icon(str(app_path), str(icon_path))
+    apply_custom_finder_icon(str(app_path), str(png_path))
+    resign_app(app_path)
+
+
+def resign_app(app_path):
+    """Re-sign with ad-hoc identity after modifying bundle contents (editing invalidates osacompile's signature)."""
+    try:
+        subprocess.run(
+            ["codesign", "--force", "--deep", "--sign", "-", str(app_path)],
+            check=True,
+            capture_output=True,
+        )
+        print_verbose(f"Re-signed app bundle: {app_path}")
+    except Exception as exc:
+        print_warning(f"Could not re-sign app bundle: {exc}")
 
 
 def create_desktop_app_link():
@@ -280,8 +300,9 @@ def create_desktop_app_link():
             else:
                 path.unlink()
 
-    desktop_app.symlink_to(runtime_app)
-    print_success(f"Desktop app link created: {desktop_app} -> {runtime_app}")
+    shutil.copytree(str(runtime_app), str(desktop_app))
+    resign_app(desktop_app)
+    print_success(f"Desktop app created: {desktop_app}")
 
 
 def shell_quote(value):
@@ -294,22 +315,25 @@ def install_runtime():
 
     runtime_root.mkdir(parents=True, exist_ok=True)
     copy_runtime_files(current_dir)
-    write_command_file(get_desktop_launcher_path(), current_dir, attach_only=False)
-    write_command_file(get_desktop_attach_path(), current_dir, attach_only=True)
     write_app_wrapper(get_runtime_app_path(), current_dir)
     create_desktop_app_link()
 
-    legacy_launch_app = get_desktop_launch_app_path()
-    if legacy_launch_app.exists():
-        shutil.rmtree(legacy_launch_app)
-        print_success(f"Removed legacy Desktop launch app: {legacy_launch_app}")
+    for legacy in (
+        Path.home() / "Desktop" / "SlackPolish.command",
+        Path.home() / "Desktop" / "SlackPolish-Attach.command",
+        get_desktop_launch_app_path(),
+    ):
+        if legacy.exists() or legacy.is_symlink():
+            if legacy.is_dir() and not legacy.is_symlink():
+                shutil.rmtree(legacy)
+            else:
+                legacy.unlink()
+            print_success(f"Removed legacy launcher: {legacy}")
 
     launcher = current_dir / "launch-slackpolish-MAC-ARM.py"
     launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR)
 
     print_success(f"Runtime installed to: {current_dir}")
-    print_success(f"Desktop launcher created: {get_desktop_launcher_path()}")
-    print_success(f"Desktop attach launcher created: {get_desktop_attach_path()}")
     print_success(f"Runtime app created: {get_runtime_app_path()}")
     return current_dir
 
@@ -346,15 +370,8 @@ def main():
     print_header("✅ Installation Completed")
     print("Slack.app was not modified.")
     print(f"Runtime files: {runtime_dir}")
-    print(f"Launch SlackPolish from: {get_desktop_launcher_path()}")
     print("")
-    print("Recommended use:")
-    print(f"  {get_desktop_app_path()}")
-    print("")
-    print("Alternative launchers:")
-    print(f"  Smart attach-or-launch app: {get_desktop_app_path()}")
-    print(f"  Launch Slack with SlackPolish: {get_desktop_launcher_path()}")
-    print(f"  Attach to already-running Slack: {get_desktop_attach_path()}")
+    print(f"Launch SlackPolish from: {get_desktop_app_path()}")
     return 0
 
 
