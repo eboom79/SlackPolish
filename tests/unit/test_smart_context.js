@@ -97,7 +97,8 @@ runTest('Context Integration with Prompt Building', () => {
 runTest('Context Message Filtering', () => {
     assert(scriptContent.includes('filter(msg => msg.text'), 'Message filtering not found');
     assert(scriptContent.includes('trim().length > 0'), 'Empty message filtering not found');
-    assert(scriptContent.includes('slice(-5)'), 'Message count limiting not found');
+    assert(scriptContent.includes('slice(-count)'), 'Message count limiting not found');
+    assert(scriptContent.includes('getSmartContextMessageCount'), 'Configurable message count helper not found');
 });
 
 // Test 9: Context Debug Logging

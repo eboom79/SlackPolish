@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.5.4",
-    BUILD: 4,
-    BUILD_DATE: "2026-04-30",
-    DESCRIPTION: "Runtime launcher recovery and standalone greeting preservation",
+    VERSION: "1.5.5",
+    BUILD: 5,
+    BUILD_DATE: "2026-05-08",
+    DESCRIPTION: "Smart Context active by default and across all styles",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
