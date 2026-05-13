@@ -100,7 +100,15 @@
 
             const savedSettings = localStorage.getItem('slackpolish_settings');
             if (savedSettings) {
-                const settings = JSON.parse(savedSettings);
+                let settings;
+                try {
+                    settings = JSON.parse(savedSettings);
+                } catch (parseErr) {
+                    utils.log(`⚠️ Corrupted slackpolish_settings in localStorage, clearing: ${parseErr.message}`);
+                    localStorage.removeItem('slackpolish_settings');
+                    settings = null;
+                }
+                if (settings) {
 
                 // Handle new settings structure from rich interface
                 if (settings.language) {
@@ -172,6 +180,7 @@
                     hasCustomInstructions: !!CONFIG.CUSTOM_INSTRUCTIONS,
                     hasApiKey: !!CONFIG.OPENAI_API_KEY
                 });
+                }
             }
         } catch (error) {
             utils.log(`Error loading settings: ${error.message}`);
@@ -2781,7 +2790,7 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
     // Show simple error notification
     function showSimpleError(message) {
         const errorDiv = document.createElement('div');
-        errorDiv.innerHTML = `❌ ${message}`;
+        errorDiv.textContent = `❌ ${message}`;
         errorDiv.style.cssText = `
             position: fixed;
             top: 20px;
@@ -2842,7 +2851,7 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
     // Show simple error notification (original design)
     function showSimpleError(message) {
         const errorDiv = document.createElement('div');
-        errorDiv.innerHTML = `❌ ${message}`;
+        errorDiv.textContent = `❌ ${message}`;
         errorDiv.style.cssText = `
             position: fixed;
             top: 20px;
@@ -3055,7 +3064,7 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
                             <div style="font-size: 13px; color: #666;">Please configure your OpenAI API key to continue</div>
                         </div>
                     </div>
-                    <p style="margin: 0 0 20px 0; color: #333; line-height: 1.4;">${message}</p>
+                    <p id="slackpolish-api-popup-message" style="margin: 0 0 20px 0; color: #333; line-height: 1.4;"></p>
 
                     <div style="margin-bottom: 20px;">
                         <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #333;">Enter your OpenAI API Key:</label>
@@ -3074,6 +3083,12 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
         `;
 
         document.body.appendChild(popup);
+
+        // Set message via textContent to avoid HTML injection
+        const messageEl = popup.querySelector('#slackpolish-api-popup-message');
+        if (messageEl) {
+            messageEl.textContent = message;
+        }
 
         // Add logo to popup
         const logoContainer = document.getElementById('api-popup-logo');
@@ -4461,24 +4476,39 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
                     return;
                 }
 
-                content.innerHTML = this.logs.map(log => {
-                    const sourceColors = {
-                        'text-improver': '#2eb67d',
-                        'settings': '#e01e5a',
-                        'channel-summary': '#ecb22e',
-                        'default': '#2eb67d'
-                    };
+                const sourceColors = {
+                    'text-improver': '#2eb67d',
+                    'settings': '#e01e5a',
+                    'channel-summary': '#ecb22e',
+                    'default': '#2eb67d'
+                };
+
+                content.textContent = '';
+                this.logs.forEach(log => {
                     const sourceColor = sourceColors[log.source] || sourceColors.default;
 
-                    let html = `<div style="margin-bottom: 8px; padding: 6px; background: #252837; border-radius: 4px; border-left: 3px solid ${sourceColor};">`;
-                    html += `<div style="color: ${sourceColor}; font-size: 10px; margin-bottom: 4px;">[${log.timestamp}] ${log.source.toUpperCase()}</div>`;
-                    html += `<div style="color: #e8e8e8; margin-bottom: 4px;">${log.message}</div>`;
+                    const entry = document.createElement('div');
+                    entry.style.cssText = `margin-bottom: 8px; padding: 6px; background: #252837; border-radius: 4px; border-left: 3px solid ${sourceColor};`;
+
+                    const header = document.createElement('div');
+                    header.style.cssText = `color: ${sourceColor}; font-size: 10px; margin-bottom: 4px;`;
+                    header.textContent = `[${log.timestamp}] ${String(log.source).toUpperCase()}`;
+                    entry.appendChild(header);
+
+                    const messageEl = document.createElement('div');
+                    messageEl.style.cssText = 'color: #e8e8e8; margin-bottom: 4px;';
+                    messageEl.textContent = log.message != null ? String(log.message) : '';
+                    entry.appendChild(messageEl);
+
                     if (log.data) {
-                        html += `<div style="color: #a0a0a0; font-size: 10px; white-space: pre-wrap; background: #1a1d29; padding: 4px; border-radius: 2px; margin-top: 4px; max-height: 200px; overflow-y: auto;">${log.data}</div>`;
+                        const dataEl = document.createElement('div');
+                        dataEl.style.cssText = 'color: #a0a0a0; font-size: 10px; white-space: pre-wrap; background: #1a1d29; padding: 4px; border-radius: 2px; margin-top: 4px; max-height: 200px; overflow-y: auto;';
+                        dataEl.textContent = typeof log.data === 'string' ? log.data : String(log.data);
+                        entry.appendChild(dataEl);
                     }
-                    html += `</div>`;
-                    return html;
-                }).join('');
+
+                    content.appendChild(entry);
+                });
 
                 // Auto-scroll to bottom
                 content.scrollTop = content.scrollHeight;
