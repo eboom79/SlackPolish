@@ -146,9 +146,11 @@ def copy_runtime_files(destination):
         print_verbose(f"Copied {source} -> {target}")
 
 
-def write_command_file(path, runtime_dir, attach_only=False):
+def write_command_file(path, runtime_dir, attach_only=False, slack_app=None):
     launcher_path = runtime_dir / "launch-slackpolish-MAC-ARM.py"
     args = ["--launch-mode", "open", "-v"]
+    if slack_app:
+        args += ["--slack-path", str(slack_app)]
     if attach_only:
         args.insert(0, "--attach-only")
     else:
@@ -193,14 +195,15 @@ def apply_custom_finder_icon(target_path, png_path):
         return False
 
 
-def build_app_shell_command(runtime_dir):
+def build_app_shell_command(runtime_dir, slack_app=None):
     launcher_path = runtime_dir / "launch-slackpolish-MAC-ARM.py"
     log_dir = Path.home() / "Library" / "Application Support" / "SlackPolish Runtime" / "mac-arm-runtime" / "state"
     log_path = log_dir / "launcher.log"
+    extra = f" --slack-path {shell_quote(str(slack_app))}" if slack_app else ""
     return (
         f"mkdir -p {shell_quote(str(log_dir))} && "
         f"cd {shell_quote(str(runtime_dir))} && "
-        f"nohup python3 {shell_quote(str(launcher_path))} --attach-or-relaunch --launch-mode open -v >>{shell_quote(str(log_path))} 2>&1 & "
+        f"nohup python3 {shell_quote(str(launcher_path))} --attach-or-relaunch --launch-mode open{extra} -v >>{shell_quote(str(log_path))} 2>&1 & "
     )
 
 
@@ -236,8 +239,8 @@ def write_jxa_app(app_path, shell_command):
             source_path.unlink()
 
 
-def write_app_wrapper(app_path, runtime_dir):
-    write_jxa_app(app_path, build_app_shell_command(runtime_dir))
+def write_app_wrapper(app_path, runtime_dir, slack_app=None):
+    write_jxa_app(app_path, build_app_shell_command(runtime_dir, slack_app=slack_app))
 
     contents = app_path / "Contents"
     resources_dir = contents / "Resources"
@@ -288,15 +291,125 @@ def shell_quote(value):
     return "'" + value.replace("'", "'\"'\"'") + "'"
 
 
-def install_runtime():
+def _load_fuse_patcher():
+    """Dynamically import the fuse patcher module."""
+    import importlib.util
+    fuse_patcher = SCRIPT_DIR / "patch-electron-fuse-MAC-ARM.py"
+    if not fuse_patcher.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("fuse_patcher", fuse_patcher)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _ensure_patched_slack_app(slack_app):
+    """
+    Ensure the Electron fuse that allows --remote-debugging-port is enabled.
+
+    Slack 4.45+ ships Electron with EnableNodeCliInspectArguments = OFF, which
+    silently ignores --remote-debugging-port.  Since /Applications/Slack.app is
+    root-owned we cannot patch it in place.  Instead we:
+
+      1. Create a user-owned copy at ~/Applications/Slack.app (if needed).
+      2. Patch the fuse in that copy.
+      3. Re-sign with an ad-hoc signature.
+
+    Returns the Path of the app that SlackPolish should launch (the patched copy
+    when a patch was required, the original otherwise).
+    """
+    mod = _load_fuse_patcher()
+    if mod is None:
+        print_warning("Fuse patcher script not found — skipping fuse check.")
+        return slack_app
+
+    patch_needed = mod.needs_patch(slack_app)
+    if patch_needed is None:
+        print_warning("Could not determine Electron fuse state — skipping fuse patch.")
+        return slack_app
+
+    if not patch_needed:
+        print_success("Electron fuse EnableNodeCliInspectArguments is already ON — no patch needed.")
+        return slack_app
+
+    # Patch is needed.  Try to patch in place first (works when user owns the file).
+    user_apps = Path.home() / "Applications"
+    copy_app = user_apps / "Slack.app"
+
+    # If the original app is already in ~/Applications, patch it directly.
+    if slack_app == copy_app or str(slack_app).startswith(str(user_apps) + "/"):
+        print_info("Patching Electron fuse in user-owned Slack copy...")
+        ok = mod.patch_fuse(slack_app)
+        if ok:
+            print_success("Electron fuse patched — SlackPolish can now attach to Slack.")
+        else:
+            print_warning("Fuse patch failed. SlackPolish may not be able to attach to Slack.")
+        return slack_app
+
+    # The app is system-owned (e.g. /Applications/Slack.app).  Create/refresh a
+    # user-owned copy in ~/Applications/ and patch that copy.
+    print_info(
+        "Slack 4.45+ ships Electron with remote-debugging disabled via a fuse. "
+        "The system copy cannot be modified directly, so a patched user copy will "
+        f"be created at {copy_app} ..."
+    )
+
+    _sync_slack_copy(slack_app, copy_app)
+
+    patch_needed_in_copy = mod.needs_patch(copy_app)
+    if patch_needed_in_copy:
+        ok = mod.patch_fuse(copy_app)
+        if ok:
+            print_success(f"Patched copy ready: {copy_app}")
+        else:
+            print_warning("Fuse patch on copy failed — SlackPolish may not attach.")
+    else:
+        print_success(f"Patched copy already up to date: {copy_app}")
+
+    return copy_app
+
+
+def _slack_version(app_path):
+    """Return the CFBundleShortVersionString of Slack.app, or None."""
+    try:
+        import plistlib
+        plist_path = app_path / "Contents" / "Info.plist"
+        with open(plist_path, "rb") as handle:
+            plist = plistlib.load(handle)
+        return plist.get("CFBundleShortVersionString")
+    except Exception:
+        return None
+
+
+def _sync_slack_copy(source_app, dest_app):
+    """Copy source_app to dest_app if it is missing or outdated."""
+    source_ver = _slack_version(source_app)
+    dest_ver = _slack_version(dest_app) if dest_app.exists() else None
+
+    if dest_ver and dest_ver == source_ver:
+        print_verbose(f"User Slack copy is already version {dest_ver} — skipping copy.")
+        return
+
+    if dest_app.exists():
+        print_info(f"Updating user Slack copy from {dest_ver} to {source_ver}...")
+        shutil.rmtree(dest_app)
+    else:
+        print_info(f"Creating user Slack copy (version {source_ver})...")
+
+    dest_app.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(source_app, dest_app, symlinks=True)
+    print_success(f"Copied Slack.app → {dest_app}")
+
+
+def install_runtime(slack_app=None):
     runtime_root = get_runtime_root()
     current_dir = get_current_runtime_dir()
 
     runtime_root.mkdir(parents=True, exist_ok=True)
     copy_runtime_files(current_dir)
-    write_command_file(get_desktop_launcher_path(), current_dir, attach_only=False)
-    write_command_file(get_desktop_attach_path(), current_dir, attach_only=True)
-    write_app_wrapper(get_runtime_app_path(), current_dir)
+    write_command_file(get_desktop_launcher_path(), current_dir, attach_only=False, slack_app=slack_app)
+    write_command_file(get_desktop_attach_path(), current_dir, attach_only=True, slack_app=slack_app)
+    write_app_wrapper(get_runtime_app_path(), current_dir, slack_app=slack_app)
     create_desktop_app_link()
 
     legacy_launch_app = get_desktop_launch_app_path()
@@ -340,11 +453,13 @@ def main():
         print_warning("Slack.app was not found in /Applications or ~/Applications")
         print_warning("You can still install the runtime launcher now and launch Slack later.")
 
-    print_info("Installing SlackPolish runtime launcher without modifying Slack.app...")
-    runtime_dir = install_runtime()
+    # Ensure a patched Slack copy exists and get the path SlackPolish should launch.
+    launch_app = _ensure_patched_slack_app(slack_app) if slack_app else None
+
+    print_info("Installing SlackPolish runtime launcher...")
+    runtime_dir = install_runtime(slack_app=launch_app)
 
     print_header("✅ Installation Completed")
-    print("Slack.app was not modified.")
     print(f"Runtime files: {runtime_dir}")
     print(f"Launch SlackPolish from: {get_desktop_launcher_path()}")
     print("")

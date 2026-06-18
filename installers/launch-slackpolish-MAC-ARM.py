@@ -649,9 +649,26 @@ class SlackPolishMacLauncher:
             self._terminate_process(pid, reason="legacy duplicate launcher")
 
     def _quit_slack(self):
-        subprocess.run(["pkill", "-x", "Slack"], check=False)
+        # Ask Slack to quit gracefully via AppleScript so it can flush localStorage.
+        result = subprocess.run(
+            ["osascript", "-e", 'tell application "Slack" to quit'],
+            check=False,
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            # Slack wasn't running or AppleScript failed — fall back to signal.
+            subprocess.run(["pkill", "-x", "Slack"], check=False)
         print_info("Requested Slack shutdown before launch")
-        time.sleep(1)
+        # Give Slack up to 5 s to write its data and exit cleanly.
+        for _ in range(10):
+            time.sleep(0.5)
+            check = subprocess.run(["pgrep", "-x", "Slack"], capture_output=True)
+            if check.returncode != 0:
+                break
+        else:
+            # Still alive after 5 s — force kill.
+            subprocess.run(["pkill", "-9", "-x", "Slack"], check=False)
+            time.sleep(0.5)
 
     def _launch_slack(self):
         debug_args = [
@@ -677,7 +694,52 @@ class SlackPolishMacLauncher:
                 return
             except Exception:
                 time.sleep(0.5)
+        self._diagnose_devtools_unavailable()
         raise TimeoutError("Slack DevTools endpoint did not become available")
+
+    def _diagnose_devtools_unavailable(self):
+        """Print a helpful message when the DevTools endpoint does not open."""
+        slack_exe = self.slack_executable or ""
+        slack_app = slack_exe.split("/Contents/MacOS/Slack")[0] if "/Contents/MacOS/Slack" in slack_exe else None
+        if not slack_app:
+            slack_app = "/Applications/Slack.app"
+
+        fw = os.path.join(
+            slack_app,
+            "Contents", "Frameworks",
+            "Electron Framework.framework",
+            "Electron Framework",
+        )
+        if not os.path.exists(fw):
+            return
+
+        try:
+            with open(fw, "rb") as handle:
+                data = handle.read()
+        except Exception:
+            return
+
+        sentinel = b"dL7pKGdnNz796PbbjQWNKmHXBZaB9tsX"
+        idx = data.find(sentinel)
+        if idx == -1:
+            return
+
+        fuse_start = idx + len(sentinel)
+        version = data[fuse_start]
+        count = data[fuse_start + 1]
+        # Fuse index 3 is EnableNodeCliInspectArguments
+        if count > 3:
+            cli_inspect_fuse = data[fuse_start + 2 + 3]
+            if cli_inspect_fuse != 0x31:
+                patcher = os.path.join(os.path.dirname(__file__), "patch-electron-fuse-MAC-ARM.py")
+                print_error(
+                    "Slack's Electron binary has the EnableNodeCliInspectArguments fuse "
+                    "disabled. This prevents --remote-debugging-port from working."
+                )
+                print_error(
+                    "Fix: run the SlackPolish installer again, or patch manually:"
+                )
+                print_error(f"  python3 {patcher}")
 
     def _poll_targets(self):
         targets = self._fetch_json("/json/list")
