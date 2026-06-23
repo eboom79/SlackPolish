@@ -12,7 +12,7 @@
         LANGUAGE: 'English (USA)',
         CUSTOM_INSTRUCTIONS: '',
         HOTKEY: 'Ctrl+Shift',
-        DEBUG_MODE: false,
+        DEBUG_MODE: true,
         ADD_EMOJI_SIGNATURE: false,
         SMART_CONTEXT: {
             enabled: true,
@@ -4170,21 +4170,29 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
         };
     }
 
-    // Retry a fetch call up to maxAttempts times on network errors (not HTTP errors).
-    // Slack's network stack can take a few seconds to become ready after launch.
-    async function fetchWithRetry(url, options, maxAttempts = 3, delayMs = 2000) {
-        let lastError;
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            try {
-                return await fetch(url, options);
-            } catch (err) {
-                lastError = err;
-                if (attempt < maxAttempts) {
-                    await new Promise(resolve => setTimeout(resolve, delayMs));
-                }
+    // XHR-based fetch replacement. Electron 42's renderer fetch() can be blocked
+    // by internal sandbox restrictions; XMLHttpRequest uses the classic network stack.
+    function fetchWithRetry(url, options) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open(options.method || 'GET', url);
+            if (options.headers) {
+                Object.entries(options.headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
             }
-        }
-        throw lastError;
+            xhr.onload = () => {
+                const responseText = xhr.responseText;
+                resolve({
+                    ok: xhr.status >= 200 && xhr.status < 300,
+                    status: xhr.status,
+                    statusText: xhr.statusText,
+                    json: () => Promise.resolve(JSON.parse(responseText)),
+                    text: () => Promise.resolve(responseText),
+                });
+            };
+            xhr.onerror = () => reject(new TypeError('Failed to fetch (XHR network error)'));
+            xhr.ontimeout = () => reject(new TypeError('Failed to fetch (XHR timeout)'));
+            xhr.send(options.body || null);
+        });
     }
 
     // Initialize global OpenAI system
@@ -4266,16 +4274,19 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
                         };
                     }
                 } catch (error) {
+                    const detail = `name=${error.name} msg=${error.message} cause=${error.cause?.message ?? error.cause}`;
+                    console.error('[SlackPolish] testApiKey fetch error:', detail, error);
                     if (window.SlackPolishDebug) {
                         window.SlackPolishDebug.addLog('openai', 'API test network error', {
                             error: error.message,
+                            detail,
                             stack: error.stack
                         });
                     }
 
                     return {
                         success: false,
-                        message: `❌ Network error: ${error.message}`,
+                        message: `❌ Network error: ${error.message} (${detail})`,
                         error: error
                     };
                 }

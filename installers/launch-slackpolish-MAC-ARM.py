@@ -674,7 +674,6 @@ class SlackPolishMacLauncher:
         debug_args = [
             f"--remote-debugging-port={self.debug_port}",
             "--remote-allow-origins=*",
-            "--disable-web-security",  # allow injected JS to fetch external APIs (e.g. api.openai.com)
         ]
 
         if self.launch_mode == "open":

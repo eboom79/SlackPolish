@@ -308,15 +308,14 @@ def _ensure_patched_slack_app(slack_app):
     Ensure the Electron fuse that allows --remote-debugging-port is enabled.
 
     Slack 4.45+ ships Electron with EnableNodeCliInspectArguments = OFF, which
-    silently ignores --remote-debugging-port.  Since /Applications/Slack.app is
-    root-owned we cannot patch it in place.  Instead we:
+    silently ignores --remote-debugging-port.
 
-      1. Create a user-owned copy at ~/Applications/Slack.app (if needed).
-      2. Patch the fuse in that copy.
-      3. Re-sign with an ad-hoc signature.
+    Strategy: patch /Applications/Slack.app in-place via sudo (preserves the
+    original code signature identity so macOS network access is unaffected).
+    A user copy in ~/Applications is no longer created — it caused macOS to
+    treat the re-signed binary as an untrusted app and block network requests.
 
-    Returns the Path of the app that SlackPolish should launch (the patched copy
-    when a patch was required, the original otherwise).
+    Returns the Path of the Slack.app SlackPolish should launch.
     """
     mod = _load_fuse_patcher()
     if mod is None:
@@ -332,41 +331,21 @@ def _ensure_patched_slack_app(slack_app):
         print_success("Electron fuse EnableNodeCliInspectArguments is already ON — no patch needed.")
         return slack_app
 
-    # Patch is needed.  Try to patch in place first (works when user owns the file).
-    user_apps = Path.home() / "Applications"
-    copy_app = user_apps / "Slack.app"
-
-    # If the original app is already in ~/Applications, patch it directly.
-    if slack_app == copy_app or str(slack_app).startswith(str(user_apps) + "/"):
-        print_info("Patching Electron fuse in user-owned Slack copy...")
-        ok = mod.patch_fuse(slack_app)
-        if ok:
-            print_success("Electron fuse patched — SlackPolish can now attach to Slack.")
-        else:
-            print_warning("Fuse patch failed. SlackPolish may not be able to attach to Slack.")
-        return slack_app
-
-    # The app is system-owned (e.g. /Applications/Slack.app).  Create/refresh a
-    # user-owned copy in ~/Applications/ and patch that copy.
+    # Try patching in-place (works if we own the file or have sudo).
     print_info(
         "Slack 4.45+ ships Electron with remote-debugging disabled via a fuse. "
-        "The system copy cannot be modified directly, so a patched user copy will "
-        f"be created at {copy_app} ..."
+        f"Patching {slack_app} in-place (you may be prompted for your password)..."
     )
-
-    _sync_slack_copy(slack_app, copy_app)
-
-    patch_needed_in_copy = mod.needs_patch(copy_app)
-    if patch_needed_in_copy:
-        ok = mod.patch_fuse(copy_app)
-        if ok:
-            print_success(f"Patched copy ready: {copy_app}")
-        else:
-            print_warning("Fuse patch on copy failed — SlackPolish may not attach.")
+    ok = mod.patch_fuse(slack_app)
+    if ok:
+        print_success("Electron fuse patched — SlackPolish can now attach to Slack.")
     else:
-        print_success(f"Patched copy already up to date: {copy_app}")
-
-    return copy_app
+        print_warning(
+            "Fuse patch failed. Run manually with sudo:\n"
+            f"  sudo python3 {SCRIPT_DIR / 'patch-electron-fuse-MAC-ARM.py'} "
+            f"--slack-app {slack_app}"
+        )
+    return slack_app
 
 
 def _slack_version(app_path):
