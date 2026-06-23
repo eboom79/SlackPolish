@@ -2321,7 +2321,7 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
 
             utils.debug('API request body', requestBody);
 
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            const response = await fetchWithRetry('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -4170,6 +4170,23 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
         };
     }
 
+    // Retry a fetch call up to maxAttempts times on network errors (not HTTP errors).
+    // Slack's network stack can take a few seconds to become ready after launch.
+    async function fetchWithRetry(url, options, maxAttempts = 3, delayMs = 2000) {
+        let lastError;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                return await fetch(url, options);
+            } catch (err) {
+                lastError = err;
+                if (attempt < maxAttempts) {
+                    await new Promise(resolve => setTimeout(resolve, delayMs));
+                }
+            }
+        }
+        throw lastError;
+    }
+
     // Initialize global OpenAI system
     function initializeGlobalOpenAISystem() {
         if (window.SlackPolishOpenAI) return; // Already initialized
@@ -4185,7 +4202,7 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
                 }
 
                 try {
-                    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    const response = await fetchWithRetry('https://api.openai.com/v1/chat/completions', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -4281,7 +4298,7 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
                         temperature: options.temperature || window.SLACKPOLISH_CONFIG?.OPENAI_TEMPERATURE || 0.7
                     };
 
-                    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    const response = await fetchWithRetry('https://api.openai.com/v1/chat/completions', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
