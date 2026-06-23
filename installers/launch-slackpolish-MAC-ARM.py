@@ -23,6 +23,8 @@ import struct
 import subprocess
 import sys
 import time
+import http.server
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -47,6 +49,88 @@ STATE_DIR = Path.home() / "Library" / "Application Support" / "SlackPolish Runti
 STATUS_PATH = STATE_DIR / "launcher-status.json"
 LOG_PATH = STATE_DIR / "launcher.log"
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+# ---------------------------------------------------------------------------
+# Local OpenAI proxy server
+# ---------------------------------------------------------------------------
+
+class _OpenAIProxyHandler(http.server.BaseHTTPRequestHandler):
+    """Minimal HTTP handler that proxies POST /proxy/openai to OpenAI."""
+
+    def log_message(self, format, *args):  # suppress default access log noise
+        pass
+
+    def _send_cors_headers(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "*")
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self._send_cors_headers()
+        self.end_headers()
+
+    def do_POST(self):
+        if self.path != "/proxy/openai":
+            self.send_response(404)
+            self.end_headers()
+            return
+
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length)
+            req = json.loads(raw)
+        except Exception as e:
+            self._respond(400, json.dumps({"error": f"Bad request: {e}"}))
+            return
+
+        url = req.get("url", "")
+        method = req.get("method", "POST").upper()
+        headers = req.get("headers", {})
+        body = req.get("body", None)
+        if isinstance(body, str):
+            body = body.encode("utf-8")
+        elif body is not None:
+            body = json.dumps(body).encode("utf-8")
+
+        try:
+            upstream_req = urllib.request.Request(url, data=body, headers=headers, method=method)
+            with urllib.request.urlopen(upstream_req, timeout=30) as resp:
+                resp_body = resp.read().decode("utf-8", errors="replace")
+                resp_headers = dict(resp.headers)
+                self._respond(resp.status, json.dumps({
+                    "status": resp.status,
+                    "headers": resp_headers,
+                    "body": resp_body,
+                }))
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", errors="replace")
+            self._respond(502, json.dumps({
+                "status": e.code,
+                "headers": dict(e.headers),
+                "body": err_body,
+            }))
+        except Exception as e:
+            self._respond(502, json.dumps({"error": str(e)}))
+
+    def _respond(self, status, body_str):
+        encoded = body_str.encode("utf-8")
+        self.send_response(status)
+        self._send_cors_headers()
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
+
+def start_openai_proxy(port):
+    """Start the OpenAI proxy HTTP server in a daemon thread. Returns the port."""
+    server = http.server.HTTPServer(("127.0.0.1", port), _OpenAIProxyHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return port
+
 
 
 def append_log_line(text):
@@ -398,6 +482,8 @@ class SlackPolishMacLauncher:
         self.attach_or_relaunch = attach_or_relaunch
         self.runtime_payload = build_runtime_payload()
         self.payload_hash = hashlib.sha256(self.runtime_payload.encode("utf-8")).hexdigest()[:12]
+        self.proxy_port = debug_port + 1
+        start_openai_proxy(self.proxy_port)
         self.sessions = {}
         self.lock_handle = None
         self.last_heartbeat = 0
@@ -863,6 +949,9 @@ class SlackPolishMacLauncher:
                     "SlackPolish runtime was missing from target. Re-injecting: "
                     + f"{target.get('title') or '(untitled)'} | {target.get('url')}"
                 )
+                proxy_init = f"window.__SLACKPOLISH_PROXY_PORT__ = {self.proxy_port};"
+                session.install_script(proxy_init)
+                session.evaluate(proxy_init)
                 session.install_script(self.runtime_payload)
                 session.evaluate(self.runtime_payload)
                 print_success(
@@ -880,6 +969,9 @@ class SlackPolishMacLauncher:
     def _attach_target(self, target):
         session = SlackTargetSession(target)
         session.connect()
+        proxy_init = f"window.__SLACKPOLISH_PROXY_PORT__ = {self.proxy_port};"
+        session.install_script(proxy_init)
+        session.evaluate(proxy_init)
         session.install_script(self.runtime_payload)
         session.evaluate(self.runtime_payload)
         self.sessions[session.websocket_url] = session

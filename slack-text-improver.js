@@ -4172,27 +4172,38 @@ IMPORTANT: Respond with ONLY the improved text. Do not include any explanations,
 
     // XHR-based fetch replacement. Electron 42's renderer fetch() can be blocked
     // by internal sandbox restrictions; XMLHttpRequest uses the classic network stack.
-    function fetchWithRetry(url, options) {
-        return new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open(options.method || 'GET', url);
-            if (options.headers) {
-                Object.entries(options.headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
-            }
-            xhr.onload = () => {
-                const responseText = xhr.responseText;
-                resolve({
-                    ok: xhr.status >= 200 && xhr.status < 300,
-                    status: xhr.status,
-                    statusText: xhr.statusText,
-                    json: () => Promise.resolve(JSON.parse(responseText)),
-                    text: () => Promise.resolve(responseText),
-                });
-            };
-            xhr.onerror = () => reject(new TypeError('Failed to fetch (XHR network error)'));
-            xhr.ontimeout = () => reject(new TypeError('Failed to fetch (XHR timeout)'));
-            xhr.send(options.body || null);
+    async function fetchWithRetry(url, options) {
+        const proxyPort = window.__SLACKPOLISH_PROXY_PORT__ || 9224;
+        const proxyUrl = `http://127.0.0.1:${proxyPort}/proxy/openai`;
+        const proxyBody = JSON.stringify({
+            url,
+            method: options.method || 'GET',
+            headers: options.headers || {},
+            body: options.body || null,
         });
+
+        const proxyResp = await fetch(proxyUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: proxyBody,
+        });
+
+        const envelope = await proxyResp.json();
+
+        if (envelope.error && !envelope.status) {
+            throw new TypeError(`Proxy error: ${envelope.error}`);
+        }
+
+        const responseBody = envelope.body || '';
+        const status = envelope.status || proxyResp.status;
+
+        return {
+            ok: status >= 200 && status < 300,
+            status,
+            statusText: String(status),
+            json: () => Promise.resolve(JSON.parse(responseBody)),
+            text: () => Promise.resolve(responseBody),
+        };
     }
 
     // Initialize global OpenAI system
