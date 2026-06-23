@@ -587,22 +587,13 @@ class SlackPolishMacLauncher:
             self._acquire_single_instance_lock()
             return
         except RuntimeError:
-            status = self._read_status()
             lock_pid = self._read_lock_pid()
-            if self._can_recover_stuck_launcher(lock_pid, status):
-                self._terminate_process(lock_pid, reason="stale launcher")
+            # Always replace a running launcher so updated runtime code takes effect.
+            if lock_pid and self._process_exists(lock_pid):
+                self._terminate_process(lock_pid, reason="replaced by new launcher")
                 time.sleep(1)
-                self._acquire_single_instance_lock()
-                print_warning("Recovered from a stale SlackPolish launcher process")
-                return
-
-            if self._devtools_available():
-                self._bring_slack_to_front()
-                print_success("SlackPolish is already running. Brought Slack to the foreground.")
-                raise AlreadyRunningAndFocused()
-
-            self._bring_slack_to_front()
-            raise RuntimeError(f"SlackPolish is already running. Logs: {LOG_PATH}")
+            self._acquire_single_instance_lock()
+            print_warning("Replaced previous SlackPolish launcher process")
 
     def _release_single_instance_lock(self):
         if not self.lock_handle:
