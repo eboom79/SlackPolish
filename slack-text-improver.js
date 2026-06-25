@@ -1986,11 +1986,13 @@ Recent conversation context (last ${contextMessages.length} messages):
 
             prompt += `
 
-${styleInstruction}:
+${styleInstruction}
 
+=== MESSAGE TO IMPROVE (improve ONLY the text between these markers) ===
 ${text}
+=== END OF MESSAGE TO IMPROVE ===
 
-IMPORTANT: Respond with ONLY the improved text. Do not include any explanations, quotes, requirements, or additional text. Use ${CONFIG.LANGUAGE} language. Use the conversation context above only to understand the writer's intent, the topic, and the appropriate tone — do not quote it, summarize it, or address other participants. Improve only the message below.`;
+IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE above. Do not include any explanations, quotes, requirements, or additional text. Do not reproduce or paraphrase the conversation context. Use ${CONFIG.LANGUAGE} language.`;
 
             if (utils.hasProtectedEntities(textState)) {
                 prompt += '\nIMPORTANT: Tokens like __SLACKPOLISH_MENTION_1__ and __SLACKPOLISH_LINK_1__ represent real Slack entities such as mentions and links. Preserve every such token exactly, without renaming, removing, reordering, or breaking it.';
