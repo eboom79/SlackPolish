@@ -262,16 +262,18 @@
                 });
             });
 
-            // Close button
-            closeBtn.addEventListener('click', () => {
+            const closeWindow = () => {
                 summaryWindow.remove();
-            });
+                document.removeEventListener('keydown', escapeHandler);
+            };
+
+            // Close button
+            closeBtn.addEventListener('click', closeWindow);
 
             // Escape key to close
             const escapeHandler = (e) => {
                 if (e.key === 'Escape') {
-                    summaryWindow.remove();
-                    document.removeEventListener('keydown', escapeHandler);
+                    closeWindow();
                 }
             };
             document.addEventListener('keydown', escapeHandler);
@@ -279,7 +281,7 @@
             // Click outside to close
             summaryWindow.addEventListener('click', (e) => {
                 if (e.target === summaryWindow) {
-                    summaryWindow.remove();
+                    closeWindow();
                 }
             });
         },
@@ -520,11 +522,13 @@
                             utils.debug('🧵 No thread messages found in DOM');
                             textbox.value = `❌ Thread Summary Error\n\nNo thread messages found in DOM\n\nFalling back to channel summary...`;
                             // Continue with regular channel summary as fallback
+                            result = await this.getChannelSummaryMessages(timeRange);
                         }
                     } catch (error) {
                         utils.debug('🧵 Thread message extraction failed', { error: error.message });
                         textbox.value = `❌ Thread Summary Error\n\nFailed to extract thread messages: ${error.message}\n\nFalling back to channel summary...`;
                         // Continue with regular channel summary as fallback
+                        result = await this.getChannelSummaryMessages(timeRange);
                     }
                 } else {
                     utils.debug('📝 MAIN CHANNEL DETECTED - Continuing with regular summary');

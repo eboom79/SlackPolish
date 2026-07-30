@@ -632,13 +632,18 @@
             currentSettings: SlackSettings.loadSettings()
         });
 
-        // Add keyboard shortcut for settings (F12)
+        // Expose for diagnostics / fallback invocation
+        window.SlackSettings = SlackSettings;
+
+        // Add keyboard shortcut for settings (F12) — capture phase so Slack/Electron
+        // can't swallow the event before us.
         document.addEventListener('keydown', function(event) {
             if (event.key === 'F12') {
                 event.preventDefault();
+                event.stopPropagation();
                 SlackSettings.showSettingsMenu();
             }
-        });
+        }, true);
     }
 
     // Wait for DOM to be ready
