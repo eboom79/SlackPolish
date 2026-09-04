@@ -12,6 +12,7 @@ The launcher is intended to remain running while Slack is open.
 
 import argparse
 import base64
+import errno
 import fcntl
 import hashlib
 import json
@@ -124,9 +125,26 @@ class _OpenAIProxyHandler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(encoded)
 
 
-def start_openai_proxy(port):
-    """Start the OpenAI proxy HTTP server in a daemon thread. Returns the port."""
-    server = http.server.HTTPServer(("127.0.0.1", port), _OpenAIProxyHandler)
+def start_openai_proxy(port, timeout=8.0, poll_interval=0.25):
+    """Start the OpenAI proxy HTTP server in a daemon thread. Returns the port.
+
+    The proxy port is normally held by the previous launcher instance until it
+    exits, so binding is retried for up to ``timeout`` seconds. Must be called
+    only after the single-instance lock has been acquired (which terminates any
+    previous launcher); otherwise the bind can never succeed.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            server = http.server.HTTPServer(("127.0.0.1", port), _OpenAIProxyHandler)
+            break
+        except OSError as error:
+            if error.errno not in (errno.EADDRINUSE, errno.EACCES) or time.monotonic() >= deadline:
+                raise RuntimeError(
+                    f"OpenAI proxy port {port} is still in use after {timeout:.0f}s "
+                    f"(another SlackPolish launcher or process is holding it): {error}"
+                ) from error
+            time.sleep(poll_interval)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return port
@@ -483,7 +501,6 @@ class SlackPolishMacLauncher:
         self.runtime_payload = build_runtime_payload()
         self.payload_hash = hashlib.sha256(self.runtime_payload.encode("utf-8")).hexdigest()[:12]
         self.proxy_port = debug_port + 1
-        start_openai_proxy(self.proxy_port)
         self.sessions = {}
         self.lock_handle = None
         self.last_heartbeat = 0
@@ -512,6 +529,12 @@ class SlackPolishMacLauncher:
         self._acquire_or_recover_single_instance_lock()
         self._terminate_legacy_launchers()
         self._update_status(phase="lock-acquired")
+
+        # The previous launcher (now terminated) held the proxy port; bind only
+        # after the lock so "replace running launcher" actually works.
+        self._update_status(phase="starting-openai-proxy")
+        start_openai_proxy(self.proxy_port)
+        print_success(f"OpenAI proxy listening on 127.0.0.1:{self.proxy_port}")
 
         try:
             if self.relaunch:
