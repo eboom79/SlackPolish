@@ -50,6 +50,49 @@ STATE_DIR = Path.home() / "Library" / "Application Support" / "SlackPolish Runti
 STATUS_PATH = STATE_DIR / "launcher-status.json"
 LOG_PATH = STATE_DIR / "launcher.log"
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+LAUNCHER_SCRIPT_NAME = "launch-slackpolish-MAC-ARM.py"
+_PYTHON_BASENAME_RE = re.compile(r"^[Pp]ython(\d+(\.\d+)*)?$")
+_WRAPPER_BASENAMES = {"env", "sudo"}
+
+
+def is_launcher_process_command(command_line):
+    """Return True only if ``command_line`` is a Python interpreter *executing* this launcher.
+
+    Used to find pre-lock ("legacy") launcher instances to replace. A plain
+    substring test on the script name also matched unrelated processes that
+    merely mention the file — an editor, ``grep``, ``git diff``, ``cmp`` — and
+    killed them whenever SlackPolish.app was clicked.
+
+    The script path may contain spaces (``~/Library/Application Support/...``)
+    and ``ps`` joins argv with spaces, so path tokens are re-joined up to the
+    first ``-``-prefixed option and must resolve to an existing file when more
+    than one token is involved.
+    """
+    tokens = str(command_line or "").split()
+    while tokens and os.path.basename(tokens[0]) in _WRAPPER_BASENAMES:
+        tokens = tokens[1:]
+    if not tokens:
+        return False
+    if os.path.basename(tokens[0]) == LAUNCHER_SCRIPT_NAME:
+        return True  # executed directly via its shebang
+    if not _PYTHON_BASENAME_RE.match(os.path.basename(tokens[0])):
+        return False
+    rest = tokens[1:]
+    index = 0
+    while index < len(rest) and rest[index].startswith("-"):
+        if rest[index].startswith(("-c", "-m")):
+            return False  # inline code / module run, not a script file
+        index += 1
+    path_tokens = []
+    while index < len(rest) and not rest[index].startswith("-"):
+        path_tokens.append(rest[index])
+        index += 1
+    if not path_tokens:
+        return False
+    script_path = " ".join(path_tokens)
+    if os.path.basename(script_path) != LAUNCHER_SCRIPT_NAME:
+        return False
+    return len(path_tokens) == 1 or os.path.isfile(script_path)
 
 
 # ---------------------------------------------------------------------------
@@ -734,10 +777,7 @@ class SlackPolishMacLauncher:
             return
 
         for raw_line in result.stdout.splitlines():
-            line = raw_line.strip()
-            if "launch-slackpolish-MAC-ARM.py" not in line:
-                continue
-            parts = line.split(None, 1)
+            parts = raw_line.strip().split(None, 1)
             if len(parts) != 2:
                 continue
             try:
@@ -745,6 +785,8 @@ class SlackPolishMacLauncher:
             except ValueError:
                 continue
             if pid == os.getpid():
+                continue
+            if not is_launcher_process_command(parts[1]):
                 continue
             self._terminate_process(pid, reason="legacy duplicate launcher")
 
