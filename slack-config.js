@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.5.5",
-    BUILD: 5,
-    BUILD_DATE: "2026-05-08",
-    DESCRIPTION: "Smart Context active by default and across all styles",
+    VERSION: "1.6.1",
+    BUILD: 1,
+    BUILD_DATE: "2026-06-25",
+    DESCRIPTION: "Slack 4.50 / Electron 42 compatibility and smart-context prompt fix",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
