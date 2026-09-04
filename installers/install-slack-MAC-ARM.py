@@ -15,6 +15,8 @@ import shutil
 import stat
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 
@@ -291,61 +293,40 @@ def shell_quote(value):
     return "'" + value.replace("'", "'\"'\"'") + "'"
 
 
-def _load_fuse_patcher():
-    """Dynamically import the fuse patcher module."""
-    import importlib.util
-    fuse_patcher = SCRIPT_DIR / "patch-electron-fuse-MAC-ARM.py"
-    if not fuse_patcher.exists():
-        return None
-    spec = importlib.util.spec_from_file_location("fuse_patcher", fuse_patcher)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+DEFAULT_DEBUG_PORT = 9222
 
 
-def _ensure_patched_slack_app(slack_app):
+def check_remote_debugging(port=DEFAULT_DEBUG_PORT, timeout=1.0):
+    """Return True if a Chrome DevTools endpoint answers on 127.0.0.1:<port>.
+
+    This is the only reliable test of whether Slack honours
+    --remote-debugging-port. Inspecting Electron fuse bytes is not: Slack
+    4.52.155 exposes the port with EnableNodeCliInspectArguments OFF.
     """
-    Ensure the Electron fuse that allows --remote-debugging-port is enabled.
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+    return isinstance(payload, dict) and ("webSocketDebuggerUrl" in payload or "Browser" in payload)
 
-    Slack 4.45+ ships Electron with EnableNodeCliInspectArguments = OFF, which
-    silently ignores --remote-debugging-port.
 
-    Strategy: patch /Applications/Slack.app in-place via sudo (preserves the
-    original code signature identity so macOS network access is unaffected).
-    A user copy in ~/Applications is no longer created — it caused macOS to
-    treat the re-signed binary as an untrusted app and block network requests.
-
-    Returns the Path of the Slack.app SlackPolish should launch.
-    """
-    mod = _load_fuse_patcher()
-    if mod is None:
-        print_warning("Fuse patcher script not found — skipping fuse check.")
-        return slack_app
-
-    patch_needed = mod.needs_patch(slack_app)
-    if patch_needed is None:
-        print_warning("Could not determine Electron fuse state — skipping fuse patch.")
-        return slack_app
-
-    if not patch_needed:
-        print_success("Electron fuse EnableNodeCliInspectArguments is already ON — no patch needed.")
-        return slack_app
-
-    # Try patching in-place (works if we own the file or have sudo).
-    print_info(
-        "Slack 4.45+ ships Electron with remote-debugging disabled via a fuse. "
-        f"Patching {slack_app} in-place (you may be prompted for your password)..."
-    )
-    ok = mod.patch_fuse(slack_app)
-    if ok:
-        print_success("Electron fuse patched — SlackPolish can now attach to Slack.")
-    else:
-        print_warning(
-            "Fuse patch failed. Run manually with sudo:\n"
-            f"  sudo python3 {SCRIPT_DIR / 'patch-electron-fuse-MAC-ARM.py'} "
-            f"--slack-app {slack_app}"
+def _report_remote_debugging(slack_app, port=DEFAULT_DEBUG_PORT):
+    """Tell the user whether remote debugging is verified; never gate the install on fuse bytes."""
+    if check_remote_debugging(port):
+        print_success(
+            f"Slack DevTools endpoint is reachable on 127.0.0.1:{port} — remote debugging works; "
+            "no Electron patch is needed."
         )
-    return slack_app
+        return
+    print_info(
+        f"Slack is not currently running with the SlackPolish debug port ({port}). "
+        "The launcher starts Slack with --remote-debugging-port and verifies on first run."
+    )
+    print_info(
+        "If the launcher later reports it cannot attach, inspect the Electron fuses with:\n"
+        f"  python3 {SCRIPT_DIR / 'patch-electron-fuse-MAC-ARM.py'} --check --slack-app {slack_app}"
+    )
 
 
 def _slack_version(app_path):
@@ -432,11 +413,11 @@ def main():
         print_warning("Slack.app was not found in /Applications or ~/Applications")
         print_warning("You can still install the runtime launcher now and launch Slack later.")
 
-    # Ensure a patched Slack copy exists and get the path SlackPolish should launch.
-    launch_app = _ensure_patched_slack_app(slack_app) if slack_app else None
+    if slack_app:
+        _report_remote_debugging(slack_app)
 
     print_info("Installing SlackPolish runtime launcher...")
-    runtime_dir = install_runtime(slack_app=launch_app)
+    runtime_dir = install_runtime(slack_app=slack_app)
 
     print_header("✅ Installation Completed")
     print(f"Runtime files: {runtime_dir}")

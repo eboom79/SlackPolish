@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """
-Patch the Electron Framework inside Slack.app to enable the
-EnableNodeCliInspectArguments fuse so that --remote-debugging-port works.
+Inspect (and optionally flip) the EnableNodeCliInspectArguments fuse in the
+Electron Framework inside Slack.app.
 
-Slack 4.45+ ships Electron with this fuse disabled, which prevents
-SlackPolish from opening a DevTools endpoint for injection.
+This is a TROUBLESHOOTING tool, not a required install step. Slack 4.52.155
+(Electron 42) honours --remote-debugging-port with this fuse OFF, so the
+installer no longer gates on it; it checks the live DevTools endpoint instead.
+Only use this if the SlackPolish launcher reports that it cannot attach.
 
-Requires admin privileges (will prompt via macOS dialog if needed).
+Slack's Electron Framework is a universal (x86_64 + arm64) binary and carries
+one fuse block per architecture slice. Both slices are reported and patched;
+earlier versions of this script only touched the first block found, which on
+Apple Silicon is the x86_64 slice and therefore had no effect.
+
+Patching requires admin privileges (will prompt via macOS dialog if needed).
 
 Usage:
     python3 patch-electron-fuse-MAC-ARM.py [--slack-app <path>] [--check]
@@ -50,8 +57,12 @@ FUSE_NAMES = [
     "OnlyLoadAppFromAsar",
     "LoadBrowserProcessSpecificV8Snapshot",
     "GrantFileProtocolExtraPrivileges",
-    "EnableRemoteDebuggingInAppPackage",
+    "WasmTrapHandlers",
 ]
+
+# Mach-O universal binary header constants.
+FAT_MAGIC = b"\xca\xfe\xba\xbe"
+CPU_TYPE_NAMES = {0x01000007: "x86_64", 0x0100000C: "arm64"}
 
 TARGET_FUSE_NAME = "EnableNodeCliInspectArguments"
 
@@ -103,19 +114,66 @@ def find_electron_framework_binary(slack_app):
     return None
 
 
-def read_fuse_region(data):
+def _fat_slices(data):
+    """Return [(arch, offset, size)] for a universal binary, or [] for a thin one."""
+    if data[:4] != FAT_MAGIC:
+        return []
+    slices = []
+    count = int.from_bytes(data[4:8], "big")
+    for i in range(count):
+        base = 8 + i * 20
+        cpu_type = int.from_bytes(data[base:base + 4], "big")
+        offset = int.from_bytes(data[base + 8:base + 12], "big")
+        size = int.from_bytes(data[base + 12:base + 16], "big")
+        slices.append((CPU_TYPE_NAMES.get(cpu_type, hex(cpu_type)), offset, size))
+    return slices
+
+
+def _slice_arch_for_offset(data, offset):
+    slices = _fat_slices(data)
+    if not slices:
+        return "thin"
+    for arch, start, size in slices:
+        if start <= offset < start + size:
+            return arch
+    return "unknown"
+
+
+def find_fuse_regions(data):
+    """Return one region dict per fuse block in the binary (one per architecture slice)."""
+    regions = []
     idx = data.find(FUSE_SENTINEL)
-    if idx == -1:
-        return None, None
-    fuse_start = idx + len(FUSE_SENTINEL)
-    count = data[fuse_start + 1]
-    fuses = {}
-    for i in range(min(count, len(FUSE_NAMES))):
-        byte_offset = fuse_start + 2 + i
-        val = data[byte_offset]
-        name = FUSE_NAMES[i]
-        fuses[name] = {"offset": byte_offset, "value": val, "enabled": val == 0x31}
-    return fuse_start, fuses
+    while idx != -1:
+        fuse_start = idx + len(FUSE_SENTINEL)
+        version = data[fuse_start]
+        count = data[fuse_start + 1]
+        fuses = {}
+        for i in range(min(count, len(FUSE_NAMES))):
+            byte_offset = fuse_start + 2 + i
+            val = data[byte_offset]
+            fuses[FUSE_NAMES[i]] = {"offset": byte_offset, "value": val, "enabled": val == 0x31}
+        regions.append({
+            "sentinel_offset": idx,
+            "fuse_start": fuse_start,
+            "version": version,
+            "count": count,
+            "arch": _slice_arch_for_offset(data, idx),
+            "fuses": fuses,
+        })
+        idx = data.find(FUSE_SENTINEL, fuse_start)
+    return regions
+
+
+def patch_fuse_bytes(data, fuse_name=TARGET_FUSE_NAME):
+    """Flip ``fuse_name`` to ON in every fuse block. Returns (new_bytes, [patched offsets])."""
+    patched = bytearray(data)
+    offsets = []
+    for region in find_fuse_regions(bytes(data)):
+        fuse = region["fuses"].get(fuse_name)
+        if fuse and not fuse["enabled"]:
+            patched[fuse["offset"]] = 0x31  # '1' = enabled
+            offsets.append(fuse["offset"])
+    return bytes(patched), offsets
 
 
 def check_fuses(slack_app):
@@ -124,19 +182,20 @@ def check_fuses(slack_app):
         return None
 
     data = fw_path.read_bytes()
-    _, fuses = read_fuse_region(data)
-    if fuses is None:
+    regions = find_fuse_regions(data)
+    if not regions:
         print_error("Fuse sentinel not found in Electron Framework binary.")
         print_error("This Electron version may use a different fuse format.")
         return None
 
-    print_info(f"Electron Framework fuses in {slack_app.name}:")
-    for name, info in fuses.items():
-        status = "ON " if info["enabled"] else "OFF"
-        marker = " ← target" if name == TARGET_FUSE_NAME else ""
-        print(f"  [{status}] {name}{marker}")
+    for region in regions:
+        print_info(f"Electron Framework fuses in {slack_app.name} [{region['arch']} slice, wire v{region['version']}]:")
+        for name, info in region["fuses"].items():
+            status = "ON " if info["enabled"] else "OFF"
+            marker = " ← target" if name == TARGET_FUSE_NAME else ""
+            print(f"  [{status}] {name}{marker}")
 
-    return fuses
+    return regions
 
 
 def _backup_path(fw_path):
@@ -149,20 +208,20 @@ def patch_fuse(slack_app, elevated=False):
     if not fw_path:
         return False
 
-    data = bytearray(fw_path.read_bytes())
-    _, fuses = read_fuse_region(bytes(data))
+    data = fw_path.read_bytes()
+    regions = find_fuse_regions(data)
 
-    if fuses is None:
+    if not regions:
         print_error("Fuse sentinel not found — cannot patch.")
         return False
 
-    target = fuses.get(TARGET_FUSE_NAME)
-    if target is None:
+    if any(r["fuses"].get(TARGET_FUSE_NAME) is None for r in regions):
         print_error(f"Fuse '{TARGET_FUSE_NAME}' not found in binary.")
         return False
 
-    if target["enabled"]:
-        print_success(f"Fuse '{TARGET_FUSE_NAME}' is already ON — no patch needed.")
+    patched, offsets = patch_fuse_bytes(data)
+    if not offsets:
+        print_success(f"Fuse '{TARGET_FUSE_NAME}' is already ON in all {len(regions)} slice(s) — no patch needed.")
         return True
 
     backup = _backup_path(fw_path)
@@ -176,18 +235,16 @@ def patch_fuse(slack_app, elevated=False):
                 return False
             return _rerun_as_admin()
 
-    offset = target["offset"]
-    data[offset] = 0x31  # '1' = enabled
-
     try:
-        fw_path.write_bytes(bytes(data))
+        fw_path.write_bytes(patched)
     except PermissionError:
         if elevated:
             print_error("Could not write patched binary even with elevated privileges.")
             return False
         return _rerun_as_admin()
 
-    print_success(f"Patched fuse '{TARGET_FUSE_NAME}' from OFF → ON at offset {offset}")
+    archs = ", ".join(r["arch"] for r in regions if r["fuses"][TARGET_FUSE_NAME]["offset"] in offsets)
+    print_success(f"Patched fuse '{TARGET_FUSE_NAME}' from OFF → ON in {len(offsets)} slice(s) [{archs}] at offsets {offsets}")
     return _resign(slack_app, elevated=elevated)
 
 
@@ -290,13 +347,13 @@ def needs_patch(slack_app):
         data = fw_path.read_bytes()
     except Exception:
         return None
-    _, fuses = read_fuse_region(data)
-    if fuses is None:
+    regions = find_fuse_regions(data)
+    if not regions:
         return None
-    target = fuses.get(TARGET_FUSE_NAME)
-    if target is None:
+    targets = [r["fuses"].get(TARGET_FUSE_NAME) for r in regions]
+    if any(t is None for t in targets):
         return None
-    return not target["enabled"]
+    return any(not t["enabled"] for t in targets)
 
 
 def parse_args():
@@ -323,17 +380,22 @@ def main():
     if args.restore:
         return 0 if restore_fuse(slack_app) else 1
 
-    fuses = check_fuses(slack_app)
-    if fuses is None:
+    regions = check_fuses(slack_app)
+    if regions is None:
         return 1
 
     if args.check:
-        target = fuses.get(TARGET_FUSE_NAME)
-        if target and not target["enabled"]:
-            print_warning(
-                f"Fuse '{TARGET_FUSE_NAME}' is OFF — SlackPolish cannot open the DevTools port."
+        off_archs = [r["arch"] for r in regions
+                     if r["fuses"].get(TARGET_FUSE_NAME) and not r["fuses"][TARGET_FUSE_NAME]["enabled"]]
+        if off_archs:
+            print_info(
+                f"Fuse '{TARGET_FUSE_NAME}' is OFF in: {', '.join(off_archs)}. "
+                "This does NOT by itself block SlackPolish: Slack 4.52+ honours "
+                "--remote-debugging-port with this fuse OFF."
             )
-            print_warning("Run this script without --check to apply the one-byte patch.")
+            print_info("Only run this script without --check if the launcher reports it cannot attach to Slack.")
+        else:
+            print_success(f"Fuse '{TARGET_FUSE_NAME}' is ON in all slices.")
         return 0
 
     return 0 if patch_fuse(slack_app, elevated=args._elevated) else 1
