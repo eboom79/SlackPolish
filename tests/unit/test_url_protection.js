@@ -122,6 +122,19 @@ runTest('Tokens never leak into plain (non-rich) inputs', () => {
     assert(preserved.includes('element.innerText = this.detokenizeToPlainText(newFullText, textState);'), 'Manual non-rich fallback must detokenise');
 });
 
+runTest('Slack app rich-link slugs (Jira/Drive/Confluence pills) are recognised as links', () => {
+    const detect = sliceBetween('isSlackLinkNode: function(node)', 'getLinkNodeUrl: function(node)');
+    assert(detect.includes("if (tagName === 'ts-slug')"), 'ts-slug elements must be treated as links');
+    assert(detect.includes("node.getAttribute('data-url')"), 'data-url must count as a link');
+    assert(detect.includes("role === 'link'"), 'role="link" must count as a link');
+    assert(detect.includes("className.includes('slackslug')"), 'c-slackslug class must count as a link');
+    assert(detect.includes("aria-roledescription"), 'aria-roledescription="Attachment link" must count as a link');
+    assert(scriptContent.includes("getLinkNodeUrl: function(node)"), 'getLinkNodeUrl missing');
+    assert(scriptContent.includes("for (const attribute of ['href', 'data-url', 'data-id', 'data-stringify-link'])"), 'URL must be read from href or slug data attributes');
+    const capture = sliceBetween('captureLinkToken: function(node, state)', 'getMentionByToken: function');
+    assert(capture.includes('href: this.getLinkNodeUrl(node),'), 'captureLinkToken must record the slug URL so a dropped token can be re-anchored');
+});
+
 runTest('Prompt tells the model to leave URLs, paths and issue keys verbatim', () => {
     assert(scriptContent.includes('Leave URLs, file paths, and identifiers such as issue keys (e.g. RED-1234, PROJ-42) exactly as written.'), 'Prompt instruction missing');
 });

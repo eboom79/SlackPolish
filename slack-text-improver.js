@@ -737,21 +737,48 @@
                 return false;
             }
 
+            // Slack "slugs" are app-resolved rich links (Jira issues, Drive/Confluence docs, canvases...):
+            // <ts-slug data-url="https://..." data-label="Title" role="link" class="c-slackslug c-slackslug--resolved">Title</ts-slug>
+            if (tagName === 'ts-slug') {
+                return true;
+            }
+
             const href = (node.getAttribute('href') || '').trim();
+            const dataUrl = (node.getAttribute('data-url') || '').trim();
+            const role = (node.getAttribute('role') || '').toLowerCase();
             const dataQa = (node.getAttribute('data-qa') || '').toLowerCase();
             const stringifyType = (node.getAttribute('data-stringify-type') || '').toLowerCase();
             const className = String(node.className || '').toLowerCase();
             const ariaLabel = (node.getAttribute('aria-label') || '').toLowerCase();
+            const ariaRoleDescription = (node.getAttribute('aria-roledescription') || '').toLowerCase();
 
             return (
                 tagName === 'a' ||
                 !!href ||
+                !!dataUrl ||
+                role === 'link' ||
                 dataQa.includes('link') ||
                 stringifyType.includes('link') ||
                 stringifyType.includes('url') ||
                 className.includes('link') ||
-                ariaLabel.includes('link')
+                className.includes('slackslug') ||
+                ariaLabel.includes('link') ||
+                ariaRoleDescription.includes('link')
             );
+        },
+
+        getLinkNodeUrl: function(node) {
+            // The URL of a link-like node: <a href>, or a Slack slug's data-url / data-id.
+            if (!node || node.nodeType !== Node.ELEMENT_NODE) {
+                return '';
+            }
+            for (const attribute of ['href', 'data-url', 'data-id', 'data-stringify-link']) {
+                const value = (node.getAttribute(attribute) || '').trim();
+                if (/^(https?:|mailto:|slack:)/i.test(value)) {
+                    return value;
+                }
+            }
+            return '';
         },
 
         captureMentionToken: function(node, state) {
@@ -771,7 +798,7 @@
             state.links.push({
                 token,
                 text: (node.textContent || '').trim(),
-                href: node.getAttribute('href') || '',
+                href: this.getLinkNodeUrl(node),
                 node: node.cloneNode(true)
             });
             return token;
