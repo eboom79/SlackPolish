@@ -425,6 +425,9 @@
                             }
                         }
                         return listText;
+                    } else if (tagName === 'blockquote') {
+                        // Slack quote (typed as "> text") - keep each quoted line with its marker
+                        return this.formatQuoteLines(Array.from(node.childNodes).map(processNode).join(''));
                     } else if (tagName === 'p' || tagName === 'div') {
                         // Paragraph or div - get text and add newline
                         const pText = this.getTextFromNode(node);
@@ -463,6 +466,12 @@
             }
 
             return '';
+        },
+
+        formatQuoteLines: function(text) {
+            // Prefix every non-empty line with "> " so the model sees (and keeps) the quote structure
+            const lines = String(text || '').split('\n').map(line => line.trim()).filter(Boolean);
+            return lines.length ? lines.map(line => `> ${line}`).join('\n') + '\n' : '';
         },
 
         extractTextStateWithMentions: function(element) {
@@ -524,6 +533,10 @@
                         }
                     }
                     return listText;
+                }
+
+                if (tagName === 'blockquote') {
+                    return this.formatQuoteLines(Array.from(node.childNodes).map(processNode).join(''));
                 }
 
                 if (tagName === 'p' || tagName === 'div') {
@@ -764,6 +777,19 @@
                 const trimmedLine = line.trim();
                 if (!trimmedLine) return; // Skip empty lines
 
+                // Check if this is a quote line ("> text") - restore as a Slack blockquote
+                const quoteMatch = trimmedLine.match(/^>{1,3}(?:\s+(.*))?$/);
+                if (quoteMatch) {
+                    currentList = null;
+                    currentListType = null;
+                    const quoteContent = (quoteMatch[1] || '').trim();
+                    if (!quoteContent) return; // Skip empty quote lines
+                    const blockquote = document.createElement('blockquote');
+                    this.appendTextWithMentions(blockquote, quoteContent, textState);
+                    fragment.appendChild(blockquote);
+                    return;
+                }
+
                 // Check if this is a numbered list item
                 const numberedMatch = trimmedLine.match(/^(\d+)\.\s+(.+)$/);
                 if (numberedMatch) {
@@ -915,7 +941,8 @@
                     style: CONFIG.STYLE,
                     innerHTML: element.innerHTML,
                     paragraphCount: element.querySelectorAll('p').length,
-                    listCount: element.querySelectorAll('ol, ul').length
+                    listCount: element.querySelectorAll('ol, ul').length,
+                    quoteCount: element.querySelectorAll('blockquote').length
                 });
             } else {
                 // Fallback for non-rich-text elements
@@ -1992,7 +2019,7 @@ ${styleInstruction}
 ${text}
 === END OF MESSAGE TO IMPROVE ===
 
-IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE above. Do not include any explanations, quotes, requirements, or additional text. Do not reproduce or paraphrase the conversation context. Use ${CONFIG.LANGUAGE} language.`;
+IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE above. Do not include any explanations, quotation marks, requirements, or additional text. Do not reproduce or paraphrase the conversation context. Preserve the line structure: keep each line that starts with a quote marker (">") or a list marker ("1.", "•", "-") on its own line, beginning with the same marker. Use ${CONFIG.LANGUAGE} language.`;
 
             if (utils.hasProtectedEntities(textState)) {
                 prompt += '\nIMPORTANT: Tokens like __SLACKPOLISH_MENTION_1__ and __SLACKPOLISH_LINK_1__ represent real Slack entities such as mentions and links. Preserve every such token exactly, without renaming, removing, reordering, or breaking it.';
