@@ -326,18 +326,114 @@
         getModelTextState: function(element, selectionInfo = null) {
             const activeSelectionInfo = selectionInfo || this.getSelectionInfo(element);
 
-            if (element && element.classList.contains('ql-editor') && !(activeSelectionInfo && activeSelectionInfo.hasSelection)) {
+            if (activeSelectionInfo && activeSelectionInfo.hasSelection) {
+                return this.extractSelectionTextState(activeSelectionInfo);
+            }
+
+            if (element && element.classList.contains('ql-editor')) {
                 const richTextState = this.extractTextStateWithMentions(element);
                 if (this.hasProtectedEntities(richTextState)) {
                     return richTextState;
                 }
             }
 
-            return {
-                text: this.getTextFromElement(element),
-                mentions: [],
-                links: []
-            };
+            // Plain path (no mentions/links in the DOM): still protect bare URLs in the text
+            const plainState = this.createTextState();
+            plainState.text = this.captureBareUrls(this.getTextFromElement(element), plainState);
+            return plainState;
+        },
+
+        createTextState: function() {
+            return { text: '', mentions: [], links: [], nextMentionId: 1, nextLinkId: 1 };
+        },
+
+        extractSelectionTextState: function(selectionInfo) {
+            // Build the model text from the selected DOM (not selection.toString()) so links and
+            // mentions inside the selection are tokenised and restored instead of flattened.
+            try {
+                if (selectionInfo.range && typeof selectionInfo.range.cloneContents === 'function') {
+                    const richState = this.extractTextStateWithMentions(selectionInfo.range.cloneContents());
+                    if (richState.text.trim()) {
+                        return richState;
+                    }
+                }
+            } catch (error) {
+                utils.debug('Selection fragment extraction failed, using plain selected text', { error: error.message });
+            }
+            const state = this.createTextState();
+            state.text = this.captureBareUrls(selectionInfo.selectedText || '', state);
+            return state;
+        },
+
+        findUrlSpans: function(text) {
+            // Pure: locate bare URLs in plain text. Trailing sentence punctuation is excluded;
+            // closing brackets are kept only when balanced (e.g. wikipedia.org/wiki/Foo_(bar)).
+            const spans = [];
+            if (!text) {
+                return spans;
+            }
+            const urlRegex = /(?:https?:\/\/|www\.)[^\s<>"'`*]+/gi;
+            let match;
+            while ((match = urlRegex.exec(text)) !== null) {
+                let url = match[0];
+                for (;;) {
+                    const last = url[url.length - 1];
+                    if ('.,;:!?'.includes(last)) {
+                        url = url.slice(0, -1);
+                        continue;
+                    }
+                    const pairs = { ')': '(', ']': '[', '}': '{' };
+                    if (pairs[last] && url.split(pairs[last]).length < url.split(last).length) {
+                        url = url.slice(0, -1);
+                        continue;
+                    }
+                    break;
+                }
+                const minLength = url.toLowerCase().startsWith('www.') ? 6 : 11;
+                if (url.length >= minLength) {
+                    spans.push({ start: match.index, end: match.index + url.length, url });
+                }
+            }
+            return spans;
+        },
+
+        captureBareUrls: function(text, state) {
+            // Replace bare URLs with link tokens so the model cannot alter them; restored verbatim as text.
+            if (!text || !state) {
+                return text || '';
+            }
+            const spans = this.findUrlSpans(text);
+            if (!spans.length) {
+                return text;
+            }
+            let result = '';
+            let cursor = 0;
+            spans.forEach(span => {
+                result += text.slice(cursor, span.start);
+                const token = `__SLACKPOLISH_LINK_${state.nextLinkId}__`;
+                state.nextLinkId += 1;
+                state.links.push({
+                    token,
+                    text: span.url,
+                    href: span.url,
+                    bare: true,
+                    node: document.createTextNode(span.url)
+                });
+                result += token;
+                cursor = span.end;
+            });
+            return result + text.slice(cursor);
+        },
+
+        detokenizeToPlainText: function(text, textState) {
+            // For plain (non-rich) inputs: tokens back to their visible text so nothing leaks.
+            if (!text || !this.hasProtectedEntities(textState)) {
+                return text || '';
+            }
+            return text.replace(/(__SLACKPOLISH_MENTION_\d+__|__SLACKPOLISH_LINK_\d+__)/g, token => {
+                const entity = this.getMentionByToken(token, textState) || this.getLinkByToken(token, textState);
+                return entity ? entity.text : token;
+            });
         },
 
         hasProtectedEntities: function(textState) {
@@ -474,14 +570,9 @@
             return lines.length ? lines.map(line => `> ${line}`).join('\n') + '\n' : '';
         },
 
-        extractTextStateWithMentions: function(element) {
-            const state = {
-                text: '',
-                mentions: [],
-                links: [],
-                nextMentionId: 1,
-                nextLinkId: 1
-            };
+        extractTextStateWithMentions: function(root) {
+            // `root` may be the editor element or a DocumentFragment (selection contents)
+            const state = this.createTextState();
             let listCounter = 1;
 
             const processNode = (node) => {
@@ -490,7 +581,7 @@
                 }
 
                 if (node.nodeType === Node.TEXT_NODE) {
-                    return node.textContent;
+                    return this.captureBareUrls(node.textContent, state);
                 }
 
                 if (node.nodeType !== Node.ELEMENT_NODE) {
@@ -551,7 +642,7 @@
                 return this.getEntityAwareTextFromNode(node, state);
             };
 
-            for (const child of element.childNodes) {
+            for (const child of root.childNodes) {
                 state.text += processNode(child);
             }
 
@@ -563,7 +654,7 @@
             if (!node) return '';
 
             if (node.nodeType === Node.TEXT_NODE) {
-                return node.textContent;
+                return this.captureBareUrls(node.textContent, state);
             }
 
             if (node.nodeType !== Node.ELEMENT_NODE) {
@@ -730,13 +821,25 @@
                     }
 
                     const escapedCandidate = candidate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    const matches = restoredText.match(new RegExp(escapedCandidate, 'g')) || [];
+                    // Whole-word match only: "Q3 planning doc" must not be re-anchored inside "Q3 planning document"
+                    const boundaryRegex = new RegExp(`(?<![A-Za-z0-9_])${escapedCandidate}(?![A-Za-z0-9_])`, 'g');
+                    const matches = restoredText.match(boundaryRegex) || [];
                     if (matches.length === 1) {
-                        restoredText = restoredText.replace(candidate, entity.token);
+                        restoredText = restoredText.replace(boundaryRegex, entity.token);
                         break;
                     }
                 }
             });
+
+            // Last resort: a link or mention must never silently disappear from the message.
+            const stillMissing = entities.filter(entity => !restoredText.includes(entity.token));
+            if (stillMissing.length) {
+                const separator = !restoredText || /\s$/.test(restoredText) ? '' : ' ';
+                restoredText += separator + stillMissing.map(entity => entity.token).join(' ');
+                utils.debug('Re-appended protected entities the model dropped', {
+                    tokens: stillMissing.map(entity => entity.token)
+                });
+            }
 
             return restoredText;
         },
@@ -921,8 +1024,13 @@
             // Check if we should replace selected text only
             // Use preserved selection info if available, otherwise check current selection
             const selectionInfo = preservedSelectionInfo || this.getSelectionInfo(element);
-            if (selectionInfo && selectionInfo.hasSelection && !this.hasProtectedEntities(textState)) {
-                this.replaceSelectedTextWithPreservedInfo(element, text, selectionInfo);
+            if (selectionInfo && selectionInfo.hasSelection) {
+                this.replaceSelectedTextWithPreservedInfo(
+                    element,
+                    this.restoreMissingProtectedTokens(text, textState),
+                    selectionInfo,
+                    textState
+                );
                 return;
             }
 
@@ -945,15 +1053,28 @@
                     quoteCount: element.querySelectorAll('blockquote').length
                 });
             } else {
-                // Fallback for non-rich-text elements
+                // Fallback for non-rich-text elements (tokens back to visible text, never leaked)
                 element.innerHTML = '';
-                element.innerText = text;
+                element.innerText = this.detokenizeToPlainText(this.restoreMissingProtectedTokens(text, textState), textState);
             }
 
             this.notifySlackDraftChanged(element);
         },
 
-        replaceSelectedText: function(element, improvedText, selectionInfo) {
+        insertRichTextAtRange: function(range, improvedText, textState) {
+            // Replace the range contents with text whose tokens are restored to their original nodes.
+            const fragment = document.createDocumentFragment();
+            this.appendTextWithMentions(fragment, improvedText, textState);
+            if (!fragment.lastChild) {
+                fragment.appendChild(document.createTextNode(''));
+            }
+            const lastNode = fragment.lastChild;
+            range.deleteContents();
+            range.insertNode(fragment);
+            return lastNode;
+        },
+
+        replaceSelectedText: function(element, improvedText, selectionInfo, textState = null) {
             utils.debug('🎯 Replacing selected text (current selection)', {
                 originalSelection: selectionInfo.selectedText,
                 improvedText: improvedText,
@@ -965,18 +1086,12 @@
                 const range = selectionInfo.range;
                 const selection = selectionInfo.selection;
 
-                // Delete the selected content
-                range.deleteContents();
-
-                // Create a text node with the improved text
-                const textNode = document.createTextNode(improvedText);
-
-                // Insert the improved text
-                range.insertNode(textNode);
+                // Replace the selected content, restoring any link/mention tokens to their nodes
+                const lastNode = this.insertRichTextAtRange(range, improvedText, textState);
 
                 // Collapse the caret after the inserted text to avoid visible reselection flicker
                 const newRange = document.createRange();
-                newRange.setStartAfter(textNode);
+                newRange.setStartAfter(lastNode);
                 newRange.collapse(true);
                 selection.removeAllRanges();
                 selection.addRange(newRange);
@@ -992,11 +1107,11 @@
                 utils.debug('❌ Error replacing selected text:', error);
                 // Fallback to full text replacement
                 utils.debug('🔄 Falling back to full text replacement');
-                this.setTextWithFormatting(element, improvedText);
+                this.setTextWithFormatting(element, improvedText, textState);
             }
         },
 
-        replaceSelectedTextWithPreservedInfo: function(element, improvedText, preservedSelectionInfo) {
+        replaceSelectedTextWithPreservedInfo: function(element, improvedText, preservedSelectionInfo, textState = null) {
             utils.debug('🎯 Replacing selected text (preserved selection)', {
                 originalSelection: preservedSelectionInfo.selectedText,
                 improvedText: improvedText,
@@ -1099,15 +1214,13 @@
                     selection.removeAllRanges();
                     selection.addRange(range);
 
-                    // Replace the selected content with improved text
-                    range.deleteContents();
-                    const textNode = document.createTextNode(improvedText);
-                    range.insertNode(textNode);
+                    // Replace the selected content, restoring any link/mention tokens to their nodes
+                    const lastNode = this.insertRichTextAtRange(range, improvedText, textState);
 
                     this.notifySlackDraftChanged(element);
 
                     const newRange = document.createRange();
-                    newRange.setStartAfter(textNode);
+                    newRange.setStartAfter(lastNode);
                     newRange.collapse(true);
                     selection.removeAllRanges();
                     selection.addRange(newRange);
@@ -1121,21 +1234,21 @@
                     const newFullText = beforeSelection + improvedText + afterSelection;
 
                     if (element.classList.contains('ql-editor')) {
-                        this.setTextWithFormatting(element, newFullText);
+                        this.setTextWithFormatting(element, newFullText, textState);
                     } else {
-                        element.innerText = newFullText;
+                        element.innerText = this.detokenizeToPlainText(newFullText, textState);
                     }
 
                     this.notifySlackDraftChanged(element);
 
-                    this.placeCaretAtTextPosition(element, selectionIndex + improvedText.length);
+                    this.placeCaretAtTextPosition(element, selectionIndex + this.detokenizeToPlainText(improvedText, textState).length);
                 }
 
             } catch (error) {
                 utils.debug('❌ Error replacing selected text with preserved info:', error);
                 // Fallback to full text replacement
                 utils.debug('🔄 Falling back to full text replacement');
-                this.setTextWithFormatting(element, improvedText);
+                this.setTextWithFormatting(element, improvedText, textState);
             }
         },
 
@@ -2019,7 +2132,7 @@ ${styleInstruction}
 ${text}
 === END OF MESSAGE TO IMPROVE ===
 
-IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE above. Do not include any explanations, quotation marks, requirements, or additional text. Do not reproduce or paraphrase the conversation context. Preserve the line structure: keep each line that starts with a quote marker (">") or a list marker ("1.", "•", "-") on its own line, beginning with the same marker. Use ${CONFIG.LANGUAGE} language.`;
+IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE above. Do not include any explanations, quotation marks, requirements, or additional text. Do not reproduce or paraphrase the conversation context. Preserve the line structure: keep each line that starts with a quote marker (">") or a list marker ("1.", "•", "-") on its own line, beginning with the same marker. Leave URLs, file paths, and identifiers such as issue keys (e.g. RED-1234, PROJ-42) exactly as written. Use ${CONFIG.LANGUAGE} language.`;
 
             if (utils.hasProtectedEntities(textState)) {
                 prompt += '\nIMPORTANT: Tokens like __SLACKPOLISH_MENTION_1__ and __SLACKPOLISH_LINK_1__ represent real Slack entities such as mentions and links. Preserve every such token exactly, without renaming, removing, reordering, or breaking it.';
