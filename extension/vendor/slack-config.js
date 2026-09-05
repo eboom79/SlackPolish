@@ -1,4 +1,4 @@
-// SlackPolish Configuration - Complete Customizable Configuration
+// JustPolish Configuration - Complete Customizable Configuration
 // All settings can be customized here without modifying the main script
 
 try {
@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.6.3",
-    BUILD: 3,
+    VERSION: "1.7.0",
+    BUILD: 0,
     BUILD_DATE: "2026-09-06",
-    DESCRIPTION: "Chrome extension polishes Jira/Confluence comments with the Slack rules; settings and key synced with Slack on Save",
+    DESCRIPTION: "Renamed to JustPolish: one polisher for Slack, Jira and Confluence",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
@@ -267,5 +267,5 @@ window.SLACKPOLISH_CONFIG = {
     }
 };
 } catch (error) {
-    console.error('❌ SlackPolish config failed to load:', error);
+    console.error('❌ JustPolish config failed to load:', error);
 }

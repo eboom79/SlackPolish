@@ -1,10 +1,12 @@
-# SlackPolish
+# JustPolish
+
+*Formerly SlackPolish. Same app, same hotkey — the name changed in v1.7.0 because it now polishes text in Slack, Jira and Confluence.*
 
 **An AI-powered text enhancement tool that integrates directly into Slack Desktop to improve your communication with personalized style preferences.**
 
 Transform your messages instantly with professional polish, casual tone, grammar fixes, translations, and your own custom writing style - all with simple hotkeys right in Slack.
 
-**🆕 NEW: Thread-Aware Intelligence!** SlackPolish now understands threads! Get **thread-specific text improvement** with smart context and **thread-focused summaries** that analyze just the thread conversation. Press **F10** for AI-powered summaries that adapt to your context!
+**🆕 NEW: Thread-Aware Intelligence!** JustPolish now understands threads! Get **thread-specific text improvement** with smart context and **thread-focused summaries** that analyze just the thread conversation. Press **F10** for AI-powered summaries that adapt to your context!
 
 ---
 
@@ -21,7 +23,7 @@ Transform your messages instantly with professional polish, casual tone, grammar
 
 ## 🎯 Product Overview
 
-**SlackPolish** is an internal Redis Enterprise team tool that seamlessly integrates with Slack Desktop to improve written communication using OpenAI's advanced language models. It now supports Linux and macOS Apple Silicon, with the new macOS support delivered through a runtime launcher that leaves `Slack.app` untouched.
+**JustPolish** is an internal Redis Enterprise team tool that seamlessly integrates with Slack Desktop to improve written communication using OpenAI's advanced language models. It now supports Linux and macOS Apple Silicon, with the new macOS support delivered through a runtime launcher that leaves `Slack.app` untouched.
 
 ### **How It Works:**
 
@@ -83,7 +85,7 @@ Transform your messages instantly with professional polish, casual tone, grammar
 
 ## 📁 Project Structure
 
-SlackPolish uses a **modular architecture** with functionality divided into independent scripts for better maintainability:
+JustPolish uses a **modular architecture** with functionality divided into independent scripts for better maintainability:
 
 ### **📜 `slack-text-improver.js`**
 Core text improvement functionality with thread awareness. Handles text detection, hotkey processing (Ctrl+Shift), OpenAI API calls, and smart context integration. Uses thread-specific context when in threads for better suggestions.
@@ -99,7 +101,7 @@ Thread-aware summarization module. Handles F10 hotkey with smart context detecti
 Configuration file containing OpenAI settings, language/style options, detailed prompts, version information, and default preferences. Central configuration for all modules.
 
 ### **🎨 `logo-data.js`**
-Base64-encoded SlackPolish logo data for clean code organization. Custom logo appears in loading indicators, settings menu, channel summary, and API key popups.
+Base64-encoded JustPolish logo data for clean code organization. Custom logo appears in loading indicators, settings menu, channel summary, and API key popups.
 
 
 ## � Pre-Installation Requirements
@@ -120,9 +122,9 @@ Base64-encoded SlackPolish logo data for clean code organization. Custom logo ap
 
 ### **🍎 macOS ARM (Apple Silicon)**
 
-**New in this release:** SlackPolish now supports macOS Apple Silicon.
+**New in this release:** JustPolish now supports macOS Apple Silicon.
 
-SlackPolish on macOS uses a runtime launcher. It does **not** modify
+JustPolish on macOS uses a runtime launcher. It does **not** modify
 `Slack.app`, `app-arm64.asar`, or `Info.plist`.
 
 ### **Step 1: Install the macOS runtime launcher**
@@ -135,7 +137,7 @@ This creates:
 - `~/Desktop/SlackPolish.command`
 - `~/Desktop/SlackPolish-Attach.command`
 
-### **Step 2: Launch SlackPolish on macOS**
+### **Step 2: Launch JustPolish on macOS**
 ```bash
 ~/Desktop/SlackPolish.command
 ```
@@ -168,17 +170,17 @@ python3 --version
 npm --version
 ```
 
-### **Step 1: Download SlackPolish**
+### **Step 1: Download JustPolish**
 ```bash
 # Navigate to your desired directory
 cd /path/to/your/projects/
 
 # Clone the repository
 git clone https://github.com/eboom79/SlackPolish.git
-cd SlackPolish
+cd JustPolish
 ```
 
-### **Step 2: Install SlackPolish**
+### **Step 2: Install JustPolish**
 ```bash
 sudo python3 installers/install-slack-LINUX-X64.py
 ```
@@ -193,19 +195,19 @@ sudo python3 installers/install-slack-LINUX-X64.py
 
 ### **� First Use - API Key Setup**
 
-**On your first use of SlackPolish**, you'll be prompted to enter your OpenAI API key:
+**On your first use of JustPolish**, you'll be prompted to enter your OpenAI API key:
 
 1. **Press Ctrl+Shift** in any message field (or F10 for channel summary)
 2. **API Key Popup** will appear automatically if no key is configured
 3. **Enter your OpenAI API key** (starts with `sk-...`)
 4. **Click "Save & Retry"** - Your key is securely stored locally
-5. **Start using SlackPolish** - No further configuration needed!
+5. **Start using JustPolish** - No further configuration needed!
 
 **💡 Tip**: You can always update your API key later by pressing **F12** → Settings Menu
 
 ## 🧩 Chrome Extension (experimental)
 
-`extension/` contains a Chrome extension that brings SlackPolish to **Jira and
+`extension/` contains a Chrome extension that brings JustPolish to **Jira and
 Confluence comments**: press the hotkey in the comment editor and the comment (or
 the selected text) is polished with the same prompts, styles and protections as
 in Slack — mentions, links, inline code, emoji and quoted lines are kept verbatim
@@ -252,13 +254,13 @@ The installer automatically detects Slack in these locations:
 python3 installers/install-slack-MAC-ARM.py -v
 ```
 
-**Launch SlackPolish with verbose runtime logs:**
+**Launch JustPolish with verbose runtime logs:**
 ```bash
 python3 installers/launch-slackpolish-MAC-ARM.py --relaunch --launch-mode open -v
 ```
 
 **Common macOS Issues:**
-- **Slack opens without SlackPolish** → Launch Slack from `~/Desktop/SlackPolish.command`
+- **Slack opens without JustPolish** → Launch Slack from `~/Desktop/SlackPolish.command`
 - **Slack is already open** → Use `~/Desktop/SlackPolish-Attach.command`
 - **Desktop launcher is missing** → Re-run `python3 installers/install-slack-MAC-ARM.py`
 - **Python is missing** → Install Python 3 and retry
@@ -309,7 +311,7 @@ ls -la app.asar*
 python3 installers/uninstall-slack-MAC-ARM.py
 ```
 
-This removes the SlackPolish runtime files and Desktop launchers. It does not
+This removes the JustPolish runtime files and Desktop launchers. It does not
 modify `Slack.app`.
 
 #### **🪟 Windows Uninstallation**
@@ -673,7 +675,7 @@ The current macOS installer does not modify Slack.app. It installs a runtime lau
 
 ## 🤝 **Contributing**
 
-SlackPolish is a complete, production-ready solution. For issues or feature requests, please ensure you're using the correct platform-specific installer and have followed the installation instructions.
+JustPolish is a complete, production-ready solution. For issues or feature requests, please ensure you're using the correct platform-specific installer and have followed the installation instructions.
 
 ## � **License**
 
@@ -681,4 +683,4 @@ This project is provided as-is for educational and productivity purposes. Please
 
 ---
 
-**🎉 Enjoy your enhanced Slack experience with SlackPolish!** 🚀
+**🎉 Enjoy your enhanced Slack experience with JustPolish!** 🚀

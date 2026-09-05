@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * SlackPolish Hotkey Improvements Test - No API Key Required
+ * JustPolish Hotkey Improvements Test - No API Key Required
  * Tests the hotkey system improvements without requiring OpenAI API calls
  * Safe for CI/CD and automated testing environments
  */

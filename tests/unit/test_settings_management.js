@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * SlackPolish Settings Management Tests
+ * JustPolish Settings Management Tests
  * Tests settings loading, saving, validation, and localStorage operations
  */
 

@@ -1,6 +1,6 @@
 /**
  * Live Slack scenarios: what to put in the composer, and what MUST still be true
- * after SlackPolish polishes it.
+ * after JustPolish polishes it.
  *
  *  steps        – composer actions (type / newline / paste / waitFor / tab / select)
  *  invariants   – hard checks; any failure fails the scenario
@@ -62,7 +62,7 @@ export const checks = {
     slugLabelUnchanged: (url) => (b, a) => { const x = b.slugs.find(s => s.url === url), y = a.slugs.find(s => s.url === url); return { ok: !!x && !!y && x.label === y.label, detail: x && y ? `slug label ${x.label === y.label ? 'unchanged' : 'changed'}` : 'slug missing' }; }
 };
 
-/** Preconditions on the composer state BEFORE polishing; unmet -> scenario is SKIPPED (harness/Slack issue, not SlackPolish). */
+/** Preconditions on the composer state BEFORE polishing; unmet -> scenario is SKIPPED (harness/Slack issue, not JustPolish). */
 export const pre = {
     blockquotes: (n) => (b) => ({ ok: b.counts.blockquote === n, detail: `composer has ${b.counts.blockquote} blockquote(s), want ${n}` }),
     list: (type, n) => (b) => ({ ok: b.counts[type] >= 1 && b.counts.li === n, detail: `composer has ${type}=${b.counts[type]} li=${b.counts.li}, want ${n} items` }),
@@ -249,7 +249,7 @@ export const scenarios = [
         title: 'Code block (```) content stays verbatim',
         steps: [{ type: 'type', text: '```' }, { type: 'waitFor', what: 'code block', js: `ed.querySelector('pre, .ql-code-block')`, timeoutMs: 1500, optional: true }, { type: 'type', text: 'npm run build && npm test' }],
         precondition: pre.pre(1),
-        expectNoop: true, // only code: SlackPolish must refuse ("Nothing to polish") and leave it untouched
+        expectNoop: true, // only code: JustPolish must refuse ("Nothing to polish") and leave it untouched
         invariants: [checks.preBlocksUnchanged()],
         expectations: []
     },

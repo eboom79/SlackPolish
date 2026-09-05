@@ -52,16 +52,16 @@ def main():
     
     minimal_code = """
 // === MINIMAL SLACKPOLISH TEST ===
-console.log('SlackPolish: Minimal injection test - START');
+console.log('JustPolish: Minimal injection test - START');
 try {
     window.SLACKPOLISH_TEST = {
         version: 'test-minimal',
         injected: true,
         timestamp: new Date().toISOString()
     };
-    console.log('SlackPolish: Minimal injection test - SUCCESS');
+    console.log('JustPolish: Minimal injection test - SUCCESS');
 } catch (error) {
-    console.error('SlackPolish: Minimal injection test - ERROR:', error);
+    console.error('JustPolish: Minimal injection test - ERROR:', error);
 }
 // === END MINIMAL TEST ===
 """
@@ -112,8 +112,8 @@ try {
     print("=" * 60)
     print("\nNow starting Slack...")
     print("Check the browser console (Ctrl+Shift+I) for:")
-    print("  - 'SlackPolish: Minimal injection test - START'")
-    print("  - 'SlackPolish: Minimal injection test - SUCCESS'")
+    print("  - 'JustPolish: Minimal injection test - START'")
+    print("  - 'JustPolish: Minimal injection test - SUCCESS'")
     print("\nOr check for errors if Slack crashes.")
     print("\nStarting Slack in 3 seconds...")
     

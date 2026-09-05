@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * SlackPolish API Error Handling Tests
+ * JustPolish API Error Handling Tests
  * Tests API error scenarios, network failures, and error recovery
  */
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Installer Test: SlackPolish.app icon
+ * Installer Test: JustPolish.app icon
  * The wrapper app must ship a real .icns (built with sips + iconutil) and must not
  * rely on a Finder "custom icon" set through osascript, which fails without
  * Automation permission and only ever printed a warning.

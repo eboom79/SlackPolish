@@ -6,7 +6,7 @@ Electron Framework inside Slack.app.
 This is a TROUBLESHOOTING tool, not a required install step. Slack 4.52.155
 (Electron 42) honours --remote-debugging-port with this fuse OFF, so the
 installer no longer gates on it; it checks the live DevTools endpoint instead.
-Only use this if the SlackPolish launcher reports that it cannot attach.
+Only use this if the JustPolish launcher reports that it cannot attach.
 
 Slack's Electron Framework is a universal (x86_64 + arm64) binary and carries
 one fuse block per architecture slice. Both slices are reported and patched;
@@ -390,7 +390,7 @@ def main():
         if off_archs:
             print_info(
                 f"Fuse '{TARGET_FUSE_NAME}' is OFF in: {', '.join(off_archs)}. "
-                "This does NOT by itself block SlackPolish: Slack 4.52+ honours "
+                "This does NOT by itself block JustPolish: Slack 4.52+ honours "
                 "--remote-debugging-port with this fuse OFF."
             )
             print_info("Only run this script without --check if the launcher reports it cannot attach to Slack.")

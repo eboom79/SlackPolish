@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-SlackPolish Version Manager
-Manages version numbers for SlackPolish releases
+JustPolish Version Manager
+Manages version numbers for JustPolish releases
 
 Usage:
   python3 increment-version.py                    # Increment build number by 1

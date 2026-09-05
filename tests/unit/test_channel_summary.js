@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * SlackPolish Channel Summary Feature Tests
+ * JustPolish Channel Summary Feature Tests
  * Tests the new channel summarization functionality
  */
 
@@ -113,7 +113,7 @@ runTest('Message Formatting Functions', () => {
 
 // Test 9: HTML Template Generation
 runTest('HTML Template Generation', () => {
-    assert(channelSummaryContent.includes('SlackPolish Channel Summary'), 'Summary window title not found');
+    assert(channelSummaryContent.includes('JustPolish Channel Summary'), 'Summary window title not found');
     assert(channelSummaryContent.includes('Time Range:'), 'Time range UI not found');
     assert(channelSummaryContent.includes('Summary Level:'), 'Summary level UI not found');
     assert(channelSummaryContent.includes('Generate Summary'), 'Generate Summary button not found');

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SlackPolish Installer for Linux x64
+JustPolish Installer for Linux x64
 Optimized for Linux distributions (Ubuntu, Debian, CentOS, etc.)
 """
 
@@ -286,16 +286,16 @@ def validate_injection_file(file_path, force=False):
         return False
 
 def inject_scripts(injection_file, config_path, *script_paths):
-    """Inject SlackPolish scripts into the target file."""
+    """Inject JustPolish scripts into the target file."""
     try:
         # Read existing content
         with open(injection_file, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        # COMPREHENSIVE CLEANUP - Remove ALL SlackPolish code
-        print_info("Performing comprehensive cleanup of all SlackPolish code...")
+        # COMPREHENSIVE CLEANUP - Remove ALL JustPolish code
+        print_info("Performing comprehensive cleanup of all JustPolish code...")
 
-        # Patterns to remove everything SlackPolish-related
+        # Patterns to remove everything JustPolish-related
         cleanup_patterns = [
             # Main injection blocks with optional semicolons - more comprehensive
             r'// === SLACKPOLISH INJECTION START ===.*?// === SLACKPOLISH INJECTION END ===;?\s*(?:// === SLACKPOLISH INJECTION END ===;?\s*)*',
@@ -327,10 +327,10 @@ def inject_scripts(injection_file, config_path, *script_paths):
             r'\(function\(\)\s*{\s*[\'"]use strict[\'"];.*?SlackSettings.*?}\)\(\);?',
             r'\(function\(\)\s*{\s*[\'"]use strict[\'"];.*?SlackChannelSummary.*?}\)\(\);?',
 
-            # Any remaining SlackPolish references
-            r'SlackPolish[A-Za-z]*\s*[=:].*?[;}]',
-            r'// SlackPolish.*?\n',
-            r'/\* SlackPolish.*?\*/',
+            # Any remaining JustPolish references
+            r'JustPolish[A-Za-z]*\s*[=:].*?[;}]',
+            r'// JustPolish.*?\n',
+            r'/\* JustPolish.*?\*/',
 
             # Cleanup any orphaned semicolons or empty lines left behind
             r';\s*;\s*;+',
@@ -368,7 +368,7 @@ def inject_scripts(injection_file, config_path, *script_paths):
         if total_removed > 0:
             print_success(f"Comprehensive cleanup complete: Removed {total_removed} characters of old code")
         else:
-            print_info("No old SlackPolish code found to remove")
+            print_info("No old JustPolish code found to remove")
 
         # Read config script
         with open(config_path, 'r', encoding='utf-8') as f:
@@ -511,7 +511,7 @@ def repack_asar(input_dir, asar_path, asar_tool):
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="SlackPolish Installer for Linux x64",
+        description="JustPolish Installer for Linux x64",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -607,10 +607,10 @@ def verify_installation(slack_path):
             shutil.rmtree(extract_dir)
 
         if injection_found:
-            print_success("Installation verification passed - SlackPolish code found")
+            print_success("Installation verification passed - JustPolish code found")
             return True
         else:
-            print_error("Installation verification failed - SlackPolish code not found")
+            print_error("Installation verification failed - JustPolish code not found")
             return False
 
     except Exception as e:
@@ -625,7 +625,7 @@ def main():
         args = parse_arguments()
         VERBOSE = args.verbose
 
-        print_header("🐧 SlackPolish Installer for Linux x64")
+        print_header("🐧 JustPolish Installer for Linux x64")
     
         # Validate platform
         if not detect_linux_system():
@@ -710,7 +710,7 @@ def main():
             return 1
 
         # Inject scripts
-        print_info("Injecting SlackPolish Text Improver...")
+        print_info("Injecting JustPolish Text Improver...")
         try:
             if not inject_scripts(injection_file, "slack-config.js"):
                 print_error("Failed to inject scripts")

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * SlackPolish LocalStorage Operations Tests
+ * JustPolish LocalStorage Operations Tests
  * Tests localStorage operations, data persistence, and error handling
  */
 

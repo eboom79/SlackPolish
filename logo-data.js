@@ -1,4 +1,4 @@
-// SlackPolish Logo Data
+// JustPolish Logo Data
 // This file contains the base64 encoded logo to keep the main code clean
 
 // Set the logo globally - no imports/exports needed

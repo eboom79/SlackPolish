@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * SlackPolish URL / Link Protection Tests
+ * JustPolish URL / Link Protection Tests
  * Links must survive polishing untouched: anchors are tokenised and cloned back,
  * bare URLs in plain text are tokenised too, selections keep their links, a
  * dropped token is re-appended rather than lost, and tokens never leak as text.

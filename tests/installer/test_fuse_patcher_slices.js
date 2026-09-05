@@ -41,7 +41,7 @@ runTest('Per-slice API exists and single-region reader is gone', () => {
 });
 
 runTest('Messaging no longer claims the fuse blocks the DevTools port', () => {
-    assert(!source.includes('SlackPolish cannot open the DevTools port'), 'Stale claim must be removed');
+    assert(!source.includes('JustPolish cannot open the DevTools port'), 'Stale claim must be removed');
     assert(source.includes('honours --remote-debugging-port with this fuse OFF'), 'Should document the verified behaviour');
 });
 

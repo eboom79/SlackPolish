@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Minimal SlackPolish installer for testing - only injects config + text improver
+Minimal JustPolish installer for testing - only injects config + text improver
 """
 
 import os
@@ -26,7 +26,7 @@ def run_command(cmd, check=True):
 
 def main():
     print("=" * 50)
-    print("🧪 MINIMAL SlackPolish Test Installer")
+    print("🧪 MINIMAL JustPolish Test Installer")
     print("=" * 50)
     
     # Check if running as root

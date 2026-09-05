@@ -1,4 +1,4 @@
-# SlackPolish Test Vector System
+# JustPolish Test Vector System
 
 ## 🎯 **Overview**
 

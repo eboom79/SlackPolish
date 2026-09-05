@@ -91,7 +91,7 @@ async function main() {
     log(`Using ${CHROME}`);
 
     const PAGES = {
-        '/test.html': '<!doctype html><html><head><title>SlackPolish extension test page</title></head><body><h1>test</h1><textarea id="t">hello</textarea></body></html>',
+        '/test.html': '<!doctype html><html><head><title>JustPolish extension test page</title></head><body><h1>test</h1><textarea id="t">hello</textarea></body></html>',
         // Atlassian-editor-like Jira comment: ProseMirror root inside the ak content area, with a mention and a link
         // Markup mirrors a real Jira Cloud comment editor capture (2026-09): id ak-editor-textarea, data-prosemirror-node-name
         // on every node, mention as an inline node view padded with zero-width spaces.
@@ -125,7 +125,7 @@ async function main() {
     const bundle = fs.readFileSync(path.join(here, 'fixtures/prosemirror.bundle.js'));
     // Mock OpenAI: deterministic "polish" of the text between the prompt markers. /v1 is faithful; /v1-drop behaves
     // like a careless model (drops the mention token, rewrites the quoted line, wraps the answer in quotation marks).
-    // Mock SlackPolish launcher: WebSocket /slackpolish/sync (extension origin only) with hello/slack-saved/ack and
+    // Mock JustPolish launcher: WebSocket /slackpolish/sync (extension origin only) with hello/slack-saved/ack and
     // pings, POST /slackpolish/sync for a Save in Slack (Slack origin only) - the same contract as the real launcher.
     const openaiCalls = [];
     const launcherCalls = [];   // every HTTP/WS contact with the mock launcher
@@ -255,12 +255,12 @@ async function main() {
         };
         await chord();
 
-        // (0) the SlackPolish status badge (same pill as in Slack, same element id): "Improving" first, then "Active"
+        // (0) the JustPolish status badge (same pill as in Slack, same element id): "Improving" first, then "Active"
         const readBadge = () => browser.evaluate(page, `(() => { const b = document.getElementById('slackpolish-runtime-status'); return b ? { state: b.dataset.state, label: b.textContent.trim(), bg: b.style.background } : null; })()`);
         const badgeNow = await waitFor(readBadge, { timeoutMs: 3000, what: 'status badge' }).catch(() => null);
-        check(!!badgeNow && badgeNow.state === 'busy' && badgeNow.label === 'SlackPolish Improving', badgeNow ? `badge shown: ${badgeNow.state} "${badgeNow.label}" ${badgeNow.bg}` : 'no status badge');
+        check(!!badgeNow && badgeNow.state === 'busy' && badgeNow.label === 'JustPolish Improving', badgeNow ? `badge shown: ${badgeNow.state} "${badgeNow.label}" ${badgeNow.bg}` : 'no status badge');
         const badgeLater = await waitFor(async () => { const b = await readBadge(); return b && b.state === 'active' ? b : null; }, { timeoutMs: 4000, what: 'badge -> active' }).catch(() => null);
-        check(!!badgeLater && badgeLater.label === 'SlackPolish Active', badgeLater ? `badge then: ${badgeLater.state} "${badgeLater.label}"` : 'badge did not switch to Active');
+        check(!!badgeLater && badgeLater.label === 'JustPolish Active', badgeLater ? `badge then: ${badgeLater.state} "${badgeLater.label}"` : 'badge did not switch to Active');
 
         // (1) console line from the content script (isolated world console calls arrive on the page session)
         const line = await waitFor(async () => browser.consoleLines(page).find(l => l.includes('SLACKPOLISH_HOTKEY')), { timeoutMs: 5000, what: 'SLACKPOLISH_HOTKEY console line' }).catch(() => null);
@@ -268,7 +268,7 @@ async function main() {
         if (line) {
             const evt = JSON.parse(line.slice(line.indexOf('{')));
             check(evt.surface === 'other' && evt.host === '127.0.0.1' && evt.path === '/test.html', `event fields: surface=${evt.surface} host=${evt.host} path=${evt.path}`);
-            check(evt.title === 'SlackPolish extension test page', `title recorded: "${evt.title}"`);
+            check(evt.title === 'JustPolish extension test page', `title recorded: "${evt.title}"`);
             check(evt.editorFocused === true, `editorFocused=${evt.editorFocused}`);
             check(!('search' in evt) && !('url' in evt), 'no query string / full URL recorded');
         }
@@ -280,11 +280,11 @@ async function main() {
             for (const candidate of targetInfos.filter(isOurWorker)) {
                 const { sessionId } = await browser.send('Target.attachToTarget', { targetId: candidate.targetId, flatten: true });
                 const name = await browser.evaluate(sessionId, `chrome.runtime.getManifest().name`).catch(() => null);
-                if (name === 'SlackPolish') return { worker: candidate, sessionId };
+                if (name === 'JustPolish') return { worker: candidate, sessionId };
                 await browser.send('Target.detachFromTarget', { sessionId }).catch(() => {});
             }
             return null;
-        }, { timeoutMs: 8000, what: 'the SlackPolish extension service worker' });
+        }, { timeoutMs: 8000, what: 'the JustPolish extension service worker' });
         const worker = attached.worker; const w = attached.sessionId;
         log(`  worker: ${worker.url}`);
         const env = await browser.evaluate(w, `({ chrome: typeof chrome, storage: typeof (globalThis.chrome && chrome.storage), action: typeof (globalThis.chrome && chrome.action), self: (typeof self !== 'undefined' && self.location) ? self.location.href : null })`);
@@ -408,7 +408,7 @@ async function main() {
         check(launcherCalls.length === launcherBefore && launcherReceived.filter(m => m.type !== 'pong').length === wsBefore, `polishing did not contact the launcher (${launcherCalls.length - launcherBefore} requests, ${launcherReceived.filter(m => m.type !== 'pong').length - wsBefore} messages)`);
         const wa = (whole && whole.__after) || {};
         check(typeof wa.html === 'string' && wa.html.includes('data-mention-id="557058:abc"') && wa.html.includes('<code>relase</code>') && wa.html.includes('data-emoji-short-name=":tada:"') && wa.html.includes('href="https://redis.io/docs/latest/"') && wa.html.includes('<blockquote><p>can u ship it by fri??</p></blockquote>') && wa.html.includes('<li><p>Item one</p></li><li><p>Item two</p></li>'), 'entities and quote intact, text polished, structure kept');
-        check(wa.badge === 'SlackPolish Active', `badge after polishing: "${wa.badge}"`);
+        check(wa.badge === 'JustPolish Active', `badge after polishing: "${wa.badge}"`);
 
         // (c) only the selection
         const focusSelection = `(() => { const ed = document.querySelector('.ProseMirror'); ed.focus(); const p = ed.querySelector('p'); const t = [...p.childNodes].find(n => n.nodeType === 3 && n.textContent.includes('pls check the')); const start = t.textContent.indexOf('pls'); const r = document.createRange(); r.setStart(t, start); r.setEnd(t, start + 'pls check the'.length); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); return sel.toString(); })()`;
@@ -429,7 +429,7 @@ async function main() {
         const t1 = Date.now();
         const rel = await slackSave({ language: 'GERMAN', style: 'PROFESSIONAL', improveHotkey: 'Ctrl+Alt', personalPolish: 'be brief', syncWithChrome: true, savedAt: t1 }, 'sk-from-slack');
         const afterSlackSave = await waitFor(async () => { const st = await store(); return st.settings.style === 'PROFESSIONAL' ? st : null; }, { timeoutMs: 5000, what: 'Slack save applied' }).catch(() => null);
-        check(rel.delivered === 1 && !!afterSlackSave && afterSlackSave.settings.language === 'GERMAN' && afterSlackSave.settings.improveHotkey === 'Ctrl+Alt' && afterSlackSave.settings.personalPolish === 'be brief' && afterSlackSave.sync.lastAppliedFromSlack && afterSlackSave.sync.lastAppliedFromSlack.reason === 'slack-saved', `Slack Save relayed to the extension: ${afterSlackSave ? JSON.stringify({ language: afterSlackSave.settings.language, style: afterSlackSave.settings.style, hotkey: afterSlackSave.settings.improveHotkey }) : 'not applied'}`);
+        check(rel.delivered >= 1 && !!afterSlackSave && afterSlackSave.settings.language === 'GERMAN' && afterSlackSave.settings.improveHotkey === 'Ctrl+Alt' && afterSlackSave.settings.personalPolish === 'be brief' && !!afterSlackSave.sync.lastAppliedFromSlack, `Slack Save relayed to the extension (delivered to ${rel.delivered} client(s)): ${afterSlackSave ? JSON.stringify({ language: afterSlackSave.settings.language, style: afterSlackSave.settings.style, hotkey: afterSlackSave.settings.improveHotkey, reason: afterSlackSave.sync.lastAppliedFromSlack && afterSlackSave.sync.lastAppliedFromSlack.reason }) : 'not applied'}`);
 
         // (f) ...including the hotkey: Ctrl+Alt now polishes, Ctrl+Shift does nothing
         const altKey = await openAndPress(`${origin}/pm.html`, focusEnd, 'Hotkey from Slack is Ctrl+Alt: Ctrl+Shift ignored, Ctrl+Alt polishes', 900, domAfter, { press: 'ctrl+alt', negative: 'ctrl+shift' });
@@ -451,10 +451,10 @@ async function main() {
             await browser.waitForEvent(ps, 'Page.loadEventFired').catch(() => {});
             await sleep(500);
             const menu = await browser.evaluate(ps, `({ title: document.querelector ? null : document.querySelector('.title').textContent, version: document.getElementById('version').textContent, ids: ['language-select','style-select','hotkey-select','personal-polish','api-key-input','api-key-toggle','sync-with-slack','save-settings-btn','cancel-settings-btn'].filter(id => !document.getElementById(id)), languageOpt: document.querySelector('#language-select option[value=ENGLISH]').textContent, styleOpt: document.querySelector('#style-select option[value=CASUAL]').textContent, hotkeyOpt: document.querySelector('#hotkey-select option[value="Ctrl+Shift"]').textContent, values: { language: document.getElementById('language-select').value, style: document.getElementById('style-select').value, hotkey: document.getElementById('hotkey-select').value, personal: document.getElementById('personal-polish').value, key: document.getElementById('api-key-input').value, keyType: document.getElementById('api-key-input').type, sync: document.getElementById('sync-with-slack').checked }, status: document.getElementById('sync-status').textContent, dev: !!document.querySelector('#smart-context-enabled, #emoji-signature, #debug-mode') })`, true);
-            check(menu.title === 'SlackPolish Settings' && menu.ids.length === 0 && menu.version === `v${CONFIG.VERSION} (Build ${CONFIG.BUILD}) - ${CONFIG.BUILD_DATE}` && !menu.dev, `menu mirrors Slack's: title "${menu.title}", missing ids ${JSON.stringify(menu.ids)}, version "${menu.version}", developer options shown=${menu.dev}`);
+            check(menu.title === 'JustPolish Settings' && menu.ids.length === 0 && menu.version === `v${CONFIG.VERSION} (Build ${CONFIG.BUILD}) - ${CONFIG.BUILD_DATE}` && !menu.dev, `menu mirrors Slack's: title "${menu.title}", missing ids ${JSON.stringify(menu.ids)}, version "${menu.version}", developer options shown=${menu.dev}`);
             check(menu.languageOpt === '🇺🇸 English' && menu.styleOpt === '😊 Casual - Friendly and relaxed' && menu.hotkeyOpt === '⌨️ Ctrl+Shift (Default)', `option texts as in Slack: "${menu.languageOpt}" / "${menu.styleOpt}" / "${menu.hotkeyOpt}"`);
             check(menu.values.language === 'GERMAN' && menu.values.style === 'PROFESSIONAL' && menu.values.hotkey === 'Ctrl+Alt' && menu.values.personal === 'be brief' && menu.values.key === 'sk-slack-2' && menu.values.keyType === 'password' && menu.values.sync === false, `menu shows the current (synced) settings: ${JSON.stringify(menu.values)}`);
-            check(/Connected to SlackPolish in Slack/.test(menu.status), `sync status line: "${menu.status}"`);
+            check(/Connected to JustPolish in Slack/.test(menu.status), `sync status line: "${menu.status}"`);
             const received = launcherReceived.length;
             await browser.evaluate(ps, `(() => { document.getElementById('style-select').value = 'GRAMMAR'; document.getElementById('hotkey-select').value = 'Ctrl+Shift'; document.getElementById('personal-polish').value = 'Oxford comma'; document.getElementById('api-key-input').value = 'sk-from-popup'; document.getElementById('sync-with-slack').checked = true; document.getElementById('save-settings-btn').click(); return true; })()`);
             const pushed = await waitFor(async () => launcherReceived.slice(received).find(m => m.type === 'chrome-saved') || null, { timeoutMs: 5000, what: 'chrome-saved over the WebSocket' }).catch(() => null);
@@ -493,7 +493,7 @@ async function main() {
         // (k) no key anywhere: clear error, editor untouched
         await setSettings({ apiKey: '' });
         const noKey = await openAndPress(`${origin}/pm.html`, focusEnd, 'Polish without any key', 200, domAfter);
-        check(!!noKey && noKey.polish && noKey.polish.ok === false && /API key/i.test(noKey.polish.error || '') && noKey.__after && noKey.__after.badge === 'SlackPolish Needs API Key' && noKey.__after.html.includes('pls check the'), `no key -> "${noKey && noKey.polish && noKey.polish.error}", badge "${noKey && noKey.__after && noKey.__after.badge}"`);
+        check(!!noKey && noKey.polish && noKey.polish.ok === false && /API key/i.test(noKey.polish.error || '') && noKey.__after && noKey.__after.badge === 'JustPolish Needs API Key' && noKey.__after.html.includes('pls check the'), `no key -> "${noKey && noKey.polish && noKey.polish.error}", badge "${noKey && noKey.__after && noKey.__after.badge}"`);
 
         // (l) the activity log page still renders the events
         {

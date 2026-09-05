@@ -112,8 +112,8 @@ runTest('The status badge is a faithful copy of the one in Slack (ids, colours, 
             assert(slack.includes(value), `Slack script must contain ${state} style value ${JSON.stringify(value)}`);
         }
     }
-    assert(slack.includes("setStatusBadgeState('busy', 'SlackPolish Improving')"), 'Slack shows "SlackPolish Improving" while polishing');
-    assert(contentSource.includes("SlackPolishStatusBadge.set('busy', 'SlackPolish Improving');") && contentSource.includes("SlackPolishStatusBadge.set('active', 'SlackPolish Active'"), 'extension must show the same states/texts');
+    assert(slack.includes("setStatusBadgeState('busy', 'JustPolish Improving')"), 'Slack shows "JustPolish Improving" while polishing');
+    assert(contentSource.includes("SlackPolishStatusBadge.set('busy', 'JustPolish Improving');") && contentSource.includes("SlackPolishStatusBadge.set('active', 'JustPolish Active'"), 'extension must show the same states/texts');
     const badgeSource = fs.readFileSync(path.join(root, 'shared/status-badge.js'), 'utf8');
     for (const css of ['left: 20px;', 'bottom: 20px;', 'border-radius: 999px;', 'gap: 8px;', 'padding: 8px 12px;', "}, 5000);"]) {
         assert(badgeSource.includes(css) && slack.includes(css), `layout/timing detail must match Slack: ${css}`);
@@ -124,7 +124,7 @@ runTest('The status badge is a faithful copy of the one in Slack (ids, colours, 
 runTest('The content script answers a liveness ping; the menu shows the sync status', () => {
     assert(contentSource.includes("message.type === 'slackpolish-ping'"), 'content script must answer a ping (revision + active hotkey)');
     const popupSource = fs.readFileSync(path.join(root, 'popup/popup.js'), 'utf8');
-    assert(popupSource.includes("{ type: 'slackpolish-sync-status' }") && popupSource.includes('Connected to SlackPolish in Slack') && popupSource.includes('SlackPolish launcher not running'), 'menu must report whether the settings-sync link to Slack is up');
+    assert(popupSource.includes("{ type: 'slackpolish-sync-status' }") && popupSource.includes('Connected to JustPolish in Slack') && popupSource.includes('JustPolish launcher not running'), 'menu must report whether the settings-sync link to Slack is up');
 });
 
 runTest('Editor detection: kinds are classified from tag/class/ancestry; text capture is wired and bounded', () => {
@@ -178,9 +178,9 @@ runTest('Round-trip mode is opt-in, Atlassian-only, and reports paste handling',
     assert(contentSource.includes("chrome.storage.local.get(['settings', 'roundTrip'])"), 'round trip must be read from settings');
     assert(contentSource.includes("settings.roundTrip && event.surface === 'atlassian' && event.atlassianEditor"), 'round trip only on Atlassian editors when enabled');
     assert(contentSource.includes("event.surface === 'atlassian' && event.atlassianEditor && !settings.roundTrip"), 'polishing on Atlassian editors (the diagnostic replaces it only when switched on)');
-    assert(contentSource.includes("await chrome.storage.local.set({ roundTrip: false });") && contentSource.includes("SlackPolishStatusBadge.set('busy', 'SlackPolish Round-trip test');"), 'the diagnostic is one-shot and announces itself on the badge (it must never look like a polish that did nothing)');
+    assert(contentSource.includes("await chrome.storage.local.set({ roundTrip: false });") && contentSource.includes("SlackPolishStatusBadge.set('busy', 'JustPolish Round-trip test');"), 'the diagnostic is one-shot and announces itself on the badge (it must never look like a polish that did nothing)');
     assert(backgroundSource.includes("await chrome.storage.local.set({ roundTrip: false });"), 'the worker clears the diagnostic switch on install/reload/startup');
-    assert(contentSource.includes("SlackPolish: click into the comment editor first"), 'on Jira without a focused editor the badge says what to do');
+    assert(contentSource.includes("JustPolish: click into the comment editor first"), 'on Jira without a focused editor the badge says what to do');
     assert(contentSource.includes("const CONTENT_REVISION = '") && contentSource.includes('revision: CONTENT_REVISION,') && contentSource.includes('event.roundTripEnabled = settings.roundTrip === true;'), 'events must carry the script revision and the toggle state for diagnosis');
     const adapter = fs.readFileSync(path.join(root, 'shared/atlassian-adapter.js'), 'utf8');
     assert(adapter.includes("new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })"), 'write-back goes through the paste pipeline');

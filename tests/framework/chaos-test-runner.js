@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Chaos Test Framework - Random Input Testing for SlackPolish
+ * Chaos Test Framework - Random Input Testing for JustPolish
  * Tests system stability with randomized, malformed, and edge case inputs
  */
 

@@ -1,6 +1,6 @@
 # macOS Runtime Launcher
 
-This is the new macOS support architecture for SlackPolish.
+This is the new macOS support architecture for JustPolish.
 
 It does **not** modify:
 - `Slack.app`
@@ -8,7 +8,7 @@ It does **not** modify:
 - `Info.plist`
 
 Instead, it launches Slack with a Chrome DevTools remote debugging port and
-injects SlackPolish into Slack's real web page at runtime.
+injects JustPolish into Slack's real web page at runtime.
 
 ## Why
 
@@ -30,9 +30,9 @@ Launcher script:
 1. Starts Slack with `--remote-debugging-port=<port>`
 2. Polls Slack's DevTools HTTP endpoint
 3. Attaches to Slack page targets over the DevTools WebSocket protocol
-4. Installs SlackPolish into future documents with:
+4. Installs JustPolish into future documents with:
    - `Page.addScriptToEvaluateOnNewDocument`
-5. Immediately evaluates SlackPolish in the current page with:
+5. Immediately evaluates JustPolish in the current page with:
    - `Runtime.evaluate`
 
 The injected script only activates on real workspace URLs:
@@ -84,21 +84,21 @@ The runtime payload currently loads:
 
 - The launcher is intended to remain running while Slack is open.
 - Closing the launcher stops future target attachment.
-- Restarting Slack normally without the launcher will run Slack without SlackPolish.
-- The installed `SlackPolish.app` should be a Desktop symlink to the real app bundle stored under SlackPolish Runtime.
-- `SlackPolish.app` now uses smart attach-or-relaunch behavior, so it can recover when Slack is already open without SlackPolish's debug port.
+- Restarting Slack normally without the launcher will run Slack without JustPolish.
+- The installed `JustPolish.app` should be a Desktop symlink to the real app bundle stored under JustPolish Runtime.
+- `JustPolish.app` now uses smart attach-or-relaunch behavior, so it can recover when Slack is already open without JustPolish's debug port.
 - The `.command` launchers remain available as fallback entry points.
 
 ## Status
 
-This is the working implementation behind SlackPolish's new macOS support.
+This is the working implementation behind JustPolish's new macOS support.
 
 What is already validated:
 - no Slack app-bundle mutation is required
 - no `Info.plist` mutation is required
 - no ASAR repack is required
 - Slack exposes usable DevTools page targets in runtime-launch mode
-- SlackPolish can be injected into the real workspace page
+- JustPolish can be injected into the real workspace page
 - text improvement works through this launcher path
 - settings work through this launcher path
 - channel summary works through this launcher path

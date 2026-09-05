@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Test Runner - Runs all SlackPolish tests automatically
+ * Test Runner - Runs all JustPolish tests automatically
  * This allows batch testing without manual intervention
  */
 
@@ -112,7 +112,7 @@ class TestRunner {
     }
 
     async runAllTests() {
-        console.log('🚀 SlackPolish Test Suite Runner');
+        console.log('🚀 JustPolish Test Suite Runner');
         console.log('=====================================\n');
 
         const testFiles = await this.findTestFiles();
@@ -151,7 +151,7 @@ class TestRunner {
             testTypeDescription = 'Static Analysis + Chaos Tests';
         }
 
-        console.log(`🚀 SlackPolish ${testTypeDescription}`);
+        console.log(`🚀 JustPolish ${testTypeDescription}`);
         console.log('=====================================\n');
 
         const testFiles = await this.findTestFiles(excludeChaos, excludeVectors);
@@ -239,7 +239,7 @@ async function main() {
     const helpRequested = args.includes('--help');
 
     if (helpRequested) {
-        console.log('SlackPolish Test Runner');
+        console.log('JustPolish Test Runner');
         console.log('Usage:');
         console.log('  node run-all-tests.js                    # Run all tests');
         console.log('  node run-all-tests.js --test NAME        # Run specific test');

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Test Vector Framework - Input/Output Testing for SlackPolish
+ * Test Vector Framework - Input/Output Testing for JustPolish
  * Tests actual function behavior with predefined input/output pairs
  */
 

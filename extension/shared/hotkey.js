@@ -1,5 +1,5 @@
 /**
- * SlackPolish hotkey chord detection.
+ * JustPolish hotkey chord detection.
  *
  * Same semantics as the listener inside slack-text-improver.js: a modifier-only
  * combination such as "Ctrl+Shift" fires on the keydown of the modifier that

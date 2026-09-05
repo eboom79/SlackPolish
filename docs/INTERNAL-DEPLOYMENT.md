@@ -1,8 +1,8 @@
-# 🏢 SlackPolish - Internal Redis Enterprise Deployment Guide
+# 🏢 JustPolish - Internal Redis Enterprise Deployment Guide
 
 ## 🎯 Overview
 
-SlackPolish is an internal productivity tool designed specifically for Redis Enterprise team members to enhance written communication in Slack using AI-powered text improvement.
+JustPolish is an internal productivity tool designed specifically for Redis Enterprise team members to enhance written communication in Slack using AI-powered text improvement.
 
 ## 🔐 Access & Security
 
@@ -24,7 +24,7 @@ SlackPolish is an internal productivity tool designed specifically for Redis Ent
 ```bash
 # Clone from Redis Enterprise GitHub
 git clone https://github.com/redis-enterprise/SlackPolish.git
-cd SlackPolish
+cd JustPolish
 
 # Deploy to team workstations
 # Linux workstations:
@@ -48,7 +48,7 @@ python installers/install-slack-WINDOWS-X64.py
 ```bash
 # 1. Clone repository (requires Redis Enterprise GitHub access)
 git clone https://github.com/redis-enterprise/SlackPolish.git
-cd SlackPolish
+cd JustPolish
 
 # 2. Configure API key
 cp slack-config.js slack-config-personal.js
@@ -204,6 +204,6 @@ python installers/install-slack-WINDOWS-X64.py
 
 ---
 
-**SlackPolish is designed to enhance Redis Enterprise team productivity while maintaining security and compliance with internal policies.** 🚀
+**JustPolish is designed to enhance Redis Enterprise team productivity while maintaining security and compliance with internal policies.** 🚀
 
 For questions, support, or feedback, please contact the internal IT team or use the designated Redis Enterprise support channels.

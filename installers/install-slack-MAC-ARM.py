@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-SlackPolish Installer for macOS ARM.
+JustPolish Installer for macOS ARM.
 
 This installer does not modify Slack.app.
-It installs the runtime launcher and SlackPolish assets into the user's
+It installs the runtime launcher and JustPolish assets into the user's
 Application Support directory and creates convenient `.command` launchers.
 """
 
@@ -103,23 +103,23 @@ def get_current_runtime_dir():
 
 
 def get_desktop_launcher_path():
-    return Path.home() / "Desktop" / "SlackPolish.command"
+    return Path.home() / "Desktop" / "JustPolish.command"
 
 
 def get_desktop_attach_path():
-    return Path.home() / "Desktop" / "SlackPolish-Attach.command"
+    return Path.home() / "Desktop" / "JustPolish-Attach.command"
 
 
 def get_desktop_app_path():
-    return Path.home() / "Desktop" / "SlackPolish.app"
+    return Path.home() / "Desktop" / "JustPolish.app"
 
 
 def get_desktop_launch_app_path():
-    return Path.home() / "Desktop" / "SlackPolish Launch.app"
+    return Path.home() / "Desktop" / "JustPolish Launch.app"
 
 
 def get_runtime_app_path():
-    return get_runtime_root() / "SlackPolish.app"
+    return get_runtime_root() / "JustPolish.app"
 
 
 def ensure_required_files():
@@ -268,11 +268,11 @@ def write_app_wrapper(app_path, runtime_dir, slack_app=None):
         existing_plist = plistlib.load(handle)
 
     existing_plist.update({
-        "CFBundleDisplayName": "SlackPolish",
+        "CFBundleDisplayName": "JustPolish",
         "CFBundleIconFile": "AppIcon" if has_icns else "AppIcon.png",
         "CFBundleIconName": "AppIcon",
         "CFBundleIdentifier": "local.slackpolish.attach",
-        "CFBundleName": "SlackPolish",
+        "CFBundleName": "JustPolish",
         "CFBundleShortVersionString": "1.0",
         "CFBundleVersion": "1",
         "LSUIElement": False,
@@ -333,7 +333,7 @@ def _report_remote_debugging(slack_app, port=DEFAULT_DEBUG_PORT):
         )
         return
     print_info(
-        f"Slack is not currently running with the SlackPolish debug port ({port}). "
+        f"Slack is not currently running with the JustPolish debug port ({port}). "
         "The launcher starts Slack with --remote-debugging-port and verifies on first run."
     )
     print_info(
@@ -411,6 +411,16 @@ def install_runtime(slack_app=None):
         shutil.rmtree(legacy_launch_app)
         print_success(f"Removed legacy Desktop launch app: {legacy_launch_app}")
 
+    # Pre-1.7 installs were called SlackPolish: drop the old Desktop entries and runtime bundle
+    desktop = Path.home() / "Desktop"
+    for legacy in (desktop / "SlackPolish.app", desktop / "SlackPolish.app alias", desktop / "SlackPolish.command", desktop / "SlackPolish-Attach.command", runtime_root / "SlackPolish.app"):
+        if legacy.is_symlink() or legacy.is_file():
+            legacy.unlink()
+            print_success(f"Removed old SlackPolish item: {legacy}")
+        elif legacy.is_dir():
+            shutil.rmtree(legacy)
+            print_success(f"Removed old SlackPolish bundle: {legacy}")
+
     launcher = current_dir / "launch-slackpolish-MAC-ARM.py"
     launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR)
 
@@ -422,7 +432,7 @@ def install_runtime(slack_app=None):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Install SlackPolish runtime launcher for macOS ARM")
+    parser = argparse.ArgumentParser(description="Install JustPolish runtime launcher for macOS ARM")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
     return parser.parse_args()
 
@@ -432,7 +442,7 @@ def main():
     args = parse_args()
     VERBOSE = args.verbose
 
-    print_header("🍎 SlackPolish Runtime Installer for macOS ARM")
+    print_header("🍎 JustPolish Runtime Installer for macOS ARM")
 
     if not detect_mac_architecture():
         return 1
@@ -450,19 +460,19 @@ def main():
     if slack_app:
         _report_remote_debugging(slack_app)
 
-    print_info("Installing SlackPolish runtime launcher...")
+    print_info("Installing JustPolish runtime launcher...")
     runtime_dir = install_runtime(slack_app=slack_app)
 
     print_header("✅ Installation Completed")
     print(f"Runtime files: {runtime_dir}")
-    print(f"Launch SlackPolish from: {get_desktop_launcher_path()}")
+    print(f"Launch JustPolish from: {get_desktop_launcher_path()}")
     print("")
     print("Recommended use:")
     print(f"  {get_desktop_app_path()}")
     print("")
     print("Alternative launchers:")
     print(f"  Smart attach-or-launch app: {get_desktop_app_path()}")
-    print(f"  Launch Slack with SlackPolish: {get_desktop_launcher_path()}")
+    print(f"  Launch Slack with JustPolish: {get_desktop_launcher_path()}")
     print(f"  Attach to already-running Slack: {get_desktop_attach_path()}")
 
     extension_dir = stage_chrome_extension()

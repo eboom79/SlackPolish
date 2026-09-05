@@ -1,4 +1,4 @@
-// SlackPolish Settings - Independent Settings Management
+// JustPolish Settings - Independent Settings Management
 // This script handles the settings interface separately from the main text improver
 
 (function() {
@@ -160,11 +160,11 @@
             return ['Ctrl+Shift', 'Ctrl+Alt', 'Ctrl+Tab'];
         },
 
-        // Create SlackPolish logo
+        // Create JustPolish logo
         createLogo: function(size = 24) {
             const logoImg = document.createElement('img');
-            logoImg.title = 'SlackPolish';
-            logoImg.alt = 'SlackPolish Logo';
+            logoImg.title = 'JustPolish';
+            logoImg.alt = 'JustPolish Logo';
             logoImg.width = size;
             logoImg.height = size;
             logoImg.style.cssText = `display: block; border: none; width: ${size}px !important; height: ${size}px !important; max-width: ${size}px; max-height: ${size}px;`;
@@ -176,7 +176,7 @@
             logoImg.onerror = function() {
                 const textSpan = document.createElement('span');
                 textSpan.textContent = 'SP';
-                textSpan.title = 'SlackPolish';
+                textSpan.title = 'JustPolish';
                 textSpan.style.cssText = `
                     font-size: ${size}px;
                     font-weight: bold;
@@ -263,7 +263,7 @@
                             <div style="background: white; border-radius: 8px; padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-right: 16px; display: flex; align-items: center; justify-content: center;" id="settings-menu-logo">
                             </div>
                             <div style="flex: 1;">
-                                <div style="font-weight: bold; font-size: 18px; color: #2c3e50; margin-bottom: 4px;">SlackPolish Settings</div>
+                                <div style="font-weight: bold; font-size: 18px; color: #2c3e50; margin-bottom: 4px;">JustPolish Settings</div>
                                 <div style="font-size: 13px; color: #6c757d;">AI-powered text enhancement for Slack</div>
                                 <div style="font-size: 11px; color: #999; margin-top: 2px;">v${version} (Build ${build}) - ${buildDate}</div>
                                 <div style="display: none; font-size: 11px; color: #007a5a; font-weight: normal; margin-top: 4px;" id="dev-mode-indicator">
@@ -318,7 +318,7 @@
                                 </label>
                             </div>
                             <div style="font-size: 11px; color: #666; margin-top: 2px;">
-                                On Save, language, style, hotkey and personal style are sent to the SlackPolish Chrome extension. The OpenAI key is always shared.
+                                On Save, language, style, hotkey and personal style are sent to the JustPolish Chrome extension. The OpenAI key is always shared.
                             </div>
                         </div>
 
@@ -388,7 +388,7 @@
                                     </label>
                                 </div>
                                 <div style="font-size: 11px; color: #666; margin-top: 2px;">
-                                    Adds SlackPolish emoji signature to identify AI-improved messages.
+                                    Adds JustPolish emoji signature to identify AI-improved messages.
                                 </div>
                             </div>
 
@@ -615,7 +615,7 @@
             });
         },
 
-        // Tell the SlackPolish launcher that settings were saved so the Chrome extension can follow.
+        // Tell the JustPolish launcher that settings were saved so the Chrome extension can follow.
         // Only a Save triggers this. Settings travel only when "Sync settings with Chrome" is checked;
         // the OpenAI key is always shared (one key is valid for both). Fire-and-forget: Slack never waits on it.
         notifyChromeSync: function(settings) {
@@ -637,7 +637,7 @@
                 }).then(response => {
                     utils.log(`Chrome sync notified (HTTP ${response.status})`);
                 }).catch(error => {
-                    utils.log('Chrome sync not reachable (SlackPolish launcher not running?): ' + error.message);
+                    utils.log('Chrome sync not reachable (JustPolish launcher not running?): ' + error.message);
                 });
             } catch (error) {
                 utils.log('Chrome sync skipped: ' + error.message);

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * SlackPolish Inline Entities Preservation Tests
+ * JustPolish Inline Entities Preservation Tests
  * Inline code and emoji are protected entities (tokenised, cloned back); bold/italic/strike
  * are re-applied when the model keeps the words; deliberate blank lines survive.
  */

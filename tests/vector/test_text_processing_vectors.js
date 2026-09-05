@@ -226,7 +226,7 @@ const apiKeyTestVectors = [
 
 // Run Tests
 async function runAllTests() {
-    console.log('🚀 SlackPolish Text Processing Test Vectors');
+    console.log('🚀 JustPolish Text Processing Test Vectors');
     console.log('=============================================\n');
 
     const runner = new TestVectorRunner();

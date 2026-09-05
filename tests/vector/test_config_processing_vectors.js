@@ -365,7 +365,7 @@ const buildPromptConfigTestVectors = [
 
 // Run Tests
 async function runAllTests() {
-    console.log('🚀 SlackPolish Configuration Processing Test Vectors');
+    console.log('🚀 JustPolish Configuration Processing Test Vectors');
     console.log('==================================================\n');
 
     const runner = new TestVectorRunner();

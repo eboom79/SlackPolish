@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * SlackPolish DOM Manipulation Tests
+ * JustPolish DOM Manipulation Tests
  * Tests DOM interaction, message input finding, text extraction and replacement
  */
 

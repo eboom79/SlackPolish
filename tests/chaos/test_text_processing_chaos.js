@@ -15,7 +15,7 @@ const { TextProcessor } = require('../vector/test_text_processing_vectors');
  * Run chaos tests on text processing functions
  */
 async function runTextProcessingChaosTests() {
-    console.log('🌪️  SlackPolish Text Processing Chaos Tests');
+    console.log('🌪️  JustPolish Text Processing Chaos Tests');
     console.log('===========================================\n');
 
     const runner = new ChaosTestRunner({ 

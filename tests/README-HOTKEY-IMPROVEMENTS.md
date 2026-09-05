@@ -1,8 +1,8 @@
-# 🧪 SlackPolish Hotkey Improvements Test Suite
+# 🧪 JustPolish Hotkey Improvements Test Suite
 
 ## Overview
 
-This test suite validates the hotkey system improvements implemented in SlackPolish to prevent bugs related to hotkey handling, including:
+This test suite validates the hotkey system improvements implemented in JustPolish to prevent bugs related to hotkey handling, including:
 - Multiple rapid `triggerTextImprovement()` calls without explicit hotkey presses (v1.2.1)
 - Fast hotkey presses (< 50ms) not triggering due to debounce timeout cancellation (v1.2.44)
 
@@ -221,4 +221,4 @@ When contributing hotkey-related changes:
 
 **Last Updated**: 2025-11-29
 **Version**: 1.2.44
-**Maintainer**: SlackPolish Development Team
+**Maintainer**: JustPolish Development Team

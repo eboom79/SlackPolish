@@ -1,10 +1,10 @@
 /**
- * Content script: on the SlackPolish hotkey, log where it was pressed and - on an Atlassian editor - polish
+ * Content script: on the JustPolish hotkey, log where it was pressed and - on an Atlassian editor - polish
  * the comment (or the selected part) with the same rules as in Slack: mentions, links, inline code, emoji
  * and quoted lines are protected and verified after write-back.
  * Settings (language, style, hotkey, personal style, key) are the extension's own copy in chrome.storage.local,
  * kept in step with Slack by the background worker when a Save happens on either side. Nothing here talks to
- * the SlackPolish launcher: a polish is a single call to OpenAI from the worker.
+ * the JustPolish launcher: a polish is a single call to OpenAI from the worker.
  */
 (function () {
     if (window.__SLACKPOLISH_EXTENSION_HOTKEY_ATTACHED__) {
@@ -164,11 +164,11 @@
         return result;
     }
 
-    // Same status pill as in Slack: "SlackPolish Improving" while it would be polishing, then "SlackPolish Active",
+    // Same status pill as in Slack: "JustPolish Improving" while it would be polishing, then "JustPolish Active",
     // which dims after 5s (like Slack) and is removed afterwards so other sites are not cluttered.
     function showBadge() {
-        SlackPolishStatusBadge.set('busy', 'SlackPolish Improving');
-        setTimeout(() => SlackPolishStatusBadge.set('active', 'SlackPolish Active', { removeAfterMs: 8000 }), 1600);
+        SlackPolishStatusBadge.set('busy', 'JustPolish Improving');
+        setTimeout(() => SlackPolishStatusBadge.set('active', 'JustPolish Active', { removeAfterMs: 8000 }), 1600);
     }
 
     async function handlePress() {
@@ -182,7 +182,7 @@
         event.atlassianEditor = !!(root && SlackPolishAtlassian.isAtlassianEditor(root));
 
         if (event.surface === 'atlassian' && event.atlassianEditor && !settings.roundTrip) {
-            SlackPolishStatusBadge.set('busy', 'SlackPolish Improving');
+            SlackPolishStatusBadge.set('busy', 'JustPolish Improving');
             try {
                 event.polish = await polishAtlassian(root, settings);
             } catch (error) {
@@ -191,27 +191,27 @@
             const p = event.polish;
             console.log('🔧 SLACKPOLISH_POLISH', JSON.stringify({ ok: p.ok, mode: p.mode, style: p.style, language: p.language, skipped: p.skipped, error: p.error, repaired: p.repaired && { removed: p.repaired.removed, reanchored: p.repaired.reanchored, appended: p.repaired.appended, substituted: p.repaired.substituted } }));
             if (p.skipped === 'nothing-to-polish') {
-                SlackPolishStatusBadge.set('active', 'SlackPolish: nothing to polish', { removeAfterMs: 5000 });
+                SlackPolishStatusBadge.set('active', 'JustPolish: nothing to polish', { removeAfterMs: 5000 });
             } else if (p.ok) {
-                SlackPolishStatusBadge.set('active', 'SlackPolish Active', { removeAfterMs: 8000 });
+                SlackPolishStatusBadge.set('active', 'JustPolish Active', { removeAfterMs: 8000 });
             } else {
-                SlackPolishStatusBadge.set('error', /API key/i.test(p.error || '') ? 'SlackPolish Needs API Key' : 'SlackPolish Needs Attention', { removeAfterMs: 8000 });
+                SlackPolishStatusBadge.set('error', /API key/i.test(p.error || '') ? 'JustPolish Needs API Key' : 'JustPolish Needs Attention', { removeAfterMs: 8000 });
             }
         } else if (settings.roundTrip && event.surface === 'atlassian' && event.atlassianEditor) {
             // One-shot diagnostic (activity log): re-insert the same content through the editor's paste pipeline and
             // check nothing changed. It replaces polishing for this single press only, and says so on the badge.
             try { await chrome.storage.local.set({ roundTrip: false }); } catch (error) { /* extension reloaded */ }
-            SlackPolishStatusBadge.set('busy', 'SlackPolish Round-trip test');
+            SlackPolishStatusBadge.set('busy', 'JustPolish Round-trip test');
             try {
                 event.roundTrip = await SlackPolishAtlassian.roundTrip(root, el => SlackPolishEditor.describe(el));
             } catch (error) {
                 event.roundTrip = { ok: false, error: String(error && error.message || error) };
             }
             console.log('🔧 SLACKPOLISH_ROUNDTRIP', JSON.stringify({ ok: event.roundTrip.ok, pasteHandled: event.roundTrip.pasteHandled, textSame: event.roundTrip.textSame, nodesSame: event.roundTrip.nodesSame, error: event.roundTrip.error }));
-            SlackPolishStatusBadge.set(event.roundTrip.ok ? 'active' : 'error', event.roundTrip.ok ? 'SlackPolish Round-trip OK (text unchanged on purpose)' : 'SlackPolish Round-trip failed', { removeAfterMs: 8000 });
+            SlackPolishStatusBadge.set(event.roundTrip.ok ? 'active' : 'error', event.roundTrip.ok ? 'JustPolish Round-trip OK (text unchanged on purpose)' : 'JustPolish Round-trip failed', { removeAfterMs: 8000 });
         } else if (event.surface === 'atlassian') {
             // On Jira/Confluence but not inside a comment editor: say so instead of pretending to polish
-            SlackPolishStatusBadge.set('error', 'SlackPolish: click into the comment editor first', { removeAfterMs: 5000 });
+            SlackPolishStatusBadge.set('error', 'JustPolish: click into the comment editor first', { removeAfterMs: 5000 });
         } else {
             showBadge();
         }

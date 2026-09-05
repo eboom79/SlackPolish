@@ -2,12 +2,12 @@
  * Background service worker.
  *  - persists hotkey events (capped) and keeps the badge count
  *  - performs the OpenAI call for polishing with the extension's own copy of the key (no launcher involved)
- *  - keeps a lightweight WebSocket to the SlackPolish launcher purely for settings sync: a Save in Slack is
+ *  - keeps a lightweight WebSocket to the JustPolish launcher purely for settings sync: a Save in Slack is
  *    pushed here, a Save in the extension menu is pushed to Slack. Settings travel only when the sender's
  *    "Sync settings with …" box is checked; the OpenAI key is always shared (one key is valid for both).
  */
 const MAX_EVENTS = 200;
-const DEFAULT_SYNC_URL = 'ws://127.0.0.1:9223/slackpolish/sync'; // the SlackPolish launcher (debug port + 1)
+const DEFAULT_SYNC_URL = 'ws://127.0.0.1:9223/slackpolish/sync'; // the JustPolish launcher (debug port + 1)
 const SHARED_FIELDS = ['language', 'style', 'improveHotkey', 'personalPolish'];
 
 async function appendEvent(event, sender) {
@@ -41,7 +41,7 @@ async function polish(request) {
     const settings = await getSettings();
     const apiKey = (settings.apiKey || '').trim();
     if (!apiKey) {
-        return { ok: false, error: 'No OpenAI API key yet. Enter it in the SlackPolish settings (toolbar icon) or in Slack - one key is valid for both.' };
+        return { ok: false, error: 'No OpenAI API key yet. Enter it in the JustPolish settings (toolbar icon) or in Slack - one key is valid for both.' };
     }
     const apiBase = (settings.apiBase || 'https://api.openai.com/v1').replace(/\/$/, '');
     const body = {
@@ -77,7 +77,7 @@ async function polish(request) {
 }
 
 // ---------------------------------------------------------------------------
-// Settings sync link to the SlackPolish launcher (WebSocket; the launcher pings every 20s, which also keeps
+// Settings sync link to the JustPolish launcher (WebSocket; the launcher pings every 20s, which also keeps
 // this worker alive). Reconnects with backoff; a one-minute alarm re-establishes it after the worker restarts.
 // ---------------------------------------------------------------------------
 let socket = null;

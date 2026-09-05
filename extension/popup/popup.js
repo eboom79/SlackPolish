@@ -1,4 +1,4 @@
-// The extension's settings menu: same fields, labels and option texts as the SlackPolish menu in Slack.
+// The extension's settings menu: same fields, labels and option texts as the JustPolish menu in Slack.
 const CONFIG = window.SLACKPOLISH_CONFIG || {};
 const DEFAULTS = { language: 'ENGLISH', style: 'CASUAL', improveHotkey: 'Ctrl+Shift', personalPolish: '', apiKey: '', syncWithSlack: false };
 
@@ -36,7 +36,7 @@ function fillMenu(settings) {
     document.getElementById('personal-polish').value = settings.personalPolish || '';
     document.getElementById('api-key-input').value = settings.apiKey || '';
     document.getElementById('sync-with-slack').checked = settings.syncWithSlack === true;
-    document.getElementById('version').textContent = `v${CONFIG.VERSION || ''} (Build ${CONFIG.BUILD || ''}) - ${CONFIG.BUILD_DATE || ''}`;
+    document.getElementById('version').textContent = `v${CONFIG.VERSION || ''} (Build ${CONFIG.BUILD !== undefined ? CONFIG.BUILD : ''}) - ${CONFIG.BUILD_DATE || ''}`;
 }
 
 function readMenu() {
@@ -62,9 +62,9 @@ async function showSyncStatus() {
     const s = reply.sync || {};
     const when = (t) => (t ? new Date(t).toLocaleString() : 'never');
     if (s.connected) {
-        line.innerHTML = `<span class="sync-ok">Connected to SlackPolish in Slack.</span> Last received from Slack: ${s.lastAppliedFromSlack ? `${s.lastAppliedFromSlack.fields.join(', ')} (${when(s.lastAppliedFromSlack.at)})` : 'nothing yet'}. Last sent to Slack: ${when(s.lastPushAt)}${s.pendingChromeSave ? ' (a Save is waiting to be sent)' : ''}.`;
+        line.innerHTML = `<span class="sync-ok">Connected to JustPolish in Slack.</span> Last received from Slack: ${s.lastAppliedFromSlack ? `${s.lastAppliedFromSlack.fields.join(', ')} (${when(s.lastAppliedFromSlack.at)})` : 'nothing yet'}. Last sent to Slack: ${when(s.lastPushAt)}${s.pendingChromeSave ? ' (a Save is waiting to be sent)' : ''}.`;
     } else {
-        line.innerHTML = `<span class="sync-off">SlackPolish launcher not running</span> - settings are kept here and sync when Slack runs through SlackPolish.${s.pendingChromeSave ? ' A Save is waiting to be sent.' : ''}${s.lastError ? ` (${s.lastError})` : ''}`;
+        line.innerHTML = `<span class="sync-off">JustPolish launcher not running</span> - settings are kept here and sync when Slack runs through JustPolish.${s.pendingChromeSave ? ' A Save is waiting to be sent.' : ''}${s.lastError ? ` (${s.lastError})` : ''}`;
     }
 }
 
@@ -81,7 +81,7 @@ async function init() {
     document.getElementById('save-settings-btn').addEventListener('click', async () => {
         const reply = await send({ type: 'slackpolish-save-settings', settings: readMenu() });
         if (!reply.ok) { showNotification(`Error saving settings: ${reply.error}`, 'error'); return; }
-        showNotification(reply.synced === 'sent' ? 'Settings saved and sent to Slack!' : reply.synced === 'pending' ? 'Settings saved! They will sync when SlackPolish runs in Slack.' : 'Settings saved successfully!', 'success');
+        showNotification(reply.synced === 'sent' ? 'Settings saved and sent to Slack!' : reply.synced === 'pending' ? 'Settings saved! They will sync when JustPolish runs in Slack.' : 'Settings saved successfully!', 'success');
         showSyncStatus();
         setTimeout(() => window.close(), 1400);
     });

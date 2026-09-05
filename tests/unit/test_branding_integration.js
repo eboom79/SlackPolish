@@ -1,4 +1,4 @@
-// SlackPolish Test Suite - Branding Integration Tests
+// JustPolish Test Suite - Branding Integration Tests
 // Tests that verify all branding has been properly updated and logo integration works
 
 const fs = require('fs');
@@ -71,9 +71,9 @@ class BrandingIntegrationTests {
         const settingsPath = path.join(this.rootDir, 'slack-settings.js');
         const settingsContent = fs.readFileSync(settingsPath, 'utf8');
 
-        const hasSettingsHeader = settingsContent.includes('SlackPolish Settings');
+        const hasSettingsHeader = settingsContent.includes('JustPolish Settings');
         const hasOldHeader = settingsContent.includes('Text Improvement Settings') &&
-                           !settingsContent.includes('SlackPolish Settings');
+                           !settingsContent.includes('JustPolish Settings');
 
         this.log(`Settings menu: New header found: ${hasSettingsHeader}, Old header only: ${hasOldHeader}`);
 
@@ -85,9 +85,9 @@ class BrandingIntegrationTests {
         const scriptPath = path.join(this.rootDir, 'slack-text-improver.js');
         const scriptContent = fs.readFileSync(scriptPath, 'utf8');
         
-        const hasApiKeyHeader = scriptContent.includes('SlackPolish - API Key Issue');
+        const hasApiKeyHeader = scriptContent.includes('JustPolish - API Key Issue');
         const hasOldApiKeyHeader = scriptContent.includes('OpenAI API Key Issue') && 
-                                  !scriptContent.includes('SlackPolish - API Key Issue');
+                                  !scriptContent.includes('JustPolish - API Key Issue');
         
         this.log(`API key popup: New header found: ${hasApiKeyHeader}, Old header only: ${hasOldApiKeyHeader}`);
         
@@ -115,7 +115,7 @@ class BrandingIntegrationTests {
         const scriptContent = fs.readFileSync(scriptPath, 'utf8');
 
         const hasRuntimeBadge = scriptContent.includes('slackpolish-runtime-status');
-        const hasActiveLabel = scriptContent.includes('SlackPolish Active');
+        const hasActiveLabel = scriptContent.includes('JustPolish Active');
         const removedToastText = !scriptContent.includes('Improving your text...');
 
         this.log(`Runtime badge branding: Badge: ${hasRuntimeBadge}, Label: ${hasActiveLabel}, Toast removed: ${removedToastText}`);
@@ -128,9 +128,9 @@ class BrandingIntegrationTests {
         const scriptPath = path.join(this.rootDir, 'slack-text-improver.js');
         const scriptContent = fs.readFileSync(scriptPath, 'utf8');
 
-        const hasNewConsoleLog = scriptContent.includes('SlackPolish Text Improver initialized successfully');
+        const hasNewConsoleLog = scriptContent.includes('JustPolish Text Improver initialized successfully');
         const hasOldConsoleLog = scriptContent.includes('Text Improver loaded') &&
-                                !scriptContent.includes('SlackPolish Text Improver');
+                                !scriptContent.includes('JustPolish Text Improver');
 
         this.log(`Console log: New message found: ${hasNewConsoleLog}, Old message only: ${hasOldConsoleLog}`);
 
@@ -142,7 +142,7 @@ class BrandingIntegrationTests {
         const readmePath = path.join(this.rootDir, 'README.md');
         const readmeContent = fs.readFileSync(readmePath, 'utf8');
 
-        const hasSlackPolishTitle = readmeContent.includes('# SlackPolish');
+        const hasSlackPolishTitle = readmeContent.includes('# JustPolish');
         const hasSlackPolishDescription = readmeContent.includes('AI-powered text enhancement tool that integrates directly into Slack');
         const hasPlatformInstallers = readmeContent.includes('install-slack-LINUX-X64.py') &&
                                      readmeContent.includes('install-slack-MAC-ARM.py') &&
@@ -165,7 +165,7 @@ class BrandingIntegrationTests {
         const logoContent = fs.readFileSync(logoPath, 'utf8');
         const hasGlobalVariable = logoContent.includes('window.SLACKPOLISH_LOGO_BASE64');
         const hasBase64Data = logoContent.includes('data:image/svg+xml;base64,');
-        const hasComment = logoContent.includes('SlackPolish Logo Data');
+        const hasComment = logoContent.includes('JustPolish Logo Data');
 
         this.log(`Logo data file: Global var: ${hasGlobalVariable}, Base64: ${hasBase64Data}, Comment: ${hasComment}`);
 
@@ -182,7 +182,7 @@ class BrandingIntegrationTests {
         }
 
         const testContent = fs.readFileSync(testPath, 'utf8');
-        const hasTitle = testContent.includes('SlackPolish Logo Integration Test');
+        const hasTitle = testContent.includes('JustPolish Logo Integration Test');
         const hasMenuPreview = testContent.includes('Settings Menu Preview');
         const hasPopupPreview = testContent.includes('API Key Popup Preview');
         const hasVariations = testContent.includes('Logo Variations');
@@ -194,7 +194,7 @@ class BrandingIntegrationTests {
 
     // Main test runner
     async runAllTests() {
-        this.log('🚀 Starting SlackPolish Branding Integration Tests...');
+        this.log('🚀 Starting JustPolish Branding Integration Tests...');
         
         const tests = [
             { name: 'Config Variable Name Update', fn: () => this.testConfigVariableName() },

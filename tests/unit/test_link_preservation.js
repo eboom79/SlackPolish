@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * SlackPolish Link Preservation Tests
+ * JustPolish Link Preservation Tests
  * Verifies that Slack link entities are protected during text polishing.
  */
 

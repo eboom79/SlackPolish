@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SlackPolish Uninstaller for macOS ARM.
+JustPolish Uninstaller for macOS ARM.
 
 Removes the runtime launcher installation created by the macOS runtime installer.
 It does not modify Slack.app.
@@ -49,16 +49,19 @@ def get_runtime_root():
 
 
 def get_runtime_app_path():
-    return get_runtime_root() / "SlackPolish.app"
+    return get_runtime_root() / "JustPolish.app"
 
 
 def get_launcher_paths():
     desktop = Path.home() / "Desktop"
     return [
+        desktop / "JustPolish.command",
         desktop / "SlackPolish.command",
         desktop / "SlackPolish-Attach.command",
         desktop / "SlackPolish.app",
-        desktop / "SlackPolish Launch.app",
+        desktop / "JustPolish-Attach.command",
+        desktop / "JustPolish.app",
+        desktop / "JustPolish Launch.app",
     ]
 
 
@@ -72,7 +75,7 @@ def terminate_running_launchers():
             check=False,
         )
     except Exception as exc:
-        print_warning(f"Could not inspect running SlackPolish launchers: {exc}")
+        print_warning(f"Could not inspect running JustPolish launchers: {exc}")
         return
 
     pids = []
@@ -93,7 +96,7 @@ def terminate_running_launchers():
     for pid in pids:
         try:
             signal.kill(pid, signal.SIGTERM)
-            print_success(f"Stopped running SlackPolish launcher process: {pid}")
+            print_success(f"Stopped running JustPolish launcher process: {pid}")
         except ProcessLookupError:
             continue
         except Exception as exc:
@@ -121,7 +124,7 @@ def remove_empty_parents(path, stop_at):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Uninstall SlackPolish runtime launcher for macOS ARM")
+    parser = argparse.ArgumentParser(description="Uninstall JustPolish runtime launcher for macOS ARM")
     parser.add_argument("--keep-launchers", action="store_true", help="Do not remove Desktop launchers and app wrappers")
     return parser.parse_args()
 
@@ -129,8 +132,8 @@ def parse_args():
 def main():
     args = parse_args()
 
-    print_header("🗑️ SlackPolish Runtime Uninstaller for macOS ARM")
-    print_info("Removing SlackPolish runtime files without modifying Slack.app...")
+    print_header("🗑️ JustPolish Runtime Uninstaller for macOS ARM")
+    print_info("Removing JustPolish runtime files without modifying Slack.app...")
 
     terminate_running_launchers()
 

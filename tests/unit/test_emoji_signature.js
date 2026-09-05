@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * SlackPolish Emoji Signature Tests
+ * JustPolish Emoji Signature Tests
  * Tests the emoji signature feature functionality
  */
 
@@ -112,7 +112,7 @@ runTest('Emoji Format Specification', () => {
 
 // Test 12: Feature Description
 runTest('Feature Description', () => {
-    assert(settingsContent.includes('Adds SlackPolish emoji signature'), 'Feature description not found');
+    assert(settingsContent.includes('Adds JustPolish emoji signature'), 'Feature description not found');
     assert(settingsContent.includes('identify AI-improved messages'), 'Feature purpose description not found');
 });
 
@@ -126,7 +126,7 @@ console.log(`📈 Success Rate: ${Math.round((testsPassed / testsTotal) * 100)}%
 
 if (testsPassed === testsTotal) {
     console.log('\n🎉 All emoji signature tests passed!');
-    console.log('✨ Feature ready: SlackPolish emoji signature');
+    console.log('✨ Feature ready: JustPolish emoji signature');
     console.log('📝 Default: OFF (no emoji)');
     console.log('🔧 Access: Hidden developer menu (10-click activation)');
     console.log('🎯 Format: "message! :slack_polish:" (space before emoji)');

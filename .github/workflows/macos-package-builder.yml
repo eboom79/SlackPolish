@@ -58,7 +58,7 @@ jobs:
 
     - name: Create package directory
       run: |
-        PKG_DIR="SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
+        PKG_DIR="JustPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
         mkdir -p "$PKG_DIR/installers"
         mkdir -p "$PKG_DIR/docs"
         mkdir -p "$PKG_DIR/assets/logos"
@@ -66,7 +66,7 @@ jobs:
 
     - name: Copy package files
       run: |
-        PKG_DIR="SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
+        PKG_DIR="JustPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
 
         cp slack-text-improver.js "$PKG_DIR/"
         cp slack-channel-summary.js "$PKG_DIR/"
@@ -87,12 +87,12 @@ jobs:
 
     - name: Create user documentation
       run: |
-        PKG_DIR="SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
+        PKG_DIR="JustPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
 
         cat > "$PKG_DIR/README.md" << 'EOF'
-        # SlackPolish - macOS ARM Installation Package
+        # JustPolish - macOS ARM Installation Package
 
-        SlackPolish for macOS Apple Silicon uses a runtime launcher.
+        JustPolish for macOS Apple Silicon uses a runtime launcher.
         It does not modify Slack.app.
 
         ## Quick Installation
@@ -109,7 +109,7 @@ jobs:
 
         That app will:
         - attach to Slack if Slack is already running
-        - launch Slack with SlackPolish if Slack is not running
+        - launch Slack with JustPolish if Slack is not running
 
         ## Uninstall
 
@@ -133,7 +133,7 @@ jobs:
 
     - name: Create convenience scripts
       run: |
-        PKG_DIR="SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
+        PKG_DIR="JustPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
 
         cat > "$PKG_DIR/install.command" << 'EOF'
         #!/bin/zsh
@@ -156,10 +156,10 @@ jobs:
 
     - name: Create package info
       run: |
-        PKG_DIR="SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
+        PKG_DIR="JustPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
 
         cat > "$PKG_DIR/PACKAGE-INFO.txt" << EOF
-        SlackPolish macOS ARM Package
+        JustPolish macOS ARM Package
         ============================
 
         Version: ${{ steps.get_version.outputs.version }}
@@ -176,13 +176,13 @@ jobs:
 
     - name: List package contents
       run: |
-        PKG_DIR="SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
+        PKG_DIR="JustPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
         echo "📦 Package contents:"
         find "$PKG_DIR" -maxdepth 3 -print | sort
 
     - name: Create compressed package
       run: |
-        PKG_DIR="SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
+        PKG_DIR="JustPolish-macOS-ARM-${{ steps.get_version.outputs.version }}"
         zip -r "${PKG_DIR}.zip" "$PKG_DIR/"
         echo "📦 Package created:"
         ls -la "${PKG_DIR}.zip"
@@ -192,8 +192,8 @@ jobs:
       uses: actions/upload-artifact@v7
       if: github.event_name == 'workflow_dispatch'
       with:
-        name: SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}
-        path: SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}.zip
+        name: JustPolish-macOS-ARM-${{ steps.get_version.outputs.version }}
+        path: JustPolish-macOS-ARM-${{ steps.get_version.outputs.version }}.zip
         retention-days: 30
 
     - name: Upload package to release
@@ -201,6 +201,6 @@ jobs:
       if: github.event_name == 'release'
       with:
         tag_name: ${{ steps.get_version.outputs.version }}
-        files: SlackPolish-macOS-ARM-${{ steps.get_version.outputs.version }}.zip
+        files: JustPolish-macOS-ARM-${{ steps.get_version.outputs.version }}.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

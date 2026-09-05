@@ -1,22 +1,22 @@
 # Live Slack end-to-end suite
 
-Runs real scenarios against the **real Slack desktop app** with SlackPolish
+Runs real scenarios against the **real Slack desktop app** with JustPolish
 injected: types text into the composer of a designated conversation, fires the
-real SlackPolish hotkey (a real OpenAI call), and asserts what must still be true
+real JustPolish hotkey (a real OpenAI call), and asserts what must still be true
 afterwards — regardless of how the model chose to word things.
 
 It is intentionally **not** part of `tests/run-all-tests.js` (needs a running
-Slack, the SlackPolish launcher, and your API key).
+Slack, the JustPolish launcher, and your API key).
 
 ## Prerequisites
 
-1. Slack started via `SlackPolish.app` (this exposes the DevTools port 9222 the
-   suite drives, and injects SlackPolish).
+1. Slack started via `JustPolish.app` (this exposes the DevTools port 9222 the
+   suite drives, and injects JustPolish).
 2. The designated conversation open in the main pane — by default your DM with
    yourself. The composer's `aria-label` must contain `composerLabel` from
    `slack-e2e.config.json` (default `"Message to Eyal Boumgarten"`); the suite
    refuses to type anywhere else.
-3. An OpenAI key configured in SlackPolish settings (F12). Not needed for
+3. An OpenAI key configured in JustPolish settings (F12). Not needed for
    `--dry-run`.
 4. Node ≥ 22 (uses the built-in `WebSocket`).
 
@@ -54,7 +54,7 @@ still present, greeting line kept, block count unchanged, quoted text unchanged.
 - Never dispatches a bare Enter (Slack's "send"); newlines are Shift+Enter and
   the mention autocomplete is accepted with Tab.
 - Aborts before typing if the visible composer is not the configured
-  conversation, if SlackPolish is not injected, or if a draft is present
+  conversation, if JustPolish is not injected, or if a draft is present
   (unless `--clear-first`).
 - Stops immediately if the conversation's message count changes.
 - Clears the composer after every scenario (Cmd+A, Backspace).

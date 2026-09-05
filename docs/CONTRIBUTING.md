@@ -1,6 +1,6 @@
-# 🤝 Contributing to SlackPolish (Internal Redis Enterprise Tool)
+# 🤝 Contributing to JustPolish (Internal Redis Enterprise Tool)
 
-Thank you for your interest in contributing to SlackPolish! This document provides guidelines for Redis Enterprise team members contributing to this internal productivity tool.
+Thank you for your interest in contributing to JustPolish! This document provides guidelines for Redis Enterprise team members contributing to this internal productivity tool.
 
 ## 📋 Table of Contents
 - [Getting Started](#getting-started)
@@ -12,7 +12,7 @@ Thank you for your interest in contributing to SlackPolish! This document provid
 
 ## 🚀 Getting Started
 
-SlackPolish is an internal Redis Enterprise tool for AI-powered text enhancement in Slack Desktop. Before contributing, please:
+JustPolish is an internal Redis Enterprise tool for AI-powered text enhancement in Slack Desktop. Before contributing, please:
 
 1. **Read the README.md** to understand the project
 2. **Check existing issues** to see if your idea/bug is already being discussed
@@ -31,7 +31,7 @@ SlackPolish is an internal Redis Enterprise tool for AI-powered text enhancement
 ```bash
 # Clone the repository (requires Redis Enterprise GitHub access)
 git clone https://github.com/redis-enterprise/SlackPolish.git
-cd SlackPolish
+cd JustPolish
 
 # Install dependencies
 npm install
@@ -135,7 +135,7 @@ Detailed explanation of changes if needed
 Please include:
 - **Operating System:** Linux/macOS/Windows version
 - **Slack Version:** Desktop app version
-- **SlackPolish Version:** Which version you're using
+- **JustPolish Version:** Which version you're using
 - **Steps to Reproduce:** Clear steps to reproduce the issue
 - **Expected Behavior:** What should happen
 - **Actual Behavior:** What actually happens
@@ -191,4 +191,4 @@ We welcome contributions in these areas:
 - **Discussions:** For questions and general discussion
 - **Documentation:** Check README.md and docs/ directory
 
-Thank you for contributing to SlackPolish! 🚀
+Thank you for contributing to JustPolish! 🚀

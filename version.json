@@ -1,8 +1,8 @@
 {
     "major": 1,
-    "minor": 6,
-    "build": 3,
-    "version_string": "1.6.3",
-    "description": "Chrome extension polishes Jira/Confluence comments with the Slack rules; settings and key synced with Slack on Save",
+    "minor": 7,
+    "build": 0,
+    "version_string": "1.7.0",
+    "description": "Renamed to JustPolish: one polisher for Slack, Jira and Confluence",
     "date": "2026-09-06"
 }

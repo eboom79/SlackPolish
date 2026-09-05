@@ -1,5 +1,5 @@
 /**
- * SlackPolish - Selective Text Improvement Tests
+ * JustPolish - Selective Text Improvement Tests
  * Tests for the selective text improvement feature where only selected text is improved
  */
 

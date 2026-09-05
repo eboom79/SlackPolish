@@ -48,7 +48,7 @@ spec = importlib.util.spec_from_file_location("launcher", sys.argv[1]); m = impo
 f = m.is_launcher_process_command
 # Real installed layout: a path with spaces, as ps prints it (argv joined by spaces)
 tmp = tempfile.mkdtemp()
-spaced_dir = os.path.join(tmp, "Application Support", "SlackPolish Runtime", "mac-arm-runtime", "current")
+spaced_dir = os.path.join(tmp, "Application Support", "JustPolish Runtime", "mac-arm-runtime", "current")
 os.makedirs(spaced_dir)
 spaced_script = os.path.join(spaced_dir, "launch-slackpolish-MAC-ARM.py")
 open(spaced_script, "w").write("# stub\\n")

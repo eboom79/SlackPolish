@@ -1,4 +1,4 @@
-// SlackPolish Test Suite - UI Elements Tests
+// JustPolish Test Suite - UI Elements Tests
 // Tests that verify UI elements, menus, popups, and visual components work correctly
 
 const fs = require('fs');
@@ -107,8 +107,8 @@ class UIElementsTests {
         const hasBadgeId = scriptContent.includes('slackpolish-runtime-status');
         const hasStatusSetter = scriptContent.includes('function setStatusBadgeState');
         const hasWindowStatus = scriptContent.includes('window.__SLACKPOLISH_STATUS__');
-        const hasActiveLabel = scriptContent.includes('SlackPolish Active');
-        const hasBusyLabel = scriptContent.includes('SlackPolish Improving');
+        const hasActiveLabel = scriptContent.includes('JustPolish Active');
+        const hasBusyLabel = scriptContent.includes('JustPolish Improving');
 
         this.log(`Runtime badge: ID: ${hasBadgeId}, Setter: ${hasStatusSetter}, Window status: ${hasWindowStatus}`);
         this.log(`Runtime badge labels: Active: ${hasActiveLabel}, Busy: ${hasBusyLabel}`);
@@ -260,7 +260,7 @@ class UIElementsTests {
 
     // Main test runner
     async runAllTests() {
-        this.log('🚀 Starting SlackPolish UI Elements Tests...');
+        this.log('🚀 Starting JustPolish UI Elements Tests...');
         
         const tests = [
             { name: 'Settings Menu Structure', fn: () => this.testSettingsMenuStructure() },

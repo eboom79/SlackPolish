@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * SlackPolish live end-to-end suite.
+ * JustPolish live end-to-end suite.
  *
  * Drives the REAL Slack desktop app (via the DevTools port opened by the
- * SlackPolish launcher), types each scenario into the composer of the
- * configured conversation, fires the real SlackPolish hotkey (a real OpenAI
+ * JustPolish launcher), types each scenario into the composer of the
+ * configured conversation, fires the real JustPolish hotkey (a real OpenAI
  * call), and checks invariants on the resulting composer DOM.
  *
  *   node tests/e2e/run-slack-e2e.mjs                 # run everything
@@ -95,9 +95,9 @@ async function main() {
         const info = await composer.assertTarget();
         log(`Slack window : ${info.title}`);
         log(`Composer     : "${info.ariaLabel}"`);
-        log(`SlackPolish  : injected=${info.slackPolishInjected} apiKey=${info.hasApiKey} style=${info.settings.style || info.settings.improveStyle || '?'} hotkey=${info.settings.improveHotkey || 'Ctrl+Shift'}`);
-        if (!info.slackPolishInjected) throw new Error('SlackPolish is not injected into this Slack page (start it via SlackPolish.app).');
-        if (!DRY_RUN && !info.hasApiKey) throw new Error('No OpenAI API key configured in SlackPolish settings (F12).');
+        log(`JustPolish  : injected=${info.slackPolishInjected} apiKey=${info.hasApiKey} style=${info.settings.style || info.settings.improveStyle || '?'} hotkey=${info.settings.improveHotkey || 'Ctrl+Shift'}`);
+        if (!info.slackPolishInjected) throw new Error('JustPolish is not injected into this Slack page (start it via JustPolish.app).');
+        if (!DRY_RUN && !info.hasApiKey) throw new Error('No OpenAI API key configured in JustPolish settings (F12).');
         if (!info.isEmpty) {
             if (!CLEAR_FIRST) throw new Error('The composer already contains a draft. Clear it, or re-run with --clear-first to discard it.');
             log('Composer has a draft — clearing it (--clear-first).');
@@ -153,10 +153,10 @@ async function main() {
                         if (nothingToPolish) {
                             const afterNoop = await composer.snapshot();
                             result.after = { text: afterNoop.text, html: afterNoop.html, counts: afterNoop.counts };
-                            log(`  out: (SlackPolish said "Nothing to polish" — no API call)`);
+                            log(`  out: (JustPolish said "Nothing to polish" — no API call)`);
                             const unchanged = afterNoop.html === before.html;
                             result.hard = [
-                                { ok: !!scenario.expectNoop, detail: scenario.expectNoop ? 'no-op was expected for this message' : 'UNEXPECTED no-op: SlackPolish refused to polish' },
+                                { ok: !!scenario.expectNoop, detail: scenario.expectNoop ? 'no-op was expected for this message' : 'UNEXPECTED no-op: JustPolish refused to polish' },
                                 { ok: unchanged, detail: unchanged ? 'composer unchanged' : 'composer changed despite no-op' }
                             ];
                             const messagesAfterNoop = await composer.messageCount();

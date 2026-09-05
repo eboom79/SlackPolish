@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * SlackPolish Smart Context System Tests
+ * JustPolish Smart Context System Tests
  * Tests the smart context functionality including message fetching, anonymization, and formatting
  */
 

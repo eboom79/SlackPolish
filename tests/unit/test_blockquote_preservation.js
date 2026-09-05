@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * SlackPolish Blockquote Preservation Tests
+ * JustPolish Blockquote Preservation Tests
  * Verifies that Slack quotes (typed as "> text", rendered as <blockquote>) survive
  * the extract -> model -> write-back round trip instead of being flattened into
  * the neighbouring paragraph.

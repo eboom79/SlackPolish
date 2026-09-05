@@ -1,4 +1,4 @@
-// SlackPolish - Text Improvement for Slack
+// JustPolish - Text Improvement for Slack
 // Simple, focused text polishing with Ctrl+Shift hotkey
 
 (function() {
@@ -2193,7 +2193,7 @@
 
 
             // DEBUG TEST SYSTEM: Intercept debug commands in debug mode
-            if (CONFIG.DEBUG_MODE && originalText.trim().startsWith('SlackPolish test')) {
+            if (CONFIG.DEBUG_MODE && originalText.trim().startsWith('JustPolish test')) {
                 utils.debug('Debug test command detected', { command: originalText });
                 return this.handleDebugTest(originalText.trim());
             }
@@ -2211,7 +2211,7 @@
             }
 
             this.isProcessing = true;
-            setStatusBadgeState('busy', 'SlackPolish Improving');
+            setStatusBadgeState('busy', 'JustPolish Improving');
             utils.log('Starting text improvement...');
             utils.debug('Text improvement started', {
                 originalLength: originalText.length,
@@ -2228,7 +2228,7 @@
             try {
                 const prompt = await this.buildPrompt(originalText, textState);
 
-                // DEBUG: Log the complete prompt to SlackPolish debug system
+                // DEBUG: Log the complete prompt to JustPolish debug system
                 utils.debug('FULL PROMPT SENT TO OPENAI', {
                     fullPrompt: prompt,
                     promptLength: prompt.length
@@ -2345,16 +2345,16 @@
                 this.isProcessing = false;
                 // Hide loading indicator
                 hideLoadingIndicator();
-                setStatusBadgeState('active', 'SlackPolish Active');
+                setStatusBadgeState('active', 'JustPolish Active');
                 utils.debug('Text improvement process completed', { isProcessing: this.isProcessing });
             }
         },
 
         handleDebugTest(originalText) {
-            // Parse debug command: "SlackPolish test [command] [parameters...]"
+            // Parse debug command: "JustPolish test [command] [parameters...]"
             const parts = originalText.split(' ');
 
-            // If just "SlackPolish test" with no command, show help
+            // If just "JustPolish test" with no command, show help
             if (parts.length === 2) {
                 utils.debug('Debug test help requested');
                 utils.showNotification('Debug Test Help - Check debug logs', 'info');
@@ -2363,11 +2363,11 @@
 
             if (parts.length < 3) {
                 utils.debug('Invalid debug test command format', { originalText });
-                utils.showNotification('Invalid test format. Use: SlackPolish test [command] [parameters]', 'error');
-                return 'Invalid test command format. Use "SlackPolish test" for help.';
+                utils.showNotification('Invalid test format. Use: JustPolish test [command] [parameters]', 'error');
+                return 'Invalid test command format. Use "JustPolish test" for help.';
             }
 
-            const command = parts[2]; // The command after "SlackPolish test"
+            const command = parts[2]; // The command after "JustPolish test"
             const parameters = parts.slice(3).join(' '); // Everything after the command
 
             utils.debug('Parsing debug test command', {
@@ -2469,34 +2469,34 @@
 
         getDebugTestHelp() {
             const helpText = `
-🧪 SlackPolish Debug Test Commands
+🧪 JustPolish Debug Test Commands
 =====================================
 
 Available test commands (use in debug mode only):
 
 📝 BASIC TESTS:
 • linkTyping [text]     - Simulate character-by-character typing
-  Example: SlackPolish test linkTyping https://www.google.com
+  Example: JustPolish test linkTyping https://www.google.com
 
 • instantInsert [text]  - Use current instant insertion method
-  Example: SlackPolish test instantInsert Check https://google.com
+  Example: JustPolish test instantInsert Check https://google.com
 
 🔗 URL TESTS:
 • urlLineBreak [text]   - Smart URL detection with line breaks after URLs
-  Example: SlackPolish test urlLineBreak Check https://google.com for info
+  Example: JustPolish test urlLineBreak Check https://google.com for info
 
 • multipleUrls [text]   - Test multiple URLs in one message
-  Example: SlackPolish test multipleUrls Visit https://google.com and https://amazon.com
+  Example: JustPolish test multipleUrls Visit https://google.com and https://amazon.com
 
 ⏱️ TIMING TESTS:
 • timing fast [text]    - Fast typing simulation (50ms delay)
-  Example: SlackPolish test timing fast https://google.com
+  Example: JustPolish test timing fast https://google.com
 
 • timing slow [text]    - Slow typing simulation (300ms delay)
-  Example: SlackPolish test timing slow https://google.com
+  Example: JustPolish test timing slow https://google.com
 
 📋 HELP:
-• Just type "SlackPolish test" to see this help menu
+• Just type "JustPolish test" to see this help menu
 
 =====================================
 💡 TIP: Watch the debug logs for detailed character-by-character progress!
@@ -3393,16 +3393,16 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
         setTimeout(() => errorDiv.remove(), 5000);
     }
 
-    // Create SlackPolish logo
+    // Create JustPolish logo
     function createSlackPolishLogo(size = 24) {
         const logoImg = document.createElement('img');
-        logoImg.title = 'SlackPolish';
-        logoImg.alt = 'SlackPolish Logo';
+        logoImg.title = 'JustPolish';
+        logoImg.alt = 'JustPolish Logo';
         logoImg.width = size;
         logoImg.height = size;
         logoImg.style.cssText = `display: block; border: none; width: ${size}px !important; height: ${size}px !important; max-width: ${size}px; max-height: ${size}px;`;
 
-        // Your custom SlackPolish logo as base64 encoded SVG
+        // Your custom JustPolish logo as base64 encoded SVG
         // Try to use external logo file, fallback to embedded if not available
         logoImg.src = window.SLACKPOLISH_LOGO_BASE64 || "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIj48Y2lyY2xlIGN4PSIyNTYiIGN5PSIyNTYiIHI9IjIwMCIgZmlsbD0iIzEyNjRhMyIvPjx0ZXh0IHg9IjI1NiIgeT0iMjgwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTIwIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+U1A8L3RleHQ+PC9zdmc+";
 
@@ -3410,7 +3410,7 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
         logoImg.onerror = function() {
             const textSpan = document.createElement('span');
             textSpan.textContent = 'SP';
-            textSpan.title = 'SlackPolish';
+            textSpan.title = 'JustPolish';
             textSpan.style.cssText = `
                 font-size: ${size}px;
                 font-weight: bold;
@@ -3454,16 +3454,16 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
         setTimeout(() => errorDiv.remove(), 5000);
     }
 
-    // Create SlackPolish logo (original design)
+    // Create JustPolish logo (original design)
     function createSlackPolishLogo(size = 24) {
         const logoImg = document.createElement('img');
-        logoImg.title = 'SlackPolish';
-        logoImg.alt = 'SlackPolish Logo';
+        logoImg.title = 'JustPolish';
+        logoImg.alt = 'JustPolish Logo';
         logoImg.width = size;
         logoImg.height = size;
         logoImg.style.cssText = `display: block; border: none; width: ${size}px !important; height: ${size}px !important; max-width: ${size}px; max-height: ${size}px;`;
 
-        // Your custom SlackPolish logo as base64 encoded SVG
+        // Your custom JustPolish logo as base64 encoded SVG
         // Try to use external logo file, fallback to embedded if not available
         logoImg.src = window.SLACKPOLISH_LOGO_BASE64 || "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIj48Y2lyY2xlIGN4PSIyNTYiIGN5PSIyNTYiIHI9IjIwMCIgZmlsbD0iIzEyNjRhMyIvPjx0ZXh0IHg9IjI1NiIgeT0iMjgwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTIwIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+U1A8L3RleHQ+PC9zdmc+";
 
@@ -3471,7 +3471,7 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
         logoImg.onerror = function() {
             const textSpan = document.createElement('span');
             textSpan.textContent = 'SP';
-            textSpan.title = 'SlackPolish';
+            textSpan.title = 'JustPolish';
             textSpan.style.cssText = `
                 font-size: ${size}px;
                 font-weight: bold;
@@ -3497,7 +3497,7 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
         badge.id = STATUS_BADGE_ID;
         badge.innerHTML = `
             <div id="slackpolish-runtime-status-dot"></div>
-            <div id="slackpolish-runtime-status-label">SlackPolish Active</div>
+            <div id="slackpolish-runtime-status-label">JustPolish Active</div>
         `;
         badge.style.cssText = `
             position: fixed;
@@ -3561,19 +3561,19 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
                 background: 'rgba(18, 100, 163, 0.92)',
                 dot: '#8df7c8',
                 glow: 'rgba(141,247,200,0.18)',
-                label: label || 'SlackPolish Active'
+                label: label || 'JustPolish Active'
             },
             busy: {
                 background: 'rgba(46, 182, 125, 0.94)',
                 dot: '#ffffff',
                 glow: 'rgba(255,255,255,0.22)',
-                label: label || 'SlackPolish Improving'
+                label: label || 'JustPolish Improving'
             },
             error: {
                 background: 'rgba(217, 48, 37, 0.94)',
                 dot: '#ffd7d4',
                 glow: 'rgba(255,215,212,0.24)',
-                label: label || 'SlackPolish Needs Attention'
+                label: label || 'JustPolish Needs Attention'
             }
         };
 
@@ -3604,7 +3604,7 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
 
     // Handle API errors and show appropriate popups
     function handleApiError(error) {
-        setStatusBadgeState('error', 'SlackPolish Check API');
+        setStatusBadgeState('error', 'JustPolish Check API');
         // Check if it's a fetch error (network/API issues)
         if (error.message && (
             error.message.includes('401') ||
@@ -3645,7 +3645,7 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
                         <div style="background: white; border-radius: 6px; padding: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-right: 12px; display: flex; align-items: center; justify-content: center;" id="api-popup-logo">
                         </div>
                         <div>
-                            <h3 style="margin: 0 0 4px 0; color: #d93025; font-size: 18px;">🔑 SlackPolish - API Key Issue</h3>
+                            <h3 style="margin: 0 0 4px 0; color: #d93025; font-size: 18px;">🔑 JustPolish - API Key Issue</h3>
                             <div style="font-size: 13px; color: #666;">Please configure your OpenAI API key to continue</div>
                         </div>
                     </div>
@@ -4880,7 +4880,7 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
                     }
                 } catch (error) {
                     const detail = `name=${error.name} msg=${error.message} cause=${error.cause?.message ?? error.cause}`;
-                    console.error('[SlackPolish] testApiKey fetch error:', detail, error);
+                    console.error('[JustPolish] testApiKey fetch error:', detail, error);
                     if (window.SlackPolishDebug) {
                         window.SlackPolishDebug.addLog('openai', 'API test network error', {
                             error: error.message,
@@ -5036,7 +5036,7 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
                     border-radius: 6px 6px 0 0;
                 `;
                 header.innerHTML = `
-                    <span>🐛 SlackPolish Debug Console</span>
+                    <span>🐛 JustPolish Debug Console</span>
                     <div>
                         <button id="copy-debug" style="background: none; border: 1px solid white; color: white; cursor: pointer; font-size: 12px; margin-right: 8px; padding: 2px 6px; border-radius: 3px;">📋 Copy</button>
                         <button id="clear-debug" style="background: none; border: 1px solid white; color: white; cursor: pointer; font-size: 12px; margin-right: 8px; padding: 2px 6px; border-radius: 3px;">Clear</button>
@@ -5177,7 +5177,7 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
                 }).join('\n\n');
 
                 // Add header information
-                const header = `SlackPolish Debug Logs (${this.logs.length} entries)\n` +
+                const header = `JustPolish Debug Logs (${this.logs.length} entries)\n` +
                               `Generated: ${new Date().toLocaleString()}\n` +
                               `${'='.repeat(50)}\n\n`;
 
@@ -5247,7 +5247,7 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
         initializeGlobalOpenAISystem();
         initializeGlobalDebugSystem();
 
-        utils.log('SlackPolish Text Improver initializing...');
+        utils.log('JustPolish Text Improver initializing...');
 
         // Load settings from localStorage
         loadSettings();
@@ -5258,7 +5258,7 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
         // Wait for DOM to be ready
         const initializeUi = () => {
             setupEventListeners();
-            setStatusBadgeState('active', 'SlackPolish Active');
+            setStatusBadgeState('active', 'JustPolish Active');
         };
 
         if (document.readyState === 'loading') {
@@ -5267,7 +5267,7 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
             initializeUi();
         }
 
-        utils.log('SlackPolish Text Improver initialized successfully');
+        utils.log('JustPolish Text Improver initialized successfully');
     }
 
     // Set up storage event listener for real-time settings updates

@@ -88,7 +88,7 @@ class ChaosTestSuite {
     }
 
     async runAllChaosTests() {
-        console.log('🌪️  SlackPolish Comprehensive Chaos Test Suite');
+        console.log('🌪️  JustPolish Comprehensive Chaos Test Suite');
         console.log('==============================================\n');
 
         const testFiles = await this.findChaosTestFiles();
@@ -242,7 +242,7 @@ async function main() {
         // Run specific chaos test
         await suite.runSpecificChaosTest(args[1]);
     } else if (args[0] === '--help') {
-        console.log('SlackPolish Chaos Test Runner');
+        console.log('JustPolish Chaos Test Runner');
         console.log('Usage:');
         console.log('  node run-chaos-tests.js                    # Run all chaos tests');
         console.log('  node run-chaos-tests.js --test NAME        # Run specific chaos test');

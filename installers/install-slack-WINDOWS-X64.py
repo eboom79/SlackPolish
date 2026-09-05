@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SlackPolish Installer for Windows x64
+JustPolish Installer for Windows x64
 Optimized for Windows 10/11 systems
 """
 
@@ -284,13 +284,13 @@ def validate_injection_file(file_path, force=False):
         return False
 
 def inject_scripts(injection_file, config_path, script_path):
-    """Inject SlackPolish scripts into the target file."""
+    """Inject JustPolish scripts into the target file."""
     try:
         # Read existing content
         with open(injection_file, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Remove any existing SlackPolish injections
+        # Remove any existing JustPolish injections
         patterns = [
             r'// === SLACKPOLISH INJECTION START ===.*?// === SLACKPOLISH INJECTION END ===',
             r'// === SLACK TEXT IMPROVER INJECTION START ===.*?// === SLACK TEXT IMPROVER INJECTION END ==='
@@ -360,7 +360,7 @@ def repack_asar(input_dir, asar_path, asar_tool):
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="SlackPolish Installer for Windows x64",
+        description="JustPolish Installer for Windows x64",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -390,7 +390,7 @@ def main():
     args = parse_arguments()
     VERBOSE = args.verbose
     
-    print_header("🪟 SlackPolish Installer for Windows x64")
+    print_header("🪟 JustPolish Installer for Windows x64")
 
     # Safety warning for untested installer
     print("\n⚠️  IMPORTANT WARNING ⚠️")
@@ -482,7 +482,7 @@ def main():
         return 1
     
     # Inject scripts
-    print_info("Injecting SlackPolish...")
+    print_info("Injecting JustPolish...")
     if not inject_scripts(injection_file, "slack-config.js", "slack-text-improver.js"):
         print_error("Failed to inject scripts")
         return 1

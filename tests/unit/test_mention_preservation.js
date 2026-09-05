@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * SlackPolish Mention Preservation Tests
+ * JustPolish Mention Preservation Tests
  * Verifies that Slack mention entities are protected during text polishing.
  */
 

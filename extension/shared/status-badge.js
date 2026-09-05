@@ -1,7 +1,7 @@
 /**
- * SlackPolish status badge - a faithful copy of the pill shown in Slack (see
+ * JustPolish status badge - a faithful copy of the pill shown in Slack (see
  * ensureStatusBadge / setStatusBadgeState in slack-text-improver.js): same element
- * ids, colours, labels and fade timing, so the extension looks like SlackPolish.
+ * ids, colours, labels and fade timing, so the extension looks like JustPolish.
  *
  * Unlike Slack (where the badge is always present, dimmed), pages outside Slack
  * only show it around a hotkey press and it is removed afterwards.
@@ -15,9 +15,9 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     const STATUS_BADGE_ID = 'slackpolish-runtime-status';
     const STATES = {
-        active: { background: 'rgba(18, 100, 163, 0.92)', dot: '#8df7c8', glow: 'rgba(141,247,200,0.18)', label: 'SlackPolish Active' },
-        busy: { background: 'rgba(46, 182, 125, 0.94)', dot: '#ffffff', glow: 'rgba(255,255,255,0.22)', label: 'SlackPolish Improving' },
-        error: { background: 'rgba(217, 48, 37, 0.94)', dot: '#ffd7d4', glow: 'rgba(255,215,212,0.24)', label: 'SlackPolish Needs Attention' }
+        active: { background: 'rgba(18, 100, 163, 0.92)', dot: '#8df7c8', glow: 'rgba(141,247,200,0.18)', label: 'JustPolish Active' },
+        busy: { background: 'rgba(46, 182, 125, 0.94)', dot: '#ffffff', glow: 'rgba(255,255,255,0.22)', label: 'JustPolish Improving' },
+        error: { background: 'rgba(217, 48, 37, 0.94)', dot: '#ffd7d4', glow: 'rgba(255,215,212,0.24)', label: 'JustPolish Needs Attention' }
     };
     let fadeTimeout = null;
     let removeTimeout = null;
@@ -31,7 +31,7 @@
         badge.id = STATUS_BADGE_ID;
         badge.innerHTML = `
             <div id="slackpolish-runtime-status-dot"></div>
-            <div id="slackpolish-runtime-status-label">SlackPolish Active</div>
+            <div id="slackpolish-runtime-status-label">JustPolish Active</div>
         `;
         badge.style.cssText = `
             position: fixed;

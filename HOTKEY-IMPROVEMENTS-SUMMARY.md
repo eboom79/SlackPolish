@@ -1,4 +1,4 @@
-# 🔧 SlackPolish Hotkey System Improvements - v1.2.1
+# 🔧 JustPolish Hotkey System Improvements - v1.2.1
 
 ## 🐛 Original Bug Report
 
@@ -60,7 +60,7 @@
 
 ### **Interactive Testing** (Manual Testing)
 - **File**: `tests/test-slackpolish-improvements.html`
-- **Purpose**: Web-based testing environment with real SlackPolish integration
+- **Purpose**: Web-based testing environment with real JustPolish integration
 - **Features**: Mock Slack input, real-time logging, API key management
 - **Usage**: Open in browser, set API key, run tests
 

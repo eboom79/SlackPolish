@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Settings sync between SlackPolish in Slack and the Chrome extension:
+ * Settings sync between JustPolish in Slack and the Chrome extension:
  *  - the extension menu mirrors the Slack settings menu (same fields, labels, option texts; no developer options)
  *  - both menus have a "Sync settings with …" checkbox; settings travel only on Save and only when checked
  *  - one OpenAI key for both (always shared); polishing never touches the launcher
@@ -52,7 +52,7 @@ runTest('Launcher: relays a Slack Save to the extension and writes an extension 
 });
 
 runTest('Extension menu mirrors the Slack menu: same fields, labels, option texts, no developer options', () => {
-    ['SlackPolish Settings', '🌍 Language:', '✨ Style:', '⌨️ Hotkey:', '✨ Personal Style:', '🔑 OpenAI API Key', 'Personal writing preferences for AI to consider.', "placeholder=\"e.g., Use 'Hi' not 'Hey', avoid dashes, British spelling\""]
+    ['JustPolish Settings', '🌍 Language:', '✨ Style:', '⌨️ Hotkey:', '✨ Personal Style:', '🔑 OpenAI API Key', 'Personal writing preferences for AI to consider.', "placeholder=\"e.g., Use 'Hi' not 'Hey', avoid dashes, British spelling\""]
         .forEach(s => { assert(popupHtml.includes(s), `popup has: ${s}`); assert(slackSettings.includes(s), `Slack menu has the same text: ${s}`); });
     ['language-select', 'style-select', 'hotkey-select', 'personal-polish', 'api-key-input', 'api-key-toggle', 'save-settings-btn', 'cancel-settings-btn']
         .forEach(id => { assert(popupHtml.includes(`id="${id}"`), `popup id ${id}`); assert(slackSettings.includes(`id="${id}"`), `same id in Slack: ${id}`); });

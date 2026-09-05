@@ -15,7 +15,7 @@ const { ConfigProcessor } = require('../vector/test_config_processing_vectors');
  * Run chaos tests on configuration processing functions
  */
 async function runConfigProcessingChaosTests() {
-    console.log('🌪️  SlackPolish Configuration Processing Chaos Tests');
+    console.log('🌪️  JustPolish Configuration Processing Chaos Tests');
     console.log('===================================================\n');
 
     const runner = new ChaosTestRunner({ 

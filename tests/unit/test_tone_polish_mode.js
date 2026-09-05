@@ -3,7 +3,7 @@
  * Tests that the new TONE_POLISH style works correctly
  */
 
-// Mock SlackPolish configuration
+// Mock JustPolish configuration
 const mockConfig = {
     AVAILABLE_STYLES: {
         PROFESSIONAL: { name: '💼 Professional', description: 'Business-appropriate tone' },

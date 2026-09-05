@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# SlackPolish Deployment Script
+# JustPolish Deployment Script
 # Automates the 4-stage deployment process
 # Usage: ./deploy.sh [version] [description]
 #   version: Optional version number (e.g., 1.2.0) - if not provided, increments build
@@ -41,7 +41,7 @@ print_info() {
 
 # Check if we're in the right directory
 if [ ! -f "slack-text-improver.js" ] || [ ! -f "version.json" ]; then
-    print_error "This script must be run from the SlackPolish root directory"
+    print_error "This script must be run from the JustPolish root directory"
     exit 1
 fi
 
@@ -123,7 +123,7 @@ print_info "Current version: $CURRENT_VERSION"
 # ===================================================
 print_stage "3" "INSTALL WITH SUDO"
 
-print_info "Installing SlackPolish v$CURRENT_VERSION..."
+print_info "Installing JustPolish v$CURRENT_VERSION..."
 sudo python3 installers/install-slack-LINUX-X64.py
 
 if [ $? -eq 0 ]; then
@@ -138,7 +138,7 @@ fi
 # ===================================================
 print_stage "4" "LAUNCH NEW SLACK"
 
-print_info "Starting Slack with SlackPolish v$CURRENT_VERSION..."
+print_info "Starting Slack with JustPolish v$CURRENT_VERSION..."
 
 # Start Slack in background and detach from terminal
 nohup slack > /dev/null 2>&1 &
@@ -161,7 +161,7 @@ echo -e "${GREEN}===================================================${NC}"
 echo -e "${GREEN}🎉 DEPLOYMENT COMPLETE!${NC}"
 echo -e "${GREEN}===================================================${NC}"
 
-print_success "SlackPolish v$CURRENT_VERSION deployed successfully"
+print_success "JustPolish v$CURRENT_VERSION deployed successfully"
 print_info "Next steps:"
 echo "  1. Wait for Slack to fully load"
 echo "  2. Test hotkey functionality (Ctrl+Shift)"

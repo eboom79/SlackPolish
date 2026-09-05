@@ -129,7 +129,7 @@ runTest('Verification, polishable guard and line counting', () => {
 });
 
 runTest('Wiring: content script polishes via the worker with settings, selection support, guards and verification', () => {
-    ['improveHotkey', 'personalPolish', 'slackpolish-polish', 'SlackPolishCore', 'buildPrompt(', 'repairModelOutput', 'verifyEntities', 'extractFragment', 'nothing-to-polish', 'countContentLines', "keepSelection: !!range", 'SlackPolish Needs API Key'].forEach(s => assert(contentSource.includes(s), `content script has: ${s}`));
+    ['improveHotkey', 'personalPolish', 'slackpolish-polish', 'SlackPolishCore', 'buildPrompt(', 'repairModelOutput', 'verifyEntities', 'extractFragment', 'nothing-to-polish', 'countContentLines', "keepSelection: !!range", 'JustPolish Needs API Key'].forEach(s => assert(contentSource.includes(s), `content script has: ${s}`));
     ['/chat/completions', 'Authorization: `Bearer ${apiKey}`', 'settings.apiKey', "message.type === 'slackpolish-polish'", 'apiBase', "message.type === 'slackpolish-save-settings'", "message.type === 'slackpolish-sync-status'", 'DEFAULT_SYNC_URL'].forEach(s => assert(backgroundSource.includes(s), `worker has: ${s}`));
     ['AVAILABLE_STYLES', 'SUPPORTED_LANGUAGES', "getElementById('api-key-input')", "getElementById('sync-with-slack')", "type: 'slackpolish-save-settings'"].forEach(s => assert(popupSource.includes(s), `popup has: ${s}`));
     assert(popupHtml.indexOf('../vendor/slack-config.js') < popupHtml.indexOf('popup.js"'), 'popup loads the shared config before its script');

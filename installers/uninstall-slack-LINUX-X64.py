@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-SlackPolish Uninstaller
-Completely removes SlackPolish and restores original Slack
+JustPolish Uninstaller
+Completely removes JustPolish and restores original Slack
 """
 
 import os
@@ -53,7 +53,7 @@ def restore_original_asar(slack_path):
         if not backup_exists(slack_path):
             print_error("No original backup found (app.asar.backup)")
             print_info("This means either:")
-            print_info("  1. SlackPolish was never installed")
+            print_info("  1. JustPolish was never installed")
             print_info("  2. The backup was deleted")
             print_info("  3. You need to reinstall Slack completely")
             return False
@@ -87,12 +87,12 @@ def cleanup_backup(slack_path):
         return False
 
 def main():
-    parser = argparse.ArgumentParser(description="Uninstall SlackPolish and restore original Slack")
+    parser = argparse.ArgumentParser(description="Uninstall JustPolish and restore original Slack")
     parser.add_argument("--slack-path", help="Path to Slack resources directory")
     parser.add_argument("--keep-backup", action="store_true", help="Keep the original backup file")
     args = parser.parse_args()
 
-    print_header("SlackPolish Uninstaller")
+    print_header("JustPolish Uninstaller")
     
     # Find Slack installation
     if args.slack_path:
@@ -110,16 +110,16 @@ def main():
     
     # Check if backup exists
     if not backup_exists(slack_path):
-        print_error("No SlackPolish installation found to uninstall")
+        print_error("No JustPolish installation found to uninstall")
         print_info("app.asar.original backup file not found")
         return 1
     
-    print_info("Found SlackPolish installation (backup exists)")
+    print_info("Found JustPolish installation (backup exists)")
 
     # Confirm uninstallation
     print("\n⚠️  This will:")
     print("   1. Restore the original Slack app.asar from app.asar.backup")
-    print("   2. Remove all SlackPolish modifications")
+    print("   2. Remove all JustPolish modifications")
     print("   3. Require you to restart Slack")
     
     if not args.keep_backup:
@@ -142,9 +142,9 @@ def main():
         print_info("Keeping backup file as requested")
     
     print_header("🎉 Uninstallation completed successfully!")
-    print("SlackPolish has been completely removed.")
+    print("JustPolish has been completely removed.")
     print("Please restart Slack to use the original version.")
-    print("\nTo reinstall SlackPolish later, run the installer again.")
+    print("\nTo reinstall JustPolish later, run the installer again.")
     
     return 0
 

@@ -23,7 +23,7 @@ const stylePrompts = {
 };
 
 function demonstrateStyleDifferences() {
-    console.log('🎯 SlackPolish Tone Polish Mode Demonstration');
+    console.log('🎯 JustPolish Tone Polish Mode Demonstration');
     console.log('='.repeat(60));
     console.log('');
     
@@ -61,7 +61,7 @@ function demonstrateStyleDifferences() {
     console.log('');
     
     console.log('🚀 How to Use:');
-    console.log('   1. Open Slack with SlackPolish installed');
+    console.log('   1. Open Slack with JustPolish installed');
     console.log('   2. Press F12 to open settings');
     console.log('   3. Select "✨ Tone Polish" from the Style dropdown');
     console.log('   4. Type your message in any Slack text field');

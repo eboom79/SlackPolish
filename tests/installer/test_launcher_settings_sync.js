@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Installer Test: the launcher relays settings between SlackPolish in Slack and the Chrome extension
+ * Installer Test: the launcher relays settings between JustPolish in Slack and the Chrome extension
  *
  * - the extension connects over a WebSocket (extension origin only) and receives Slack's shared settings + key
  * - a Save in Slack (POST /slackpolish/sync, Slack origin only) is relayed: settings only when "Sync settings

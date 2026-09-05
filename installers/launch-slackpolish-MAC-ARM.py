@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-SlackPolish runtime launcher for macOS ARM.
+JustPolish runtime launcher for macOS ARM.
 
 This launcher does not modify Slack.app. Instead it:
 1. Starts Slack with a Chrome DevTools remote debugging port
 2. Connects to Slack page targets over the DevTools protocol
-3. Injects SlackPolish directly into Slack's page world
+3. Injects JustPolish directly into Slack's page world
 
 The launcher is intended to remain running while Slack is open.
 """
@@ -61,7 +61,7 @@ def is_launcher_process_command(command_line):
     Used to find pre-lock ("legacy") launcher instances to replace. A plain
     substring test on the script name also matched unrelated processes that
     merely mention the file — an editor, ``grep``, ``git diff``, ``cmp`` — and
-    killed them whenever SlackPolish.app was clicked.
+    killed them whenever JustPolish.app was clicked.
 
     The script path may contain spaces (``~/Library/Application Support/...``)
     and ``ps`` joins argv with spaces, so path tokens are re-joined up to the
@@ -100,7 +100,7 @@ def is_launcher_process_command(command_line):
 # ---------------------------------------------------------------------------
 
 class SlackKeyResolver:
-    """Reads and writes what SlackPolish keeps in Slack's localStorage - the OpenAI key and the user's
+    """Reads and writes what JustPolish keeps in Slack's localStorage - the OpenAI key and the user's
     settings (language, style, hotkey, personal style) - over the DevTools endpoint. This is the bridge
     that keeps the Chrome extension's own copy in step with Slack: a Save on either side is relayed once;
     nothing is looked up when a text is polished. Cached briefly in memory; never written to disk."""
@@ -144,7 +144,7 @@ class SlackKeyResolver:
         return self._current().get("key", "")
 
     def get_settings(self):
-        """The SlackPolish settings saved in Slack (dict, without secrets; {} when none)."""
+        """The JustPolish settings saved in Slack (dict, without secrets; {} when none)."""
         return dict(self._current().get("settings") or {})
 
     def shared_settings(self):
@@ -233,7 +233,7 @@ class SlackKeyResolver:
         if value == "ok":
             return True, None
         if value is None:
-            return False, "Slack page not found on the DevTools endpoint (is Slack running through SlackPolish?)"
+            return False, "Slack page not found on the DevTools endpoint (is Slack running through JustPolish?)"
         return False, f"Slack did not confirm the write: {str(value)[:200]}"
 
 
@@ -584,7 +584,7 @@ def start_openai_proxy(port, timeout=8.0, poll_interval=0.25, key_resolver=None,
             if error.errno not in (errno.EADDRINUSE, errno.EACCES) or time.monotonic() >= deadline:
                 raise RuntimeError(
                     f"OpenAI proxy port {port} is still in use after {timeout:.0f}s "
-                    f"(another SlackPolish launcher or process is holding it): {error}"
+                    f"(another JustPolish launcher or process is holding it): {error}"
                 ) from error
             time.sleep(poll_interval)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -676,7 +676,7 @@ def build_runtime_payload():
 
     missing = [name for name, _ in file_map if not (FILE_DIR / name).exists()]
     if missing:
-        raise FileNotFoundError(f"Missing required SlackPolish files: {', '.join(missing)}")
+        raise FileNotFoundError(f"Missing required JustPolish files: {', '.join(missing)}")
 
     parts = []
     for path, label in file_map:
@@ -695,7 +695,7 @@ def build_runtime_payload():
 {script}
 // === SLACKPOLISH {label.upper()} END ===
     }} catch (error) {{
-        console.error('SlackPolish {label} bootstrap failed:', error);
+        console.error('JustPolish {label} bootstrap failed:', error);
     }}
 """.rstrip()
         )
@@ -973,7 +973,7 @@ class SlackPolishMacLauncher:
         }
 
     def run(self):
-        print_header("🍎 SlackPolish Runtime Launcher for macOS ARM")
+        print_header("🍎 JustPolish Runtime Launcher for macOS ARM")
         print_success(f"Runtime payload prepared ({self.payload_hash})")
         self._acquire_or_recover_single_instance_lock()
         self._terminate_legacy_launchers()
@@ -1031,7 +1031,7 @@ class SlackPolishMacLauncher:
 
             print_warning(
                 "Slack DevTools endpoint was not detected quickly. "
-                "Relaunching Slack with SlackPolish runtime enabled..."
+                "Relaunching Slack with JustPolish runtime enabled..."
             )
 
         self._quit_slack()
@@ -1047,7 +1047,7 @@ class SlackPolishMacLauncher:
         try:
             fcntl.flock(self.lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            raise RuntimeError("SlackPolish is already running")
+            raise RuntimeError("JustPolish is already running")
 
         self.lock_handle.seek(0)
         self.lock_handle.truncate()
@@ -1065,7 +1065,7 @@ class SlackPolishMacLauncher:
                 self._terminate_process(lock_pid, reason="replaced by new launcher")
                 time.sleep(1)
             self._acquire_single_instance_lock()
-            print_warning("Replaced previous SlackPolish launcher process")
+            print_warning("Replaced previous JustPolish launcher process")
 
     def _release_single_instance_lock(self):
         if not self.lock_handle:
@@ -1285,7 +1285,7 @@ class SlackPolishMacLauncher:
                     "disabled. This prevents --remote-debugging-port from working."
                 )
                 print_error(
-                    "Fix: run the SlackPolish installer again, or patch manually:"
+                    "Fix: run the JustPolish installer again, or patch manually:"
                 )
                 print_error(f"  python3 {patcher}")
 
@@ -1362,7 +1362,7 @@ class SlackPolishMacLauncher:
     def _recover_lost_devtools_endpoint(self):
         print_warning(
             "Slack DevTools endpoint appears to be gone. "
-            "Relaunching Slack with SlackPolish runtime enabled..."
+            "Relaunching Slack with JustPolish runtime enabled..."
         )
         self._close_sessions()
         self._update_status(
@@ -1408,7 +1408,7 @@ class SlackPolishMacLauncher:
         try:
             if self._target_needs_runtime_reinject(session):
                 print_warning(
-                    "SlackPolish runtime was missing from target. Re-injecting: "
+                    "JustPolish runtime was missing from target. Re-injecting: "
                     + f"{target.get('title') or '(untitled)'} | {target.get('url')}"
                 )
                 proxy_init = f"window.__SLACKPOLISH_PROXY_PORT__ = {self.proxy_port};"
@@ -1417,7 +1417,7 @@ class SlackPolishMacLauncher:
                 session.install_script(self.runtime_payload)
                 session.evaluate(self.runtime_payload)
                 print_success(
-                    "Re-injected SlackPolish into target: "
+                    "Re-injected JustPolish into target: "
                     + f"{target.get('title') or '(untitled)'} | {target.get('url')}"
                 )
         except Exception as error:
@@ -1485,7 +1485,7 @@ class SlackPolishMacLauncher:
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Launch SlackPolish on macOS without modifying Slack.app"
+        description="Launch JustPolish on macOS without modifying Slack.app"
     )
     parser.add_argument(
         "--slack-path",

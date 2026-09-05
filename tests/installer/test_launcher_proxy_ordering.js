@@ -3,7 +3,7 @@
 /**
  * Installer Test: launcher OpenAI-proxy startup ordering
  *
- * Regression test for "Address already in use" when clicking SlackPolish.app
+ * Regression test for "Address already in use" when clicking JustPolish.app
  * while a launcher is already running. The proxy port (debug_port + 1) is held
  * by the previous launcher, so it must be bound only AFTER the single-instance
  * lock has terminated that launcher, and the bind must retry briefly.
