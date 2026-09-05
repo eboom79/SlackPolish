@@ -35,6 +35,7 @@ runTest('Static: the bridge never persists the key; endpoints are origin-guarded
     assert(source.includes('http.server.ThreadingHTTPServer(') && source.includes('server.daemon_threads = True'), 'WebSocket handlers hold a connection each: the server must be threaded');
     assert(!source.includes('"/v1/chat/completions"') && !source.includes('"/slackpolish/settings"'), 'the per-polish endpoints are gone');
     assert(source.includes("window.dispatchEvent(new CustomEvent('slackpolish-settings-updated'"), 'a write into Slack tells the Slack scripts to reload (same event the Slack menu fires)');
+    assert(source.includes('b"HTTP/1.1 101 Switching Protocols\\r\\n"') && source.includes('if not status_line.startswith("HTTP/1.1 101"):'), 'WebSocket handshake must be HTTP/1.1 (browsers reject HTTP/1.0 upgrades) and the client must check for it');
 });
 
 const harness = `
@@ -77,6 +78,11 @@ out["write"] = {"ok": ok, "err": err, "expression": evaluated[-1]}
 # --- live server: WebSocket hello, Slack save relay, chrome-saved write, ping, legacy proxy ---
 port = mod.start_openai_proxy(0, timeout=2.0, key_resolver=resolver, sync_ping_interval=0.4)
 ext_origin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
+import socket as _socket
+raw = _socket.create_connection(("127.0.0.1", port), timeout=5)
+raw.sendall((f"GET /slackpolish/sync HTTP/1.1\\r\\nHost: 127.0.0.1:{port}\\r\\nUpgrade: websocket\\r\\nConnection: Upgrade\\r\\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\\r\\nSec-WebSocket-Version: 13\\r\\nOrigin: {ext_origin}\\r\\n\\r\\n").encode())
+out["status_line"] = raw.recv(4096).decode("latin-1").split("\\r\\n")[0]
+raw.close()
 ws = mod.SimpleWebSocketClient(f"ws://127.0.0.1:{port}/slackpolish/sync", headers={"Origin": ext_origin})
 ws.connect()
 hello = ws._recv_message(timeout=3)
@@ -145,6 +151,7 @@ runTest('Resolver: shared settings (no secrets, no Slack-only fields) and a corr
 });
 
 runTest('WebSocket: extension gets hello with Slack state; web origins are refused', () => {
+    assert(r.status_line === 'HTTP/1.1 101 Switching Protocols', `handshake status line as browsers require: ${r.status_line}`);
     assert(r.hello && r.hello.type === 'hello' && r.hello.slack && r.hello.slack.apiKey === 'sk-from-slack' && r.hello.slack.settings.style === 'CONCISE' && r.hello.slack.settings.syncWithChrome === true, `hello: ${JSON.stringify(r.hello)}`);
     assert(/handshake failed: HTTP\/1\.[01] 403/.test(r.web_ws), `web origin refused: ${r.web_ws}`);
 });

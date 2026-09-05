@@ -485,11 +485,16 @@ class _OpenAIProxyHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             return
         accept = base64.b64encode(hashlib.sha1((key + WS_GUID).encode("ascii")).digest()).decode("ascii")
-        self.send_response(101)
-        self.send_header("Upgrade", "websocket")
-        self.send_header("Connection", "Upgrade")
-        self.send_header("Sec-WebSocket-Accept", accept)
-        self.end_headers()
+        # Written by hand: BaseHTTPRequestHandler speaks HTTP/1.0 and browsers reject a WebSocket
+        # upgrade unless the status line is HTTP/1.1 (Chrome: "Invalid status line").
+        self.wfile.write(
+            b"HTTP/1.1 101 Switching Protocols\r\n"
+            b"Upgrade: websocket\r\n"
+            b"Connection: Upgrade\r\n"
+            + f"Sec-WebSocket-Accept: {accept}\r\n".encode("ascii")
+            + b"\r\n"
+        )
+        self.wfile.flush()
         self.close_connection = True  # this handler owns the socket until the extension goes away
 
         resolver = getattr(self.server, "key_resolver", None)
@@ -766,8 +771,9 @@ class SimpleWebSocketClient:
         )
         self.socket.sendall(request.encode("ascii"))
         response = self._recv_http_headers()
-        if "101" not in response.splitlines()[0]:
-            raise DevToolsProtocolError(f"WebSocket handshake failed: {response.splitlines()[0]}")
+        status_line = response.splitlines()[0] if response else ""
+        if not status_line.startswith("HTTP/1.1 101"):
+            raise DevToolsProtocolError(f"WebSocket handshake failed: {status_line}")
 
     def close(self):
         if self.socket:
