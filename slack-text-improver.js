@@ -344,7 +344,7 @@
         },
 
         createTextState: function() {
-            return { text: '', mentions: [], links: [], nextMentionId: 1, nextLinkId: 1 };
+            return { text: '', mentions: [], links: [], quotes: [], nextMentionId: 1, nextLinkId: 1, nextQuoteId: 1 };
         },
 
         extractSelectionTextState: function(selectionInfo) {
@@ -430,7 +430,11 @@
             if (!text || !this.hasProtectedEntities(textState)) {
                 return text || '';
             }
-            return text.replace(/(__SLACKPOLISH_MENTION_\d+__|__SLACKPOLISH_LINK_\d+__)/g, token => {
+            return text.replace(/(__SLACKPOLISH_MENTION_\d+__|__SLACKPOLISH_LINK_\d+__|__SLACKPOLISH_QUOTE_\d+__)/g, token => {
+                const quote = this.getQuoteByToken(token, textState);
+                if (quote) {
+                    return this.detokenizeToPlainText(quote.text, textState);
+                }
                 const entity = this.getMentionByToken(token, textState) || this.getLinkByToken(token, textState);
                 return entity ? entity.text : token;
             });
@@ -443,7 +447,8 @@
 
             const mentionCount = Array.isArray(textState.mentions) ? textState.mentions.length : 0;
             const linkCount = Array.isArray(textState.links) ? textState.links.length : 0;
-            return mentionCount > 0 || linkCount > 0;
+            const quoteCount = Array.isArray(textState.quotes) ? textState.quotes.length : 0;
+            return mentionCount > 0 || linkCount > 0 || quoteCount > 0;
         },
 
         getSelectionInfo: function(element) {
@@ -570,6 +575,28 @@
             return lines.length ? lines.map(line => `> ${line}`).join('\n') + '\n' : '';
         },
 
+        captureQuoteLines: function(text, state) {
+            // Quoted lines are a citation of someone else's words: expose them to the model only as
+            // "> __SLACKPOLISH_QUOTE_n__" so they come back byte-identical. Nested mention/link tokens
+            // stay inside the quote text and are restored when the quote is.
+            const lines = String(text || '').split('\n').filter(line => line.trim());
+            let result = '';
+            lines.forEach(line => {
+                const token = `__SLACKPOLISH_QUOTE_${state.nextQuoteId}__`;
+                state.nextQuoteId += 1;
+                state.quotes.push({ token, text: line });
+                result += `> ${token}\n`;
+            });
+            return result;
+        },
+
+        getQuoteByToken: function(token, textState) {
+            if (!textState || !textState.quotes) {
+                return null;
+            }
+            return textState.quotes.find(quote => quote.token === token) || null;
+        },
+
         extractTextStateWithMentions: function(root) {
             // `root` may be the editor element or a DocumentFragment (selection contents)
             const state = this.createTextState();
@@ -627,7 +654,7 @@
                 }
 
                 if (tagName === 'blockquote') {
-                    return this.formatQuoteLines(Array.from(node.childNodes).map(processNode).join(''));
+                    return this.captureQuoteLines(Array.from(node.childNodes).map(processNode).join(''), state);
                 }
 
                 if (tagName === 'p' || tagName === 'div') {
@@ -843,19 +870,46 @@
             return textState.links.find(link => link.token === token) || null;
         },
 
+        expandQuoteTokens: function(text, textState, depth = 0) {
+            // Quote tokens carry nested mention/link tokens; expand them so presence checks see them.
+            if (!text || !textState || !Array.isArray(textState.quotes) || !textState.quotes.length || depth > 5) {
+                return text || '';
+            }
+            return text.replace(/__SLACKPOLISH_QUOTE_\d+__/g, token => {
+                const quote = this.getQuoteByToken(token, textState);
+                return quote ? this.expandQuoteTokens(quote.text, textState, depth + 1) : token;
+            });
+        },
+
         restoreMissingProtectedTokens: function(text, textState) {
             if (!this.hasProtectedEntities(textState) || !text) {
                 return text;
             }
 
             let restoredText = text;
+            // Present if in the output itself, or nested inside a quote token that is in the output
+            const isPresent = (token) => restoredText.includes(token) || this.expandQuoteTokens(restoredText, textState).includes(token);
+            const bodyText = textState.text || '';
             const entities = [
+                ...(textState.quotes || []).map(entity => ({ ...entity, type: 'quote' })),
                 ...(textState.mentions || []).map(entity => ({ ...entity, type: 'mention' })),
                 ...(textState.links || []).map(entity => ({ ...entity, type: 'link' }))
             ];
 
+            // A model may echo tokens it was told about; tokens that only ever lived inside a quote
+            // (not in the message body) must not appear standalone in the output.
             entities.forEach(entity => {
-                if (restoredText.includes(entity.token)) {
+                if (entity.type !== 'quote' && bodyText && !bodyText.includes(entity.token) && restoredText.includes(entity.token)) {
+                    restoredText = restoredText.split(entity.token).join('')
+                        .replace(/[ \t]{2,}/g, ' ')
+                        .replace(/[ \t]+([.,!?;:])/g, '$1')
+                        .replace(/[ \t]+$/gm, '');
+                    utils.debug('Removed a token the model echoed outside its quote', { token: entity.token });
+                }
+            });
+
+            entities.forEach(entity => {
+                if (isPresent(entity.token)) {
                     return;
                 }
 
@@ -884,10 +938,19 @@
             });
 
             // Last resort: a link or mention must never silently disappear from the message.
-            const stillMissing = entities.filter(entity => !restoredText.includes(entity.token));
+            const stillMissing = entities.filter(entity => !isPresent(entity.token));
             if (stillMissing.length) {
-                const separator = !restoredText || /\s$/.test(restoredText) ? '' : ' ';
-                restoredText += separator + stillMissing.map(entity => entity.token).join(' ');
+                const missingQuotes = stillMissing.filter(entity => entity.type === 'quote');
+                const missingInline = stillMissing.filter(entity => entity.type !== 'quote');
+                if (missingQuotes.length) {
+                    // A quote precedes the reply that answers it: put dropped quote lines back on top, in order
+                    const quoteLines = missingQuotes.map(entity => `> ${entity.token}`).join('\n');
+                    restoredText = restoredText ? `${quoteLines}\n${restoredText}` : quoteLines;
+                }
+                if (missingInline.length) {
+                    const separator = !restoredText || /\s$/.test(restoredText) ? '' : ' ';
+                    restoredText += separator + missingInline.map(entity => entity.token).join(' ');
+                }
                 utils.debug('Re-appended protected entities the model dropped', {
                     tokens: stillMissing.map(entity => entity.token)
                 });
@@ -897,11 +960,17 @@
         },
 
         appendTextWithMentions: function(parent, text, textState) {
-            const tokenRegex = /(__SLACKPOLISH_MENTION_\d+__|__SLACKPOLISH_LINK_\d+__)/g;
+            const tokenRegex = /(__SLACKPOLISH_MENTION_\d+__|__SLACKPOLISH_LINK_\d+__|__SLACKPOLISH_QUOTE_\d+__)/g;
             const parts = text.split(tokenRegex);
 
             parts.forEach(part => {
                 if (!part) {
+                    return;
+                }
+
+                const quote = this.getQuoteByToken(part, textState);
+                if (quote) {
+                    this.appendTextWithMentions(parent, quote.text, textState);
                     return;
                 }
 
@@ -932,8 +1001,9 @@
                 const trimmedLine = line.trim();
                 if (!trimmedLine) return; // Skip empty lines
 
-                // Check if this is a quote line ("> text") - restore as a Slack blockquote
-                const quoteMatch = trimmedLine.match(/^>{1,3}(?:\s+(.*))?$/);
+                // Check if this is a quote line ("> text", or a bare quote token whose ">" the model dropped)
+                const quoteLine = /^__SLACKPOLISH_QUOTE_\d+__$/.test(trimmedLine) ? `> ${trimmedLine}` : trimmedLine;
+                const quoteMatch = quoteLine.match(/^>{1,3}(?:\s+(.*))?$/);
                 if (quoteMatch) {
                     currentList = null;
                     currentListType = null;
@@ -2187,10 +2257,24 @@ ${text}
 IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE above. Do not include any explanations, quotation marks, requirements, or additional text. Do not reproduce or paraphrase the conversation context. Preserve the line structure: keep each line that starts with a quote marker (">") or a list marker ("1.", "•", "-") on its own line, beginning with the same marker. Leave URLs, file paths, and identifiers such as issue keys (e.g. RED-1234, PROJ-42) exactly as written. Use ${CONFIG.LANGUAGE} language.`;
 
             if (utils.hasProtectedEntities(textState)) {
-                prompt += '\nIMPORTANT: Tokens like __SLACKPOLISH_MENTION_1__ and __SLACKPOLISH_LINK_1__ represent real Slack entities such as mentions and links. Preserve every such token exactly, without renaming, removing, reordering, or breaking it.';
+                // Only mention inline tokens that really appear in the body; entities nested inside a quote are
+                // covered by the quote token, and naming them here made the model add them to the reply.
+                const inlineTokens = [...new Set(text.match(/__SLACKPOLISH_(?:MENTION|LINK)_\d+__/g) || [])];
+                if (inlineTokens.length) {
+                    prompt += '\nIMPORTANT: Tokens like __SLACKPOLISH_MENTION_1__ and __SLACKPOLISH_LINK_1__ represent real Slack entities such as mentions and links. Preserve every such token exactly, without renaming, removing, reordering, or breaking it. Never add a token that is not already in the message.';
+                }
                 utils.debug('Added protected entity preservation instructions', {
+                    inlineTokens,
                     mentionCount: textState?.mentions?.length || 0,
-                    linkCount: textState?.links?.length || 0
+                    linkCount: textState?.links?.length || 0,
+                    quoteCount: textState?.quotes?.length || 0
+                });
+            }
+
+            if (textState && Array.isArray(textState.quotes) && textState.quotes.length) {
+                prompt += '\nIMPORTANT: Lines of the form "> __SLACKPOLISH_QUOTE_n__" are quotations of someone else\'s words. Return every such line exactly as "> __SLACKPOLISH_QUOTE_n__", in the same order, without rewriting, merging, removing or reordering them. For context only, the quoted lines read:';
+                textState.quotes.forEach(quote => {
+                    prompt += `\n${quote.token}: "${utils.detokenizeToPlainText(quote.text, textState)}"`;
                 });
             }
 

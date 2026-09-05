@@ -107,8 +107,9 @@ runTest('Selection replacement keeps entities and never diverts to full-message 
 
 runTest('A dropped token is re-appended instead of the link disappearing', () => {
     const restore = sliceBetween('restoreMissingProtectedTokens: function', 'appendTextWithMentions: function');
-    assert(restore.includes('const stillMissing = entities.filter(entity => !restoredText.includes(entity.token));'), 'Missing-token detection not found');
-    assert(restore.includes('restoredText += separator + stillMissing.map(entity => entity.token).join(\' \');'), 'Missing tokens must be appended');
+    assert(restore.includes('const stillMissing = entities.filter(entity => !isPresent(entity.token));'), 'Missing-token detection not found');
+    assert(restore.includes('restoredText += separator + missingInline.map(entity => entity.token).join(\' \');'), 'Missing inline tokens must be appended');
+    assert(restore.includes('restoredText = restoredText ? `${quoteLines}\\n${restoredText}` : quoteLines;'), 'Missing quote lines must be re-inserted on top');
     assert(restore.includes('Re-appended protected entities the model dropped'), 'Should log the recovery');
     assert(restore.includes('(?<![A-Za-z0-9_])${escapedCandidate}(?![A-Za-z0-9_])'), 'Re-anchoring must be whole-word (no <a>doc</a>ument splits)');
     assert(!restore.includes("restoredText.replace(candidate, entity.token)"), 'Plain substring re-anchoring must be gone');
