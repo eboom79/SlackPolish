@@ -95,6 +95,12 @@ class TestRunner {
                     if (stderr) {
                         console.log(`   Error: ${stderr.trim()}`);
                     }
+                    // Tests report their assertions on stdout: show the tail so CI logs say what failed
+                    const tail = stdout.trim().split('\n').filter(line => /FAILED|Error|Assertion|Traceback|Total|Results/.test(line)).slice(-25);
+                    if (tail.length) {
+                        console.log('   Output:');
+                        tail.forEach(line => console.log(`   | ${line}`));
+                    }
                     this.failedTests++;
                 }
 
