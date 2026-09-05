@@ -262,6 +262,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 async function startup() {
     const { events = [] } = await chrome.storage.local.get('events');
     await chrome.action.setBadgeText({ text: events.length ? String(events.length) : '' });
+    // The round-trip diagnostic is a one-shot switch from the activity log; never let it survive a reload
+    await chrome.storage.local.set({ roundTrip: false });
     await chrome.alarms.create('slackpolish-sync', { periodInMinutes: 1 });
     ensureSyncConnected();
 }

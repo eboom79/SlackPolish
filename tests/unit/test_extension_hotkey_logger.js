@@ -178,6 +178,9 @@ runTest('Round-trip mode is opt-in, Atlassian-only, and reports paste handling',
     assert(contentSource.includes("chrome.storage.local.get(['settings', 'roundTrip'])"), 'round trip must be read from settings');
     assert(contentSource.includes("settings.roundTrip && event.surface === 'atlassian' && event.atlassianEditor"), 'round trip only on Atlassian editors when enabled');
     assert(contentSource.includes("event.surface === 'atlassian' && event.atlassianEditor && !settings.roundTrip"), 'polishing on Atlassian editors (the diagnostic replaces it only when switched on)');
+    assert(contentSource.includes("await chrome.storage.local.set({ roundTrip: false });") && contentSource.includes("SlackPolishStatusBadge.set('busy', 'SlackPolish Round-trip test');"), 'the diagnostic is one-shot and announces itself on the badge (it must never look like a polish that did nothing)');
+    assert(backgroundSource.includes("await chrome.storage.local.set({ roundTrip: false });"), 'the worker clears the diagnostic switch on install/reload/startup');
+    assert(contentSource.includes("SlackPolish: click into the comment editor first"), 'on Jira without a focused editor the badge says what to do');
     assert(contentSource.includes("const CONTENT_REVISION = '") && contentSource.includes('revision: CONTENT_REVISION,') && contentSource.includes('event.roundTripEnabled = settings.roundTrip === true;'), 'events must carry the script revision and the toggle state for diagnosis');
     const adapter = fs.readFileSync(path.join(root, 'shared/atlassian-adapter.js'), 'utf8');
     assert(adapter.includes("new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })"), 'write-back goes through the paste pipeline');
