@@ -140,6 +140,17 @@ runTest('Editor detection: kinds are classified from tag/class/ancestry; text ca
     assert(popupSource.includes("details.className = 'editor'"), 'popup must show the captured text');
 });
 
+runTest('Atlassian specifics: zero-width padding stripped, field from aria-label, node names summarised', () => {
+    const Editor = require(path.join(root, 'shared/editor.js'));
+    assert(Editor.stripZeroWidth('let\u2019s test that \u200B@Hadar Hazan\u200B ') === 'let\u2019s test that @Hadar Hazan ', 'U+200B padding around inline node views must be removed');
+    assert(Editor.stripZeroWidth('a\uFEFFb\u200Cc\u200Dd') === 'abcd', 'other zero-width characters too');
+    assert(Editor.fieldFromAriaLabel('Comment area, start typing to enter text.') === 'comment', 'Jira comment editor');
+    assert(Editor.fieldFromAriaLabel('Main content area, start typing to enter text.') === 'description', 'Jira description editor');
+    assert(Editor.fieldFromAriaLabel('') === null && Editor.fieldFromAriaLabel(null) === null, 'unknown editors');
+    const editorSource = fs.readFileSync(path.join(root, 'shared/editor.js'), 'utf8');
+    assert(editorSource.includes("el.querySelectorAll('[data-prosemirror-node-name]')") && editorSource.includes("el.querySelectorAll('[data-prosemirror-node-inline]')"), 'describe() must summarise Atlassian node names and inline node views');
+});
+
 console.log('\n===============================================');
 console.log(`📊 Total: ${testsTotal}  ✅ Passed: ${testsPassed}  ❌ Failed: ${testsTotal - testsPassed}`);
 process.exit(testsPassed === testsTotal ? 0 : 1);

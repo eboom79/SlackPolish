@@ -91,11 +91,15 @@ async function main() {
     const PAGES = {
         '/test.html': '<!doctype html><html><head><title>SlackPolish extension test page</title></head><body><h1>test</h1><textarea id="t">hello</textarea></body></html>',
         // Atlassian-editor-like Jira comment: ProseMirror root inside the ak content area, with a mention and a link
+        // Markup mirrors a real Jira Cloud comment editor capture (2026-09): id ak-editor-textarea, data-prosemirror-node-name
+        // on every node, mention as an inline node view padded with zero-width spaces.
         '/jira.html': '<!doctype html><html><head><title>[RED-1] Test issue - Jira</title><meta name="application-name" content="JIRA"></head><body>'
-            + '<div class="ak-editor-content-area"><div class="ProseMirror" contenteditable="true" aria-label="Main content area, start typing to enter text." data-editor-container-id="x1">'
-            + '<p>hello <span class="ak-mention" data-mention-id="557058:abc" data-access-level="CONTAINER">@Dana</span> pls check the relase</p>'
-            + '<p>see <a href="https://redis.io/docs/latest/" class="css-1qw9a4y" data-testid="link">the docs</a> today</p>'
-            + '<ul><li><p>item one</p></li><li><p>item two</p></li></ul></div></div></body></html>',
+            + '<div class="ak-editor-content-area"><div id="ak-editor-textarea" class="ProseMirror ua-chrome" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Comment area, start typing to enter text." data-editor-id="e1" data-gramm="false" translate="no">'
+            + '<p data-prosemirror-node-name="paragraph" data-prosemirror-node-block="true" data-prosemirror-content-type="node" data-local-id="p1">hello '
+            + '<span class="mentionView-content-wrap inlineNodeView" contenteditable="false" data-prosemirror-node-name="mention" data-prosemirror-node-inline="true" data-prosemirror-content-type="node" data-prosemirror-node-view-type="vanilla" data-mention-id="557058:abc" data-access-level="CONTAINER">'
+            + '<span class="zeroWidthSpaceContainer">&#8203;</span><span class="editor-mention-primitive" spellcheck="false">@Dana</span><span class="inlineNodeViewAddZeroWidthSpace">&#8203;</span></span> pls check the relase</p>'
+            + '<p data-prosemirror-node-name="paragraph" data-prosemirror-node-block="true" data-prosemirror-content-type="node" data-local-id="p2">see <a href="https://redis.io/docs/latest/" class="css-1qw9a4y" data-testid="link">the docs</a> today</p>'
+            + '<ul data-prosemirror-node-name="bulletList" data-prosemirror-node-block="true"><li data-prosemirror-node-name="listItem"><p data-prosemirror-node-name="paragraph">item one</p></li><li data-prosemirror-node-name="listItem"><p data-prosemirror-node-name="paragraph">item two</p></li></ul></div></div></body></html>',
         '/textarea.html': '<!doctype html><html><head><title>Plain textarea page</title></head><body><textarea id="c">a plain comment with a typpo</textarea></body></html>'
     };
     const server = http.createServer((req, res) => {
@@ -236,9 +240,13 @@ async function main() {
         check(!!jira && jira.surface === 'atlassian', `surface classified from application-name meta: ${jira && jira.surface}`);
         check(!!jira && jira.editor && jira.editor.kind === 'prosemirror', `editor kind: ${jira && jira.editor && jira.editor.kind}`);
         check(!!jira && jira.editor && jira.editor.text.includes('hello @Dana pls check the relase') && jira.editor.text.includes('see the docs today') && jira.editor.text.includes('item two'), `comment text captured: ${JSON.stringify(jira && jira.editor && jira.editor.text)}`);
-        check(!!jira && jira.editor && jira.editor.blocks.length === 3 && jira.editor.blocks[2].startsWith('ul:'), `block structure: ${JSON.stringify(jira && jira.editor && jira.editor.blocks)}`);
+        check(!!jira && jira.editor && jira.editor.blocks.length === 3 && jira.editor.blocks[2].startsWith('bulletList:'), `block structure by node name: ${JSON.stringify(jira && jira.editor && jira.editor.blocks)}`);
+        check(!!jira && jira.editor && !/[\u200B]/.test(jira.editor.text) && jira.editor.text.startsWith('hello @Dana pls check the relase'), 'zero-width padding around the mention is stripped');
+        check(!!jira && jira.editor && jira.editor.field === 'comment', `field detected from aria-label: ${jira && jira.editor && jira.editor.field}`);
+        check(!!jira && jira.editor && JSON.stringify(jira.editor.nodeNames) === JSON.stringify(['paragraph', 'mention', 'bulletList', 'listItem']), `node names: ${JSON.stringify(jira && jira.editor && jira.editor.nodeNames)}`);
+        check(!!jira && jira.editor && JSON.stringify(jira.editor.inlineNodes) === JSON.stringify([{ nodeName: 'mention', text: '@Dana' }]), `inline node views: ${JSON.stringify(jira && jira.editor && jira.editor.inlineNodes)}`);
         const vocab = (jira && jira.editor && jira.editor.vocabulary) || [];
-        check(vocab.some(v => v.startsWith('span.ak-mention[data-access-level,data-mention-id]')) && vocab.some(v => v.startsWith('a.css-1qw9a4y[data-testid,href]')), `DOM vocabulary lists mention/link markup (attribute names only): ${vocab.join(' | ')}`);
+        check(vocab.some(v => v.startsWith('span.mentionView-content-wrap.inlineNodeView[')) && vocab.some(v => v.startsWith('a.css-1qw9a4y[data-testid,href]')), `DOM vocabulary lists mention/link markup (attribute names only): ${vocab.slice(0, 4).join(' | ')} …`);
         check(!JSON.stringify(jira).includes('557058:abc') && !JSON.stringify(jira).includes('redis.io/docs'), 'no attribute VALUES (mention id, href) leak into the event outside the visible text');
 
         const plain = await openAndPress(`${origin}/textarea.html`, `document.getElementById('c').focus(); document.activeElement.id`, 'Plain textarea');

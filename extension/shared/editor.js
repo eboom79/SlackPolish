@@ -69,12 +69,25 @@
         return null;
     }
 
+    /** Pure: drop zero-width characters Atlassian's inline node views pad mentions/cards with. */
+    function stripZeroWidth(text) {
+        return String(text || '').replace(/[\u200B\u200C\u200D\uFEFF]/g, '');
+    }
+
+    /** Pure: which Jira field an editor is, from Atlassian's aria-label ("Comment area…", "Main content area…"). */
+    function fieldFromAriaLabel(label) {
+        const l = String(label || '').toLowerCase();
+        if (/\bcomment\b/.test(l)) return 'comment';
+        if (/main content|description/.test(l)) return 'description';
+        return null;
+    }
+
     function extractText(el) {
         if (!el) return '';
         const tag = el.tagName.toLowerCase();
         if (tag === 'textarea' || tag === 'input') return el.value || '';
         // innerText keeps line breaks between blocks; textContent does not
-        return (el.innerText !== undefined ? el.innerText : el.textContent) || '';
+        return stripZeroWidth((el.innerText !== undefined ? el.innerText : el.textContent) || '');
     }
 
     function vocabulary(el, limit) {
@@ -99,9 +112,16 @@
             dataEditorType: el.getAttribute('data-editor-type') || ''
         });
         const text = extractText(el);
-        const blocks = kind === 'textarea' || kind === 'input' ? [] : [...el.children].slice(0, 30).map(b => `${b.tagName.toLowerCase()}${b.className ? '.' + String(b.className).trim().split(/\s+/).slice(0, 2).join('.') : ''}: ${(b.innerText || b.textContent || '').trim().slice(0, 80)}`);
+        const isField = kind === 'textarea' || kind === 'input';
+        const blocks = isField ? [] : [...el.children].slice(0, 30).map(b => `${b.getAttribute('data-prosemirror-node-name') || b.tagName.toLowerCase()}${b.className && !b.getAttribute('data-prosemirror-node-name') ? '.' + String(b.className).trim().split(/\s+/).slice(0, 2).join('.') : ''}: ${stripZeroWidth(b.innerText || b.textContent || '').trim().slice(0, 80)}`);
+        // Atlassian's editor names every node (paragraph, mention, inlineCard, bulletList, codeBlock, ...): the vocabulary an adapter is built on
+        const nodeNames = isField ? [] : [...new Set([...el.querySelectorAll('[data-prosemirror-node-name]')].map(n => n.getAttribute('data-prosemirror-node-name')))].slice(0, 40);
+        const inlineNodes = isField ? [] : [...el.querySelectorAll('[data-prosemirror-node-inline]')].slice(0, 30).map(n => ({ nodeName: n.getAttribute('data-prosemirror-node-name'), text: stripZeroWidth(n.textContent).trim().slice(0, 80) }));
         return {
             kind,
+            field: fieldFromAriaLabel(el.getAttribute('aria-label')),
+            nodeNames,
+            inlineNodes,
             tag: el.tagName.toLowerCase(),
             id: el.id || null,
             classes: String(el.className || '').trim().split(/\s+/).filter(Boolean).slice(0, 6),
@@ -114,5 +134,5 @@
         };
     }
 
-    return { EDITOR_SELECTORS, isEditable, classify, editableRoot, findActive, extractText, describe };
+    return { EDITOR_SELECTORS, isEditable, classify, editableRoot, findActive, extractText, describe, stripZeroWidth, fieldFromAriaLabel };
 });
