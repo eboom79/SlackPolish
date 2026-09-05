@@ -106,3 +106,7 @@ debug/
 # Slack debug extractions (temporary debugging files)
 slack_debug_extract/
 slack_debug_extract*/
+
+# Live Slack E2E suite: local overrides and run reports
+tests/e2e/slack-e2e.local.json
+tests/e2e/reports/
