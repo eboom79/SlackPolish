@@ -195,6 +195,31 @@
         },
 
 
+        recordHotkeyEvent: function() {
+            // Same shape as the Chrome extension's log line: where was the hotkey pressed?
+            // Console for live debugging; localStorage (capped) for a persistent record.
+            try {
+                const event = {
+                    time: new Date().toISOString(),
+                    hotkey: CONFIG.HOTKEY,
+                    surface: 'slack-desktop',
+                    host: window.location.hostname,
+                    path: window.location.pathname,
+                    title: (document.title || '').slice(0, 120)
+                };
+                console.log('🔧 SLACKPOLISH_HOTKEY', JSON.stringify(event));
+                const key = 'slackpolish_hotkey_log';
+                const events = JSON.parse(localStorage.getItem(key) || '[]');
+                events.push(event);
+                while (events.length > 200) {
+                    events.shift();
+                }
+                localStorage.setItem(key, JSON.stringify(events));
+            } catch (error) {
+                utils.debug('Could not record hotkey event', { error: error.message });
+            }
+        },
+
         showNotification: function(message, type = 'info') {
             const notification = document.createElement('div');
             notification.style.cssText = `
@@ -3158,6 +3183,7 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
                 globalListenerState.hotkeyPressedOnce = true;
 
                 utils.log(`${CONFIG.HOTKEY} combination pressed - triggering text improvement (setup-id: ${setupId})`);
+                utils.recordHotkeyEvent();
 
                 // Trigger immediately without debounce delay
                 // This makes fast presses work reliably

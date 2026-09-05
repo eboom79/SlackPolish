@@ -374,6 +374,24 @@ def _sync_slack_copy(source_app, dest_app):
     print_success(f"Copied Slack.app → {dest_app}")
 
 
+def get_extension_dir():
+    return Path.home() / "Library" / "Application Support" / "SlackPolish Runtime" / "chrome-extension"
+
+
+def stage_chrome_extension():
+    """Copy the Chrome extension next to the runtime so it can be loaded unpacked from a stable path."""
+    source = REPO_ROOT / "extension"
+    if not (source / "manifest.json").exists():
+        print_verbose("No extension/ directory in this checkout - skipping the Chrome extension.")
+        return None
+    destination = get_extension_dir()
+    if destination.exists():
+        shutil.rmtree(destination)
+    shutil.copytree(source, destination)
+    print_success(f"Chrome extension staged at: {destination}")
+    return destination
+
+
 def install_runtime(slack_app=None):
     runtime_root = get_runtime_root()
     current_dir = get_current_runtime_dir()
@@ -443,6 +461,14 @@ def main():
     print(f"  Smart attach-or-launch app: {get_desktop_app_path()}")
     print(f"  Launch Slack with SlackPolish: {get_desktop_launcher_path()}")
     print(f"  Attach to already-running Slack: {get_desktop_attach_path()}")
+
+    extension_dir = stage_chrome_extension()
+    if extension_dir:
+        print("")
+        print("Chrome extension (hotkey logger, experimental):")
+        print("  One time: open chrome://extensions, enable Developer mode, click 'Load unpacked' and choose:")
+        print(f"    {extension_dir}")
+        print("  After updates: click 'Reload' on the extension card (or restart Chrome).")
     return 0
 
 

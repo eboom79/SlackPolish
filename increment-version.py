@@ -109,6 +109,27 @@ def save_version(version):
     # Update slack-config.js
     update_config_file(version)
 
+    # Update the Chrome extension manifest (same version string)
+    update_extension_manifest(version)
+
+def update_extension_manifest(version):
+    """Keep extension/manifest.json in step with version.json."""
+    import os
+    manifest_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "extension", "manifest.json")
+    if not os.path.exists(manifest_path):
+        return
+    try:
+        with open(manifest_path, "r") as f:
+            manifest = json.load(f)
+        manifest["version"] = version["version_string"]
+        with open(manifest_path, "w") as f:
+            json.dump(manifest, f, indent=2)
+            f.write("\n")
+        print(f"✅ Updated extension/manifest.json with version {version['version_string']}")
+    except Exception as e:
+        print(f"❌ Error updating extension/manifest.json: {e}")
+
+
 def update_config_file(version):
     """Update version info in slack-config.js"""
     try:

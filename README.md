@@ -203,6 +203,16 @@ sudo python3 installers/install-slack-LINUX-X64.py
 
 **💡 Tip**: You can always update your API key later by pressing **F12** → Settings Menu
 
+## 🧩 Chrome Extension (experimental)
+
+`extension/` contains a Chrome extension that, for now, only **logs where the
+SlackPolish hotkey (Ctrl+Shift) is pressed** — Slack, Atlassian/Jira or another
+site — as the first step toward polishing text outside Slack. It reads no text
+and makes no network calls. The macOS installer stages it under
+`~/Library/Application Support/SlackPolish Runtime/chrome-extension/`; load it
+via `chrome://extensions` → Developer mode → Load unpacked. See
+[extension/README.md](extension/README.md).
+
 ## 🚫 Platform Support Status
 
 ### **✅ Supported Platforms**

@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SlackPolish hotkey log</title>
+<style>
+  body { font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; width: 420px; color: #1d1c1d; }
+  header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #ddd; }
+  header img { width: 20px; height: 20px; }
+  header h1 { font-size: 14px; margin: 0; flex: 1; }
+  button { font: inherit; padding: 4px 8px; border: 1px solid #bbb; border-radius: 4px; background: #fff; cursor: pointer; }
+  button:hover { background: #f4f4f4; }
+  #tally { display: flex; gap: 12px; padding: 8px 12px; background: #f8f8f8; border-bottom: 1px solid #eee; }
+  #tally span b { display: inline-block; min-width: 1.5em; text-align: right; }
+  #events { max-height: 360px; overflow: auto; margin: 0; padding: 0; list-style: none; }
+  #events li { padding: 6px 12px; border-bottom: 1px solid #f0f0f0; display: grid; grid-template-columns: 74px 84px 1fr; gap: 8px; align-items: baseline; }
+  .time { color: #666; font-variant-numeric: tabular-nums; }
+  .surface { font-weight: 600; }
+  .surface.atlassian { color: #0052cc; } .surface.slack-web { color: #4a154b; } .surface.other { color: #616061; }
+  .where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .where small { color: #888; }
+  #empty { padding: 24px 12px; color: #666; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <img src="../icons/icon48.png" alt="">
+  <h1>Hotkey log <small id="count"></small></h1>
+  <button id="copy">Copy as JSON</button>
+  <button id="clear">Clear</button>
+</header>
+<div id="tally"></div>
+<ul id="events"></ul>
+<div id="empty" hidden>No hotkey presses recorded yet. Press Ctrl+Shift on any page.</div>
+<script src="popup.js"></script>
+</body>
+</html>

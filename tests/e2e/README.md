@@ -65,3 +65,10 @@ Edit `scenarios.mjs`: `steps` (`type`, `newline`, `paste`, `tab`, `waitFor`,
 `require`, `select`), `invariants` and `expectations` built from `checks`.
 Prefer structural/byte-identity checks over wording; the model's phrasing is
 not deterministic.
+
+## Chrome extension test
+
+`node tests/e2e/chrome-extension-hotkey.mjs` launches a throwaway Chrome for
+Testing (see `extension/README.md` for the one-time install) with the unpacked
+extension, presses the real `Ctrl+Shift` chord over CDP and asserts the logged
+event and its persistence. Independent of Slack and of the API key.
