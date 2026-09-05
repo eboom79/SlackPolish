@@ -502,10 +502,13 @@ class _OpenAIProxyHandler(http.server.BaseHTTPRequestHandler):
         client = SyncClient(self.connection, origin)
         try:
             self.connection.settimeout(None)
-            # hello first, then join the hub: the extension must never see a ping before hello
-            client.send_json({"type": "hello", "protocol": LAUNCHER_SYNC_PROTOCOL, "launcherVersion": "mac-arm", "slack": slack_state_for_extension(resolver)})
-            if hub:
-                hub.add(client)
+            hello = {"type": "hello", "protocol": LAUNCHER_SYNC_PROTOCOL, "launcherVersion": "mac-arm", "slack": slack_state_for_extension(resolver)}
+            # Join the hub and send hello under the client's send lock: hello is guaranteed to be the first
+            # frame (broadcasts/pings wait for the lock) and no relay can be missed in between.
+            with client._send_lock:
+                if hub:
+                    hub.add(client)
+                self.connection.sendall(_ws_encode_text(json.dumps(hello)))
             while True:
                 opcode, payload = _ws_read_frame(self.rfile)
                 if opcode == 0x8:
