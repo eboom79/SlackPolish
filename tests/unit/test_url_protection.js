@@ -100,7 +100,7 @@ runTest('Selection replacement keeps entities and never diverts to full-message 
     const preserved = sliceBetween('replaceSelectedTextWithPreservedInfo: function', 'findOriginalPosition: function');
     assert(preserved.includes('this.insertRichTextAtRange(range, improvedText, textState)'), 'Preserved-selection path must restore tokens');
     assert(!preserved.includes('document.createTextNode(improvedText)'), 'Bare text-node insertion (flattens links) must be gone');
-    assert(preserved.includes('this.setTextWithFormatting(element, newFullText, textState)'), 'Manual fallback must pass textState');
+    assert(preserved.includes('this.rebuildMessageAroundSelection(element, improvedText, selectedText, textState)'), 'Manual fallback must rebuild the message entity-aware');
     const live = sliceBetween('replaceSelectedText: function(element, improvedText, selectionInfo, textState = null)', 'replaceSelectedTextWithPreservedInfo: function');
     assert(live.includes('this.insertRichTextAtRange(range, improvedText, textState)'), 'Live-selection path must restore tokens');
 });
@@ -120,7 +120,7 @@ runTest('Tokens never leak into plain (non-rich) inputs', () => {
     const setText = sliceBetween('setTextInElement: function', 'insertRichTextAtRange: function');
     assert(setText.includes('element.innerText = this.detokenizeToPlainText('), 'Non-rich fallback must detokenise');
     const preserved = sliceBetween('replaceSelectedTextWithPreservedInfo: function', 'findOriginalPosition: function');
-    assert(preserved.includes('element.innerText = this.detokenizeToPlainText(newFullText, textState);'), 'Manual non-rich fallback must detokenise');
+    assert(preserved.includes('element.innerText = this.detokenizeToPlainText(beforeSelection + improvedText + afterSelection, textState);'), 'Manual non-rich fallback must detokenise');
 });
 
 runTest('Slack app rich-link slugs (Jira/Drive/Confluence pills) are recognised as links', () => {
@@ -147,6 +147,19 @@ runTest('Alphanumeric run glued after a link (Slack fast-typing race) is absorbe
     assert(extractor.includes('state.text += this.walkChildrenWithGlue(root, state, processNode);'), 'Top-level walk must use the glue-aware walker');
     const entityAware = sliceBetween('getEntityAwareTextFromNode: function', 'isSlackMentionNode: function');
     assert(entityAware.includes('return this.walkChildrenWithGlue(node, state, child => this.getEntityAwareTextFromNode(child, state));'), 'Nested walk must use the glue-aware walker');
+});
+
+runTest('Selection fallbacks never flatten or wipe the rest of the message', () => {
+    assert(scriptContent.includes('rebuildMessageAroundSelection: function(element, improvedText, selectedText, selectionState)'), 'Entity-aware whole-message rebuild missing');
+    assert(scriptContent.includes('mapPlainSpanToTokenized: function(tokenizedText, textState, plainStart, plainEnd)'), 'Plain->tokenised span mapping missing');
+    assert(scriptContent.includes('mergeTextStateInto: function(targetState, sourceState, text)'), 'State merge helper missing');
+    const preserved = sliceBetween('replaceSelectedTextWithPreservedInfo: function', 'findOriginalPosition: function');
+    assert(preserved.includes('this.rebuildMessageAroundSelection(element, improvedText, selectedText, textState)'), 'Manual fallback must rebuild entity-aware');
+    assert(!preserved.includes('this.setTextWithFormatting(element, newFullText'), 'textContent-based flattening must be gone');
+    assert(!preserved.includes('this.setTextWithFormatting(element, improvedText, textState);'), 'catch must not replace the whole message with the selection text');
+    const live = sliceBetween('replaceSelectedText: function(element, improvedText, selectionInfo, textState = null)', 'replaceSelectedTextWithPreservedInfo: function');
+    assert(!live.includes('this.setTextWithFormatting(element, improvedText, textState);'), 'live-range catch must not replace the whole message either');
+    assert(scriptContent.split('message left unchanged').length - 1 >= 3, 'User must be told when the selection could not be applied');
 });
 
 runTest('Prompt tells the model to leave URLs, paths and issue keys verbatim', () => {

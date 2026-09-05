@@ -112,8 +112,8 @@ runTest('Quoted words are protected: tokenised on extraction, restored verbatim,
     assert(scriptContent.includes('captureQuoteLines: function(text, state)'), 'captureQuoteLines missing');
     const extractor = scriptContent.slice(scriptContent.indexOf('extractTextStateWithMentions: function(root)'), scriptContent.indexOf('walkChildrenWithGlue: function'));
     assert(extractor.includes("return this.captureQuoteLines(Array.from(node.childNodes).map(processNode).join(''), state);"), 'Entity-aware extractor must tokenise quote lines');
-    assert(scriptContent.includes("quotes: [], nextMentionId: 1, nextLinkId: 1, nextQuoteId: 1"), 'Text state must carry quotes');
-    assert(scriptContent.includes('return mentionCount > 0 || linkCount > 0 || quoteCount > 0;'), 'Quotes must count as protected entities');
+    assert(scriptContent.includes("quotes: [], codes: [], emojis: [], formats: [], nextMentionId: 1, nextLinkId: 1, nextQuoteId: 1, nextCodeId: 1, nextEmojiId: 1"), 'Text state must carry quotes');
+    assert(scriptContent.includes('return mentionCount > 0 || linkCount > 0 || quoteCount > 0 || codeCount > 0 || emojiCount > 0;'), 'Quotes must count as protected entities');
     assert(scriptContent.includes('const quote = this.getQuoteByToken(part, textState);') && scriptContent.includes('this.appendTextWithMentions(parent, quote.text, textState);'), 'Write-back must restore quote tokens (recursively)');
     assert(scriptContent.includes('const quoteLine = /^__SLACKPOLISH_QUOTE_\\d+__$/.test(trimmedLine) ? `> ${trimmedLine}` : trimmedLine;'), 'A bare quote token line must still become a blockquote');
     assert(scriptContent.includes('are quotations of someone else\\\'s words. Return every such line exactly as "> __SLACKPOLISH_QUOTE_n__"'), 'Prompt must demand verbatim quote tokens');
@@ -131,7 +131,7 @@ runTest('Entities nested inside a quote are not treated as dropped (no duplicate
 runTest('Tokens that only exist inside a quote are never rendered standalone, and the prompt does not invite them', () => {
     const restore = scriptContent.slice(scriptContent.indexOf('restoreMissingProtectedTokens: function'), scriptContent.indexOf('appendTextWithMentions: function'));
     assert(restore.includes("if (entity.type !== 'quote' && bodyText && !bodyText.includes(entity.token) && restoredText.includes(entity.token)) {"), 'Echoed nested tokens must be stripped from the output');
-    assert(scriptContent.includes("const inlineTokens = [...new Set(text.match(/__SLACKPOLISH_(?:MENTION|LINK)_\\d+__/g) || [])];"), 'Prompt must inspect which inline tokens are really in the body');
+    assert(scriptContent.includes("const inlineTokens = [...new Set(text.match(/__SLACKPOLISH_(?:MENTION|LINK|CODE|EMOJI)_\\d+__/g) || [])];"), 'Prompt must inspect which inline tokens are really in the body');
     assert(scriptContent.includes('Never add a token that is not already in the message.'), 'Prompt must forbid inventing tokens');
 });
 

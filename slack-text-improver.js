@@ -331,20 +331,18 @@
             }
 
             if (element && element.classList.contains('ql-editor')) {
-                const richTextState = this.extractTextStateWithMentions(element);
-                if (this.hasProtectedEntities(richTextState)) {
-                    return richTextState;
-                }
+                // The rich extractor carries tokens, blank lines and inline formats: always use it for Slack's editor
+                return this.extractTextStateWithMentions(element);
             }
 
-            // Plain path (no mentions/links in the DOM): still protect bare URLs in the text
+            // Plain path (non-rich inputs): still protect bare URLs in the text
             const plainState = this.createTextState();
             plainState.text = this.captureBareUrls(this.getTextFromElement(element), plainState);
             return plainState;
         },
 
         createTextState: function() {
-            return { text: '', mentions: [], links: [], quotes: [], nextMentionId: 1, nextLinkId: 1, nextQuoteId: 1 };
+            return { text: '', mentions: [], links: [], quotes: [], codes: [], emojis: [], formats: [], nextMentionId: 1, nextLinkId: 1, nextQuoteId: 1, nextCodeId: 1, nextEmojiId: 1 };
         },
 
         extractSelectionTextState: function(selectionInfo) {
@@ -430,12 +428,13 @@
             if (!text || !this.hasProtectedEntities(textState)) {
                 return text || '';
             }
-            return text.replace(/(__SLACKPOLISH_MENTION_\d+__|__SLACKPOLISH_LINK_\d+__|__SLACKPOLISH_QUOTE_\d+__)/g, token => {
+            return text.replace(/(__SLACKPOLISH_MENTION_\d+__|__SLACKPOLISH_LINK_\d+__|__SLACKPOLISH_QUOTE_\d+__|__SLACKPOLISH_CODE_\d+__|__SLACKPOLISH_EMOJI_\d+__)/g, token => {
                 const quote = this.getQuoteByToken(token, textState);
                 if (quote) {
                     return this.detokenizeToPlainText(quote.text, textState);
                 }
-                const entity = this.getMentionByToken(token, textState) || this.getLinkByToken(token, textState);
+                const entity = this.getMentionByToken(token, textState) || this.getLinkByToken(token, textState)
+                    || this.getCodeByToken(token, textState) || this.getEmojiByToken(token, textState);
                 return entity ? entity.text : token;
             });
         },
@@ -448,7 +447,9 @@
             const mentionCount = Array.isArray(textState.mentions) ? textState.mentions.length : 0;
             const linkCount = Array.isArray(textState.links) ? textState.links.length : 0;
             const quoteCount = Array.isArray(textState.quotes) ? textState.quotes.length : 0;
-            return mentionCount > 0 || linkCount > 0 || quoteCount > 0;
+            const codeCount = Array.isArray(textState.codes) ? textState.codes.length : 0;
+            const emojiCount = Array.isArray(textState.emojis) ? textState.emojis.length : 0;
+            return mentionCount > 0 || linkCount > 0 || quoteCount > 0 || codeCount > 0 || emojiCount > 0;
         },
 
         getSelectionInfo: function(element) {
@@ -530,9 +531,9 @@
                         // Slack quote (typed as "> text") - keep each quoted line with its marker
                         return this.formatQuoteLines(Array.from(node.childNodes).map(processNode).join(''));
                     } else if (tagName === 'p' || tagName === 'div') {
-                        // Paragraph or div - get text and add newline
+                        // Paragraph or div - get text and add newline; an empty paragraph is a deliberate blank line
                         const pText = this.getTextFromNode(node);
-                        return pText.trim() ? pText.trim() + '\n' : '';
+                        return pText.trim() ? pText.trim() + '\n' : '\n';
                     } else if (tagName === 'br') {
                         return '\n';
                     } else {
@@ -547,8 +548,8 @@
                 result += processNode(child);
             }
 
-            // Clean up extra newlines and trim
-            result = result.replace(/\n\s*\n+/g, '\n').trim();
+            // Collapse runs of blank lines to a single blank line and trim
+            result = result.replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, '\n\n').trim();
 
             return result;
         },
@@ -623,6 +624,15 @@
                     return this.captureLinkToken(node, state);
                 }
 
+                if (this.isTopLevelProtectedNode(node, 'code')) {
+                    const codeToken = this.captureCodeToken(node, state);
+                    return this.isBlockLevelCodeNode(node) ? codeToken + '\n' : codeToken;
+                }
+
+                if (this.isTopLevelProtectedNode(node, 'emoji')) {
+                    return this.captureEmojiToken(node, state);
+                }
+
                 const tagName = node.tagName.toLowerCase();
 
                 if (tagName === 'ol') {
@@ -659,7 +669,8 @@
 
                 if (tagName === 'p' || tagName === 'div') {
                     const paragraphText = this.getEntityAwareTextFromNode(node, state);
-                    return paragraphText.trim() ? paragraphText.trim() + '\n' : '';
+                    // An empty paragraph (<p><br></p>) is a deliberate blank line: keep it as one
+                    return paragraphText.trim() ? paragraphText.trim() + '\n' : '\n';
                 }
 
                 if (tagName === 'br') {
@@ -671,7 +682,8 @@
 
             state.text += this.walkChildrenWithGlue(root, state, processNode);
 
-            state.text = state.text.replace(/\n\s*\n+/g, '\n').trim();
+            // Collapse runs of blank lines to a single blank line (Slack cannot show more anyway)
+            state.text = state.text.replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, '\n\n').trim();
             return state;
         },
 
@@ -725,6 +737,15 @@
                 return this.captureLinkToken(node, state);
             }
 
+            if (this.isTopLevelProtectedNode(node, 'code')) {
+                return this.captureCodeToken(node, state);
+            }
+
+            if (this.isTopLevelProtectedNode(node, 'emoji')) {
+                return this.captureEmojiToken(node, state);
+            }
+
+            this.recordInlineFormat(node, state);
             return this.walkChildrenWithGlue(node, state, child => this.getEntityAwareTextFromNode(child, state));
         },
 
@@ -765,13 +786,54 @@
                 return false;
             }
 
-            const matcher = type === 'mention' ? this.isSlackMentionNode.bind(this) : this.isSlackLinkNode.bind(this);
+            const matchers = {
+                mention: this.isSlackMentionNode.bind(this),
+                link: this.isSlackLinkNode.bind(this),
+                code: this.isSlackCodeNode.bind(this),
+                emoji: this.isSlackEmojiNode.bind(this)
+            };
+            const matcher = matchers[type] || this.isSlackLinkNode.bind(this);
             if (!matcher(node)) {
                 return false;
             }
 
             const parent = node.parentElement;
             return !parent || !matcher(parent);
+        },
+
+        isSlackCodeNode: function(node) {
+            // Inline code (`x`) and code blocks: their content must never be rewritten.
+            if (!node || node.nodeType !== Node.ELEMENT_NODE) {
+                return false;
+            }
+            const tagName = (node.tagName || '').toLowerCase();
+            const className = String(node.className || '').toLowerCase();
+            return tagName === 'code' || tagName === 'pre' || className.includes('code-block') || className.includes('ql-code');
+        },
+
+        isBlockLevelCodeNode: function(node) {
+            if (!node || node.nodeType !== Node.ELEMENT_NODE) {
+                return false;
+            }
+            const tagName = (node.tagName || '').toLowerCase();
+            return tagName === 'pre' || (tagName === 'div' && this.isSlackCodeNode(node));
+        },
+
+        isSlackEmojiNode: function(node) {
+            // Slack renders a typed :shortcode: as <img class="emoji" data-stringify-text=":tada:" ...> (no text content).
+            if (!node || node.nodeType !== Node.ELEMENT_NODE) {
+                return false;
+            }
+            const tagName = (node.tagName || '').toLowerCase();
+            const className = String(node.className || '').toLowerCase();
+            if (tagName === 'ts-emoji') {
+                return true;
+            }
+            return (
+                (tagName === 'img' && (className.includes('emoji') || node.hasAttribute('data-stringify-text') || node.hasAttribute('data-stringify-emoji'))) ||
+                node.hasAttribute('data-stringify-emoji') ||
+                (tagName === 'span' && (className.includes('c-emoji') || node.hasAttribute('data-emoji')))
+            );
         },
 
         isSlackLinkNode: function(node) {
@@ -856,6 +918,75 @@
             return token;
         },
 
+        captureCodeToken: function(node, state) {
+            const token = `__SLACKPOLISH_CODE_${state.nextCodeId}__`;
+            state.nextCodeId += 1;
+            state.codes.push({ token, text: node.textContent || '', node: node.cloneNode(true) });
+            return token;
+        },
+
+        captureEmojiToken: function(node, state) {
+            const token = `__SLACKPOLISH_EMOJI_${state.nextEmojiId}__`;
+            state.nextEmojiId += 1;
+            const shortcode = node.getAttribute('data-stringify-text') || node.getAttribute('data-stringify-emoji') || node.getAttribute('data-id') || node.getAttribute('data-emoji') || node.getAttribute('alt') || (node.textContent || '').trim() || ':emoji:';
+            state.emojis.push({ token, text: shortcode, node: node.cloneNode(true) });
+            return token;
+        },
+
+        getCodeByToken: function(token, textState) {
+            return (textState && textState.codes ? textState.codes.find(code => code.token === token) : null) || null;
+        },
+
+        getEmojiByToken: function(token, textState) {
+            return (textState && textState.emojis ? textState.emojis.find(emoji => emoji.token === token) : null) || null;
+        },
+
+        recordInlineFormat: function(node, state) {
+            // Bold/italic/strike are not tokenised (the model should still polish those words); remember the
+            // phrase so the formatting can be re-applied if the model keeps it verbatim.
+            if (!node || node.nodeType !== Node.ELEMENT_NODE || !state || !Array.isArray(state.formats)) {
+                return;
+            }
+            const tag = (node.tagName || '').toLowerCase();
+            const normalized = tag === 'b' ? 'strong' : tag === 'i' ? 'em' : (tag === 'del' || tag === 'strike') ? 's' : tag;
+            if (!['strong', 'em', 's', 'u'].includes(normalized)) {
+                return;
+            }
+            const text = (node.textContent || '').trim();
+            if (text) {
+                state.formats.push({ tag: normalized, text });
+            }
+        },
+
+        reapplyInlineFormatting: function(root, textState) {
+            // Best effort: re-wrap phrases that were bold/italic/strike before polishing when they survived verbatim.
+            if (!root || !textState || !Array.isArray(textState.formats) || !textState.formats.length) {
+                return;
+            }
+            const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            textState.formats.forEach(format => {
+                const regex = new RegExp(`(?<![A-Za-z0-9_])${escape(format.text)}(?![A-Za-z0-9_])`);
+                const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+                let node;
+                while ((node = walker.nextNode())) {
+                    const parent = node.parentElement;
+                    if (parent && (parent.closest(format.tag) || parent.closest('code, pre, a, ts-mention, ts-slug'))) {
+                        continue;
+                    }
+                    const match = regex.exec(node.textContent);
+                    if (!match) {
+                        continue;
+                    }
+                    const middle = node.splitText(match.index);
+                    middle.splitText(format.text.length);
+                    const wrapper = document.createElement(format.tag);
+                    middle.parentNode.insertBefore(wrapper, middle);
+                    wrapper.appendChild(middle);
+                    break;
+                }
+            });
+        },
+
         getMentionByToken: function(token, textState) {
             if (!textState || !textState.mentions) {
                 return null;
@@ -893,7 +1024,9 @@
             const entities = [
                 ...(textState.quotes || []).map(entity => ({ ...entity, type: 'quote' })),
                 ...(textState.mentions || []).map(entity => ({ ...entity, type: 'mention' })),
-                ...(textState.links || []).map(entity => ({ ...entity, type: 'link' }))
+                ...(textState.links || []).map(entity => ({ ...entity, type: 'link' })),
+                ...(textState.codes || []).map(entity => ({ ...entity, type: 'code' })),
+                ...(textState.emojis || []).map(entity => ({ ...entity, type: 'emoji' }))
             ];
 
             // A model may echo tokens it was told about; tokens that only ever lived inside a quote
@@ -960,7 +1093,7 @@
         },
 
         appendTextWithMentions: function(parent, text, textState) {
-            const tokenRegex = /(__SLACKPOLISH_MENTION_\d+__|__SLACKPOLISH_LINK_\d+__|__SLACKPOLISH_QUOTE_\d+__)/g;
+            const tokenRegex = /(__SLACKPOLISH_MENTION_\d+__|__SLACKPOLISH_LINK_\d+__|__SLACKPOLISH_QUOTE_\d+__|__SLACKPOLISH_CODE_\d+__|__SLACKPOLISH_EMOJI_\d+__)/g;
             const parts = text.split(tokenRegex);
 
             parts.forEach(part => {
@@ -986,6 +1119,18 @@
                     return;
                 }
 
+                const code = this.getCodeByToken(part, textState);
+                if (code) {
+                    parent.appendChild(code.node.cloneNode(true));
+                    return;
+                }
+
+                const emoji = this.getEmojiByToken(part, textState);
+                if (emoji) {
+                    parent.appendChild(emoji.node.cloneNode(true));
+                    return;
+                }
+
                 parent.appendChild(document.createTextNode(part));
             });
         },
@@ -996,10 +1141,32 @@
             const lines = text.split('\n');
             let currentList = null;
             let currentListType = null;
+            let pendingBlankLine = false;
 
             lines.forEach((line, index) => {
                 const trimmedLine = line.trim();
-                if (!trimmedLine) return; // Skip empty lines
+                if (!trimmedLine) {
+                    // Remember a blank line; it is emitted as an empty paragraph only between content
+                    pendingBlankLine = fragment.childNodes.length > 0;
+                    return;
+                }
+                if (pendingBlankLine) {
+                    const emptyParagraph = document.createElement('p');
+                    emptyParagraph.appendChild(document.createElement('br'));
+                    fragment.appendChild(emptyParagraph);
+                    currentList = null;
+                    currentListType = null;
+                    pendingBlankLine = false;
+                }
+
+                // A line that is exactly one block-level code token (Slack code block line) is restored as-is, not in a <p>
+                const soleCode = /^__SLACKPOLISH_CODE_\d+__$/.test(trimmedLine) ? this.getCodeByToken(trimmedLine, textState) : null;
+                if (soleCode && this.isBlockLevelCodeNode(soleCode.node)) {
+                    currentList = null;
+                    currentListType = null;
+                    fragment.appendChild(soleCode.node.cloneNode(true));
+                    return;
+                }
 
                 // Check if this is a quote line ("> text", or a bare quote token whose ">" the model dropped)
                 const quoteLine = /^__SLACKPOLISH_QUOTE_\d+__$/.test(trimmedLine) ? `> ${trimmedLine}` : trimmedLine;
@@ -1066,6 +1233,7 @@
         setTextWithFormatting: function(element, text, textState = null) {
             const fragment = this.buildFormattedFragment(text, textState);
             element.replaceChildren(fragment);
+            this.reapplyInlineFormatting(element, textState);
         },
 
         notifySlackDraftChanged: function(element) {
@@ -1186,7 +1354,7 @@
         mapPlainSpanToTokenized: function(tokenizedText, textState, plainStart, plainEnd) {
             // Map a [start, end) span of the detokenised text onto the tokenised text. A span that cuts
             // into a token is widened to cover the whole token so entities are never split.
-            const tokenRegex = /__SLACKPOLISH_(?:MENTION|LINK|QUOTE)_\d+__/g;
+            const tokenRegex = /__SLACKPOLISH_(?:MENTION|LINK|QUOTE|CODE|EMOJI)_\d+__/g;
             const segments = [];
             let cursor = 0;
             let match;
@@ -1241,7 +1409,10 @@
             };
             remap('mentions', 'MENTION', 'nextMentionId');
             remap('links', 'LINK', 'nextLinkId');
+            remap('codes', 'CODE', 'nextCodeId');
+            remap('emojis', 'EMOJI', 'nextEmojiId');
             remap('quotes', 'QUOTE', 'nextQuoteId');
+            (sourceState.formats || []).forEach(format => targetState.formats.push(format));
             return result;
         },
 
@@ -1903,6 +2074,10 @@
     const textImprover = {
         isProcessing: false,
 
+        countContentLines(text) {
+            return String(text || '').split('\n').filter(line => line.trim()).length;
+        },
+
         extractStandaloneGreeting(text) {
             if (!text) {
                 return null;
@@ -2049,6 +2224,19 @@
                     response = await this.callOpenAI(prompt);
                 }
 
+                // Models sometimes merge short lines into one paragraph; ask once more, explicitly, before accepting that
+                const expectedLines = this.countContentLines(originalText);
+                if (response && response.trim() && expectedLines >= 2 && this.countContentLines(response) < expectedLines) {
+                    utils.log(`Model merged lines (${this.countContentLines(response)}/${expectedLines}); retrying once with an explicit line-structure instruction`);
+                    const retryPrompt = `${prompt}\n\nIMPORTANT: The message has exactly ${expectedLines} non-empty lines${/\n[ \t]*\n/.test(originalText) ? ', with blank lines between paragraphs' : ''}. Your previous answer merged lines. Return exactly ${expectedLines} non-empty lines in the same order, each corresponding to the same input line, and keep blank lines exactly where the input has them.`;
+                    const retry = window.SlackPolishOpenAI
+                        ? await window.SlackPolishOpenAI.improveText(CONFIG.OPENAI_API_KEY, CONFIG.MODEL, retryPrompt, { temperature: this.getImprovementTemperature() })
+                        : await this.callOpenAI(retryPrompt);
+                    if (retry && retry.trim() && this.countContentLines(retry) === expectedLines) {
+                        response = retry;
+                    }
+                }
+
                 if (response && response.trim()) {
                     utils.log('Text improvement completed successfully');
 
@@ -2093,8 +2281,10 @@
 
                     // Special post-processing for TONE_POLISH: simple empty line removal
                     if (CONFIG.STYLE === 'TONE_POLISH') {
-                        // Simple approach: replace double newlines with single newlines
-                        processedResponse = processedResponse.replace(/\n\n+/g, '\n');
+                        // Remove blank lines the model added; keep the ones the writer had
+                        processedResponse = /\n[ \t]*\n/.test(originalText)
+                            ? processedResponse.replace(/\n(?:[ \t]*\n){2,}/g, '\n\n')
+                            : processedResponse.replace(/\n\n+/g, '\n');
                         utils.debug('Applied TONE_POLISH post-processing', {
                             originalResponse: response.trim(),
                             processedResponse: processedResponse,
@@ -2356,9 +2546,9 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
             if (utils.hasProtectedEntities(textState)) {
                 // Only mention inline tokens that really appear in the body; entities nested inside a quote are
                 // covered by the quote token, and naming them here made the model add them to the reply.
-                const inlineTokens = [...new Set(text.match(/__SLACKPOLISH_(?:MENTION|LINK)_\d+__/g) || [])];
+                const inlineTokens = [...new Set(text.match(/__SLACKPOLISH_(?:MENTION|LINK|CODE|EMOJI)_\d+__/g) || [])];
                 if (inlineTokens.length) {
-                    prompt += '\nIMPORTANT: Tokens like __SLACKPOLISH_MENTION_1__ and __SLACKPOLISH_LINK_1__ represent real Slack entities such as mentions and links. Preserve every such token exactly, without renaming, removing, reordering, or breaking it. Never add a token that is not already in the message.';
+                    prompt += '\nIMPORTANT: Tokens like __SLACKPOLISH_MENTION_1__, __SLACKPOLISH_LINK_1__, __SLACKPOLISH_CODE_1__ and __SLACKPOLISH_EMOJI_1__ represent real Slack entities such as mentions and links, inline code and emoji. Preserve every such token exactly, in place, without renaming, removing, reordering, or breaking it. Never add a token that is not already in the message.';
                 }
                 utils.debug('Added protected entity preservation instructions', {
                     inlineTokens,
@@ -3108,12 +3298,16 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
 
             if (!originalText.trim()) {
                 utils.log('No text to improve - input is empty or whitespace only');
-                utils.debug('No text to improve', {
-                    originalText,
-                    triggerCallId,
-                    setupId
-                });
+                utils.debug('No text to improve (empty)', { triggerCallId, setupId });
                 utils.showNotification('No text to improve', 'error');
+                return;
+            }
+
+            // Only links, pills, emoji or quotes: there are no words of the writer's own to polish
+            const polishableText = originalText.replace(/__SLACKPOLISH_[A-Z]+_\d+__|https?:\/\/\S+|www\.\S+|^\s*>\s*$/gm, '').trim();
+            if (!/\p{L}/u.test(polishableText)) {
+                utils.log('Nothing to polish - message contains only links, mentions, emoji or quoted text');
+                utils.showNotification('Nothing to polish', 'info');
                 return;
             }
 
