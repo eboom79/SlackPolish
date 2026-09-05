@@ -19,7 +19,7 @@ jobs:
     
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       
     - name: Get version
       id: get_version
@@ -176,7 +176,7 @@ jobs:
         echo "Size: $(du -h "${PKG_DIR}.tar.gz" | cut -f1)"
         
     - name: Upload Linux package as artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: github.event_name == 'workflow_dispatch'
       with:
         name: SlackPolish-Linux-${{ steps.get_version.outputs.version }}
@@ -184,7 +184,7 @@ jobs:
         retention-days: 30
 
     - name: Upload package to release (for release triggers)
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v3
       if: github.event_name == 'release'
       with:
         tag_name: ${{ steps.get_version.outputs.version }}
