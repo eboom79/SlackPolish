@@ -40,7 +40,7 @@ document.getElementById('clear').addEventListener('click', async () => {
                 status.innerHTML = '<span style="color:#b00">Not active on this tab.</span> Reload the page (tabs opened before the extension was loaded do not have it; chrome:// pages never do), click into the page, then press Ctrl+Shift.';
                 return;
             }
-            status.innerHTML = `<span style="color:#2e7d32">Active on this tab</span> — ${reply.host} (${reply.surface}). Click into the page and press Ctrl+Shift; a small toast confirms each press.`;
+            status.innerHTML = `<span style="color:#2e7d32">Active on this tab</span> — ${reply.host} (${reply.surface}). Click into the page and press Ctrl+Shift; the SlackPolish badge appears bottom-left.`;
         });
     } catch (error) {
         status.textContent = `Could not check the active tab: ${error.message}`;

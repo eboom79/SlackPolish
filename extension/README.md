@@ -29,6 +29,7 @@ Chrome) to pick up the new files.
 
 - `shared/hotkey.js` — chord detection, same semantics as the Slack script
 - `shared/surface.js` — host → surface classification
+- `shared/status-badge.js` — the SlackPolish status pill, copied from the Slack script
 - `content/hotkey-logger.js` — content script (all URLs, top frame)
 - `background.js` — persists events, updates the badge
 - `popup/` — the toolbar popup

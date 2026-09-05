@@ -28,7 +28,7 @@ runTest('Manifest: MV3, storage-only permission, scripts in dependency order, ve
     assert(!manifest.host_permissions, 'no host_permissions beyond the content script matches');
     const cs = manifest.content_scripts[0];
     assert(JSON.stringify(cs.matches) === JSON.stringify(['<all_urls>']), 'content script must run on all URLs');
-    assert(JSON.stringify(cs.js) === JSON.stringify(['shared/hotkey.js', 'shared/surface.js', 'content/hotkey-logger.js']), 'shared modules must load before the content script');
+    assert(JSON.stringify(cs.js) === JSON.stringify(['shared/hotkey.js', 'shared/surface.js', 'shared/status-badge.js', 'content/hotkey-logger.js']), 'shared modules must load before the content script');
     assert(!cs.all_frames, 'top frame only');
     assert(manifest.version === versionJson.version_string, `manifest version ${manifest.version} must match version.json ${versionJson.version_string}`);
     for (const rel of ['background.js', 'popup/popup.html', 'popup/popup.js', 'icons/icon16.png', 'icons/icon48.png', 'icons/icon128.png']) {
@@ -98,9 +98,26 @@ runTest('Logged event is privacy-safe and reaches the background worker', () => 
     assert(backgroundSource.includes("chrome.storage.local.set({ events })"), 'events persisted to chrome.storage.local');
 });
 
-runTest('A caught press is visible on the page and the popup can check the tab', () => {
-    assert(contentSource.includes("toast.id = 'slackpolish-hotkey-toast';") && contentSource.includes('showToast(event);'), 'content script must show a brief toast');
-    assert(contentSource.includes("'pointer-events:none'"), 'toast must not intercept clicks');
+runTest('The status badge is a faithful copy of the one in Slack (ids, colours, labels, fade)', () => {
+    const slack = fs.readFileSync(path.join(__dirname, '../../slack-text-improver.js'), 'utf8');
+    const Badge = require(path.join(root, 'shared/status-badge.js'));
+    const slackId = slack.match(/const STATUS_BADGE_ID = '([^']+)'/)[1];
+    assert(Badge.STATUS_BADGE_ID === slackId, `badge id ${Badge.STATUS_BADGE_ID} must equal Slack's ${slackId}`);
+    for (const [state, style] of Object.entries(Badge.STATES)) {
+        for (const value of [style.background, style.dot, style.glow, style.label]) {
+            assert(slack.includes(value), `Slack script must contain ${state} style value ${JSON.stringify(value)}`);
+        }
+    }
+    assert(slack.includes("setStatusBadgeState('busy', 'SlackPolish Improving')"), 'Slack shows "SlackPolish Improving" while polishing');
+    assert(contentSource.includes("SlackPolishStatusBadge.set('busy', 'SlackPolish Improving');") && contentSource.includes("SlackPolishStatusBadge.set('active', 'SlackPolish Active'"), 'extension must show the same states/texts');
+    const badgeSource = fs.readFileSync(path.join(root, 'shared/status-badge.js'), 'utf8');
+    for (const css of ['left: 20px;', 'bottom: 20px;', 'border-radius: 999px;', 'gap: 8px;', 'padding: 8px 12px;', "}, 5000);"]) {
+        assert(badgeSource.includes(css) && slack.includes(css), `layout/timing detail must match Slack: ${css}`);
+    }
+    assert(!contentSource.includes('slackpolish-hotkey-toast'), 'old toast must be gone');
+});
+
+runTest('The popup can check whether the content script is active on the tab', () => {
     assert(contentSource.includes("message.type === 'slackpolish-ping'"), 'content script must answer the popup ping');
     const popupSource = fs.readFileSync(path.join(root, 'popup/popup.js'), 'utf8');
     assert(popupSource.includes("{ type: 'slackpolish-ping' }") && popupSource.includes('Not active on this tab'), 'popup must report whether the content script is active on the current tab');

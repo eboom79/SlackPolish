@@ -142,9 +142,12 @@ async function main() {
         };
         await chord();
 
-        // (0) on-page toast (content script DOM insert is visible from the main world)
-        const toast = await waitFor(async () => browser.evaluate(page, `(document.getElementById('slackpolish-hotkey-toast') || {}).textContent || null`), { timeoutMs: 3000, what: 'toast' }).catch(() => null);
-        check(!!toast && /SlackPolish · Ctrl\+Shift · other/.test(toast), toast ? `toast shown: "${toast}"` : 'no on-page toast');
+        // (0) the SlackPolish status badge (same pill as in Slack, same element id): "Improving" first, then "Active"
+        const readBadge = () => browser.evaluate(page, `(() => { const b = document.getElementById('slackpolish-runtime-status'); return b ? { state: b.dataset.state, label: b.textContent.trim(), bg: b.style.background } : null; })()`);
+        const badgeNow = await waitFor(readBadge, { timeoutMs: 3000, what: 'status badge' }).catch(() => null);
+        check(!!badgeNow && badgeNow.state === 'busy' && badgeNow.label === 'SlackPolish Improving', badgeNow ? `badge shown: ${badgeNow.state} "${badgeNow.label}" ${badgeNow.bg}` : 'no status badge');
+        const badgeLater = await waitFor(async () => { const b = await readBadge(); return b && b.state === 'active' ? b : null; }, { timeoutMs: 4000, what: 'badge -> active' }).catch(() => null);
+        check(!!badgeLater && badgeLater.label === 'SlackPolish Active', badgeLater ? `badge then: ${badgeLater.state} "${badgeLater.label}"` : 'badge did not switch to Active');
 
         // (1) console line from the content script (isolated world console calls arrive on the page session)
         const line = await waitFor(async () => browser.consoleLines(page).find(l => l.includes('SLACKPOLISH_HOTKEY')), { timeoutMs: 5000, what: 'SLACKPOLISH_HOTKEY console line' }).catch(() => null);
