@@ -57,6 +57,14 @@ export const checks = {
     slugLabelUnchanged: (url) => (b, a) => { const x = b.slugs.find(s => s.url === url), y = a.slugs.find(s => s.url === url); return { ok: !!x && !!y && x.label === y.label, detail: x && y ? `slug label ${x.label === y.label ? 'unchanged' : 'changed'}` : 'slug missing' }; }
 };
 
+/** Preconditions on the composer state BEFORE polishing; unmet -> scenario is SKIPPED (harness/Slack issue, not SlackPolish). */
+export const pre = {
+    blockquotes: (n) => (b) => ({ ok: b.counts.blockquote === n, detail: `composer has ${b.counts.blockquote} blockquote(s), want ${n}` }),
+    list: (type, n) => (b) => ({ ok: b.counts[type] >= 1 && b.counts.li === n, detail: `composer has ${type}=${b.counts[type]} li=${b.counts.li}, want ${n} items` }),
+    mentions: (n) => (b) => ({ ok: b.counts.tsMention === n, detail: `composer has ${b.counts.tsMention} mention(s), want ${n}` }),
+    anchorsOrSlugs: (n) => (b) => ({ ok: b.counts.a + b.counts.tsSlug >= n, detail: `composer has a=${b.counts.a} slugs=${b.counts.tsSlug}, want >= ${n}` })
+};
+
 export const scenarios = [
     {
         id: 'split-anchor-full',
@@ -135,13 +143,42 @@ export const scenarios = [
         title: 'Quoted line (>) keeps its quote bar; reply stays on its own line',
         // Slack continues the quote on Shift+Enter; Backspace on the empty quote line exits it (like lists)
         steps: [{ type: 'type', text: '> can you ship by friday?' }, { type: 'newline' }, { type: 'backspace' }, { type: 'type', text: 'yes we are on track, will send eod' }],
-        invariants: [checks.blockquoteCount(1), checks.minBlocks(2), checks.paragraphs(1)],
-        expectations: [checks.quoteTextUnchanged()]
+        precondition: pre.blockquotes(1),
+        invariants: [checks.blockquoteCount(1), checks.minBlocks(2), checks.paragraphs(1), checks.quoteTextUnchanged()],
+        expectations: [checks.textChanged()]
+    },
+    {
+        id: 'quote-two-lines-then-reply',
+        title: 'Two quoted lines (with typos) stay verbatim while the reply is polished',
+        steps: [
+            { type: 'type', text: '> can u ship it by fri??' }, { type: 'newline' },
+            { type: 'type', text: 'and dont forget the relase notes' }, { type: 'newline' }, { type: 'backspace' },
+            { type: 'type', text: 'yes we r on track, will send eod' }
+        ],
+        precondition: pre.blockquotes(2),
+        invariants: [checks.blockquoteCount(2), checks.paragraphs(1), checks.quoteTextUnchanged()],
+        expectations: [checks.textChanged()]
+    },
+    {
+        id: 'quote-with-mention-and-link',
+        title: 'A quote containing an @mention and a link stays verbatim (no duplicated entities)',
+        steps: [
+            { type: 'type', text: '> ' }, { type: 'type', text: '@eyal boum' },
+            { type: 'waitFor', what: 'autocomplete', js: `document.querySelector('[data-qa*="autocomplete"], .c-tabcomplete, [role="listbox"]')`, timeoutMs: 4000, optional: true },
+            { type: 'tab' },
+            { type: 'type', text: ' asked: pls check https://redis.io/docs/latest/ today', delayMs: 35 },
+            { type: 'newline' }, { type: 'backspace' },
+            { type: 'type', text: 'sure, i will do it now' }
+        ],
+        precondition: (b) => ({ ok: b.counts.blockquote === 1 && b.counts.tsMention === 1 && b.counts.a === 1, detail: `blockquote=${b.counts.blockquote} mention=${b.counts.tsMention} a=${b.counts.a}, want 1/1/1` }),
+        invariants: [checks.blockquoteCount(1), checks.paragraphs(1), checks.quoteTextUnchanged(), checks.mentionsPreserved(), checks.anchorsPreserved(), checks.urlsPreserved(['https://redis.io/docs/latest/'])],
+        expectations: [checks.textChanged()]
     },
     {
         id: 'numbered-list',
         title: 'Numbered list keeps all its items',
         steps: [{ type: 'type', text: 'todo for the release:' }, { type: 'newline' }, { type: 'type', text: '1. finish the tests' }, { type: 'newline' }, { type: 'type', text: 'cut the release' }, { type: 'newline' }, { type: 'type', text: 'anounce in the channel' }],
+        precondition: pre.list('ol', 3),
         invariants: [checks.listItems('ol', 3)],
         expectations: [checks.keywords(['tests', 'release', 'channel'])]
     },
@@ -149,6 +186,7 @@ export const scenarios = [
         id: 'bullet-list',
         title: 'Bullet list keeps all its items',
         steps: [{ type: 'type', text: '- update the docs' }, { type: 'newline' }, { type: 'type', text: 'ping dana about the demo' }],
+        precondition: pre.list('ul', 2),
         invariants: [checks.listItems('ul', 2)],
         expectations: []
     },
@@ -163,6 +201,7 @@ export const scenarios = [
             { type: 'type', text: ' can you take a look at this pls' },
             { type: 'require', what: 'ts-mention in composer', js: `ed.querySelector('ts-mention')` }
         ],
+        precondition: pre.mentions(1),
         invariants: [checks.mentionsPreserved()],
         expectations: [checks.textChanged()]
     },

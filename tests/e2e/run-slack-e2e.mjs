@@ -118,7 +118,12 @@ async function main() {
                     const before = await composer.snapshot();
                     result.before = { text: before.text, html: before.html, counts: before.counts, slugs: before.slugs, anchors: before.anchors, mentions: before.mentions };
                     log(`  in : ${short(before.lines.join(' ⏎ '))}`);
-                    if (DRY_RUN) {
+                    const pre = scenario.precondition ? scenario.precondition(before) : { ok: true };
+                    if (!pre.ok) {
+                        result.status = 'SKIP';
+                        result.notes.push(`precondition not met (composer state): ${pre.detail}`);
+                        log(`  ⏭  skipped — precondition not met: ${pre.detail}`);
+                    } else if (DRY_RUN) {
                         log(`  dom: ${JSON.stringify(before.counts)}${before.slugs.length ? ' slugs=' + JSON.stringify(before.slugs.map(s => s.url)) : ''}`);
                     } else {
                         await composer.focus();
