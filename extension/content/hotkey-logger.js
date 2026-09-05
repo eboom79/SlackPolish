@@ -10,6 +10,8 @@
     window.__SLACKPOLISH_EXTENSION_HOTKEY_ATTACHED__ = true;
 
     const HOTKEY = 'Ctrl+Shift';
+    // Revision of this content script, stamped on every event: tells whether a tab still runs an older script
+    const CONTENT_REVISION = 'r5-roundtrip';
     const hotkey = SlackPolishHotkey.parse(HOTKEY);
 
     function describePage() {
@@ -18,6 +20,7 @@
         return {
             time: new Date().toISOString(),
             hotkey: HOTKEY,
+            revision: CONTENT_REVISION,
             surface,
             host: location.hostname,
             path: location.pathname,
@@ -43,7 +46,9 @@
         // editor's paste pipeline and check nothing changed. Proves write-back is lossless before any polishing.
         let settings = {};
         try { settings = await chrome.storage.local.get('roundTrip'); } catch (error) { /* extension reloaded */ }
+        event.roundTripEnabled = settings.roundTrip === true;
         const root = SlackPolishEditor.findActive(document);
+        event.atlassianEditor = !!(root && SlackPolishAtlassian.isAtlassianEditor(root));
         if (settings.roundTrip && event.surface === 'atlassian' && root && SlackPolishAtlassian.isAtlassianEditor(root)) {
             SlackPolishStatusBadge.set('busy', 'SlackPolish Improving');
             try {
