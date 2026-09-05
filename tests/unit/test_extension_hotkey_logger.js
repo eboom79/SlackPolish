@@ -98,6 +98,14 @@ runTest('Logged event is privacy-safe and reaches the background worker', () => 
     assert(backgroundSource.includes("chrome.storage.local.set({ events })"), 'events persisted to chrome.storage.local');
 });
 
+runTest('A caught press is visible on the page and the popup can check the tab', () => {
+    assert(contentSource.includes("toast.id = 'slackpolish-hotkey-toast';") && contentSource.includes('showToast(event);'), 'content script must show a brief toast');
+    assert(contentSource.includes("'pointer-events:none'"), 'toast must not intercept clicks');
+    assert(contentSource.includes("message.type === 'slackpolish-ping'"), 'content script must answer the popup ping');
+    const popupSource = fs.readFileSync(path.join(root, 'popup/popup.js'), 'utf8');
+    assert(popupSource.includes("{ type: 'slackpolish-ping' }") && popupSource.includes('Not active on this tab'), 'popup must report whether the content script is active on the current tab');
+});
+
 console.log('\n===============================================');
 console.log(`📊 Total: ${testsTotal}  ✅ Passed: ${testsPassed}  ❌ Failed: ${testsTotal - testsPassed}`);
 process.exit(testsPassed === testsTotal ? 0 : 1);

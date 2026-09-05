@@ -142,6 +142,10 @@ async function main() {
         };
         await chord();
 
+        // (0) on-page toast (content script DOM insert is visible from the main world)
+        const toast = await waitFor(async () => browser.evaluate(page, `(document.getElementById('slackpolish-hotkey-toast') || {}).textContent || null`), { timeoutMs: 3000, what: 'toast' }).catch(() => null);
+        check(!!toast && /SlackPolish · Ctrl\+Shift · other/.test(toast), toast ? `toast shown: "${toast}"` : 'no on-page toast');
+
         // (1) console line from the content script (isolated world console calls arrive on the page session)
         const line = await waitFor(async () => browser.consoleLines(page).find(l => l.includes('SLACKPOLISH_HOTKEY')), { timeoutMs: 5000, what: 'SLACKPOLISH_HOTKEY console line' }).catch(() => null);
         check(!!line, line ? `content script logged: ${line.slice(0, 150)}` : 'content script did not log the hotkey');
