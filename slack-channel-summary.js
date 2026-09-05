@@ -1576,13 +1576,19 @@ Please provide your summary now:`;
             currentSettings: SlackChannelSummary.loadSettings()
         });
 
-        // Add keyboard shortcut for channel summary (F10)
-        document.addEventListener('keydown', function(event) {
+        // Add keyboard shortcut for channel summary (F10). Idempotent across runtime re-injection into a live
+        // page (launcher restart with a new build): remove the previous handler first.
+        if (typeof window.__SLACKPOLISH_SUMMARY_F10_HANDLER__ === 'function') {
+            document.removeEventListener('keydown', window.__SLACKPOLISH_SUMMARY_F10_HANDLER__);
+        }
+        const summaryHotkeyHandler = function(event) {
             if (event.key === 'F10') {
                 event.preventDefault();
                 SlackChannelSummary.showChannelSummary();
             }
-        });
+        };
+        window.__SLACKPOLISH_SUMMARY_F10_HANDLER__ = summaryHotkeyHandler;
+        document.addEventListener('keydown', summaryHotkeyHandler);
     }
 
     // Wait for DOM to be ready

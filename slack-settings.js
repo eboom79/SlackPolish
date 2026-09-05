@@ -679,13 +679,20 @@
             currentSettings: SlackSettings.loadSettings()
         });
 
-        // Add keyboard shortcut for settings (F12)
-        document.addEventListener('keydown', function(event) {
+        // Add keyboard shortcut for settings (F12). Idempotent: when the launcher re-injects a new runtime build
+        // into a live page, the previous handler is removed first - two handlers would open the menu and
+        // immediately close it again (showSettingsMenu toggles).
+        if (typeof window.__SLACKPOLISH_SETTINGS_F12_HANDLER__ === 'function') {
+            document.removeEventListener('keydown', window.__SLACKPOLISH_SETTINGS_F12_HANDLER__);
+        }
+        const settingsHotkeyHandler = function(event) {
             if (event.key === 'F12') {
                 event.preventDefault();
                 SlackSettings.showSettingsMenu();
             }
-        });
+        };
+        window.__SLACKPOLISH_SETTINGS_F12_HANDLER__ = settingsHotkeyHandler;
+        document.addEventListener('keydown', settingsHotkeyHandler);
     }
 
     // Wait for DOM to be ready
