@@ -642,12 +642,41 @@
                 return this.getEntityAwareTextFromNode(node, state);
             };
 
-            for (const child of root.childNodes) {
-                state.text += processNode(child);
-            }
+            state.text += this.walkChildrenWithGlue(root, state, processNode);
 
             state.text = state.text.replace(/\n\s*\n+/g, '\n').trim();
             return state;
+        },
+
+        walkChildrenWithGlue: function(parent, state, processChild) {
+            // Slack sometimes auto-links a URL before its last characters are typed, leaving e.g.
+            // <a href=".../kee">.../kee</a>p as a stray text run right after the link. Absorb such an
+            // alphanumeric run into the link entity so the model never sees "__LINK__p" (and drops
+            // the "p"), and the user's text comes back byte-identical.
+            const children = Array.from(parent.childNodes);
+            let text = '';
+            for (let index = 0; index < children.length; index++) {
+                const child = children[index];
+                text += processChild(child);
+                const next = children[index + 1];
+                if (!next || next.nodeType !== Node.TEXT_NODE || !this.isTopLevelProtectedNode(child, 'link')) {
+                    continue;
+                }
+                const match = /^[A-Za-z0-9]+/.exec(next.textContent || '');
+                const entity = state.links[state.links.length - 1];
+                if (!match || !entity) {
+                    continue;
+                }
+                const fragment = document.createDocumentFragment();
+                fragment.appendChild(entity.node);
+                fragment.appendChild(document.createTextNode(match[0]));
+                entity.node = fragment;
+                entity.text += match[0];
+                entity.glued = match[0];
+                // Continue with the remainder of the text node without touching the live DOM
+                children[index + 1] = document.createTextNode(next.textContent.slice(match[0].length));
+            }
+            return text;
         },
 
         getEntityAwareTextFromNode: function(node, state) {
@@ -669,11 +698,7 @@
                 return this.captureLinkToken(node, state);
             }
 
-            let text = '';
-            for (const child of node.childNodes) {
-                text += this.getEntityAwareTextFromNode(child, state);
-            }
-            return text;
+            return this.walkChildrenWithGlue(node, state, child => this.getEntityAwareTextFromNode(child, state));
         },
 
         isSlackMentionNode: function(node) {

@@ -135,6 +135,19 @@ runTest('Slack app rich-link slugs (Jira/Drive/Confluence pills) are recognised 
     assert(capture.includes('href: this.getLinkNodeUrl(node),'), 'captureLinkToken must record the slug URL so a dropped token can be re-anchored');
 });
 
+runTest('Alphanumeric run glued after a link (Slack fast-typing race) is absorbed into the link entity', () => {
+    assert(scriptContent.includes('walkChildrenWithGlue: function(parent, state, processChild)'), 'walkChildrenWithGlue missing');
+    const walker = sliceBetween('walkChildrenWithGlue: function', 'getEntityAwareTextFromNode: function');
+    assert(walker.includes('/^[A-Za-z0-9]+/.exec(next.textContent'), 'Only alphanumeric runs may be glued (punctuation stays editable)');
+    assert(walker.includes("this.isTopLevelProtectedNode(child, 'link')"), 'Gluing applies to link entities only');
+    assert(walker.includes('entity.text += match[0];'), 'Glued text must join the entity text for re-anchoring');
+    assert(walker.includes('children[index + 1] = document.createTextNode(next.textContent.slice(match[0].length));'), 'Remainder must be processed without mutating the live DOM');
+    const extractor = sliceBetween('extractTextStateWithMentions: function(root)', 'walkChildrenWithGlue: function');
+    assert(extractor.includes('state.text += this.walkChildrenWithGlue(root, state, processNode);'), 'Top-level walk must use the glue-aware walker');
+    const entityAware = sliceBetween('getEntityAwareTextFromNode: function', 'isSlackMentionNode: function');
+    assert(entityAware.includes('return this.walkChildrenWithGlue(node, state, child => this.getEntityAwareTextFromNode(child, state));'), 'Nested walk must use the glue-aware walker');
+});
+
 runTest('Prompt tells the model to leave URLs, paths and issue keys verbatim', () => {
     assert(scriptContent.includes('Leave URLs, file paths, and identifiers such as issue keys (e.g. RED-1234, PROJ-42) exactly as written.'), 'Prompt instruction missing');
 });
