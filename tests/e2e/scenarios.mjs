@@ -273,7 +273,7 @@ export const scenarios = [
         id: 'channel-mention',
         title: '#channel pill survives polishing',
         steps: [
-            { type: 'type', text: 'lets move this to ' }, { type: 'mention', query: '#gen', labelIncludes: '#' }, { type: 'type', text: ' pls' }
+            { type: 'type', text: 'lets move this to ' }, { type: 'mention', query: '#gen', labelIncludes: 'gen' } /* Slack lists channels without the # in the popup */, { type: 'type', text: ' pls' }
         ],
         precondition: pre.mentions(1),
         invariants: [checks.mentionsPreserved()],

@@ -58,8 +58,7 @@ async function runStep(composer, step) {
         case 'polish': {
             await composer.waitForNoToasts();
             await composer.focus();
-            await composer.pressHotkey(step.hotkey || 'Ctrl+Shift');
-            const polish = await composer.waitForPolish();
+            const polish = await composer.polishAndWait(step.hotkey || 'Ctrl+Shift');
             if (!polish.triggered) return { ok: false, reason: 'intermediate polish did not trigger' };
             if (polish.finalState !== 'active') return { ok: false, reason: `intermediate polish ended in state ${polish.finalState}` };
             await sleep(600);
@@ -147,8 +146,7 @@ async function main() {
                     } else {
                         await composer.waitForNoToasts();
                         await composer.focus();
-                        await composer.pressHotkey(hotkey);
-                        const polish = await composer.waitForPolish();
+                        const polish = await composer.polishAndWait(hotkey);
                         result.polish = { ...polish, logs: (polish.logs || []).slice(-40) };
                         const nothingToPolish = polish.toasts.some(t => /Nothing to polish/i.test(t));
                         if (!polish.triggered && !nothingToPolish) throw new Error(`hotkey did not trigger a polish (state=${polish.finalState}${polish.toasts.length ? ', toasts: ' + polish.toasts.join(' | ') : ''})`);
