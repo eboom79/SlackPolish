@@ -178,23 +178,33 @@ def load_app_icon_png_bytes():
     return icon_path.read_bytes()
 
 
-def apply_custom_finder_icon(target_path, png_path):
-    script = (
-        'tell application "Finder" '
-        f'to set icon of (POSIX file "{target_path}") to (POSIX file "{png_path}")'
-    )
+def convert_png_to_icns(png_path, icns_path):
+    """Build a real .icns from the PNG with sips + iconutil (both ship with macOS).
+
+    A PNG named in CFBundleIconFile is not reliably shown by Finder or the Dock,
+    and setting a Finder "custom icon" via osascript needs Automation permission
+    that non-interactive installs do not have. An .icns needs neither.
+    """
+    import tempfile
+    workdir = Path(tempfile.mkdtemp(prefix="slackpolish-icon-"))
+    iconset = workdir / "AppIcon.iconset"
+    iconset.mkdir()
     try:
-        subprocess.run(
-            ["osascript", "-e", script],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        print_verbose(f"Applied custom Finder icon to: {target_path}")
-        return True
+        for size in (16, 32, 128, 256, 512):
+            for scale in (1, 2):
+                pixels = size * scale
+                name = f"icon_{size}x{size}{'@2x' if scale == 2 else ''}.png"
+                subprocess.run(
+                    ["sips", "-z", str(pixels), str(pixels), str(png_path), "--out", str(iconset / name)],
+                    check=True, capture_output=True, text=True,
+                )
+        subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(icns_path)], check=True, capture_output=True, text=True)
+        return Path(icns_path).exists()
     except Exception as exc:
-        print_warning(f"Could not apply custom Finder icon automatically: {exc}")
+        print_verbose(f"Could not build an .icns icon ({exc}); falling back to the PNG icon")
         return False
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
 
 
 def build_app_shell_command(runtime_dir, slack_app=None):
@@ -250,6 +260,8 @@ def write_app_wrapper(app_path, runtime_dir, slack_app=None):
 
     icon_path = resources_dir / "AppIcon.png"
     icon_path.write_bytes(load_app_icon_png_bytes())
+    icns_path = resources_dir / "AppIcon.icns"
+    has_icns = convert_png_to_icns(icon_path, icns_path)
 
     plist_path = contents / "Info.plist"
     with open(plist_path, "rb") as handle:
@@ -257,7 +269,7 @@ def write_app_wrapper(app_path, runtime_dir, slack_app=None):
 
     existing_plist.update({
         "CFBundleDisplayName": "SlackPolish",
-        "CFBundleIconFile": "AppIcon.png",
+        "CFBundleIconFile": "AppIcon" if has_icns else "AppIcon.png",
         "CFBundleIconName": "AppIcon",
         "CFBundleIdentifier": "local.slackpolish.attach",
         "CFBundleName": "SlackPolish",
@@ -270,7 +282,8 @@ def write_app_wrapper(app_path, runtime_dir, slack_app=None):
     with open(plist_path, "wb") as handle:
         plistlib.dump(existing_plist, handle)
 
-    apply_custom_finder_icon(str(app_path), str(icon_path))
+    # Nudge Finder/LaunchServices to re-read the bundle's icon
+    os.utime(app_path, None)
 
 
 def create_desktop_app_link():
