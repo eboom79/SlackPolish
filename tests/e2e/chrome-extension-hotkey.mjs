@@ -238,7 +238,7 @@ async function main() {
         check(first.editor && first.editor.kind === 'textarea' && first.editor.text === 'hello', `test page editor captured: ${first.editor && first.editor.kind} "${first.editor && first.editor.text}"`);
 
         // More pages: a Jira-like ProseMirror comment and a plain textarea
-        const openAndPress = async (url, focusJs, label) => {
+        const openAndPress = async (url, focusJs, label, holdMs = 60) => {
             log(`▶ ${label}`);
             const { targetId: tid } = await browser.send('Target.createTarget', { url });
             const { sessionId: s } = await browser.send('Target.attachToTarget', { targetId: tid, flatten: true });
@@ -251,7 +251,7 @@ async function main() {
             const before = await browser.evaluate(w, `chrome.storage.local.get('events').then(r => (r.events || []).length)`, true);
             const k = (type, kk, code, vk, mods) => browser.send('Input.dispatchKeyEvent', { type, key: kk, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: mods }, s);
             await sleep(650);
-            await k('keyDown', 'Control', 'ControlLeft', 17, 2); await k('keyDown', 'Shift', 'ShiftLeft', 16, 10); await sleep(60); await k('keyUp', 'Shift', 'ShiftLeft', 16, 2); await k('keyUp', 'Control', 'ControlLeft', 17, 0);
+            await k('keyDown', 'Control', 'ControlLeft', 17, 2); await k('keyDown', 'Shift', 'ShiftLeft', 16, 10); await sleep(holdMs); await k('keyUp', 'Shift', 'ShiftLeft', 16, 2); await k('keyUp', 'Control', 'ControlLeft', 17, 0);
             const events = await waitFor(async () => { const v = await browser.evaluate(w, `chrome.storage.local.get('events').then(r => r.events || [])`, true); return v.length > before ? v : null; }, { timeoutMs: 8000, what: 'new stored event' }).catch(() => []);
             await browser.send('Target.closeTarget', { targetId: tid }).catch(() => {});
             return events[events.length - 1];
@@ -275,11 +275,13 @@ async function main() {
 
         // Round-trip write-back on a REAL ProseMirror editor (opt-in setting)
         await browser.evaluate(w, `chrome.storage.local.set({ roundTrip: true })`, true);
-        const rt = await openAndPress(`${origin}/pm.html`, `(() => { const ed = document.querySelector('.ProseMirror'); ed.focus(); const sel = getSelection(); const r = document.createRange(); r.setStart(ed.querySelector('p').firstChild, 2); r.collapse(true); sel.removeAllRanges(); sel.addRange(r); return document.activeElement.id; })()`, 'Real ProseMirror editor: round-trip write-back');
+        // Hold Ctrl+Shift for 900ms, like real fingers: ProseMirror would paste plain text while Shift is down
+        const rt = await openAndPress(`${origin}/pm.html`, `(() => { const ed = document.querySelector('.ProseMirror'); ed.focus(); const sel = getSelection(); const r = document.createRange(); r.setStart(ed.querySelector('p').firstChild, 2); r.collapse(true); sel.removeAllRanges(); sel.addRange(r); return document.activeElement.id; })()`, 'Real ProseMirror editor: round-trip write-back (keys held 900ms)', 900);
         await browser.evaluate(w, `chrome.storage.local.set({ roundTrip: false })`, true);
         const r = (rt && rt.roundTrip) || {};
         check(!!rt && rt.editor && rt.editor.kind === 'prosemirror' && rt.editor.field === 'comment', `editor recognised: ${rt && rt.editor && rt.editor.kind}/${rt && rt.editor && rt.editor.field}`);
         check(r.pasteHandled === true, `editor handled the synthetic paste: ${r.pasteHandled}`);
+        check(typeof r.waitedForKeysMs === 'number' && r.waitedForKeysMs >= 500, `write-back waited for the modifiers to be released: ${r.waitedForKeysMs}ms`);
         const kinds = (r.entities || []).map(e => e.kind).join(',');
         check(kinds === 'MENTION,CODE,EMOJI,LINK', `entities tokenised in order: ${kinds}`);
         check(typeof r.modelText === 'string' && r.modelText.split('\n')[0] === 'hello __SLACKPOLISH_MENTION_1__ pls check the __SLACKPOLISH_CODE_1__ job __SLACKPOLISH_EMOJI_1__' && r.modelText.includes('> can u ship it by fri??') && r.modelText.includes('• item one'), `model text: ${JSON.stringify(r.modelText)}`);

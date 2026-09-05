@@ -50,12 +50,40 @@
      * Listeners run in the capture phase so pages that stop propagation (rich editors) cannot hide it.
      * Returns a function that removes the listeners.
      */
+    // Modifier keys currently held (tracked from the same capture-phase listeners). Editors such as
+    // ProseMirror treat a paste as "paste as plain text" while Shift is down, so write-back must wait.
+    const held = new Set();
+    const MODIFIERS = ['Control', 'Shift', 'Alt', 'Meta'];
+
+    function heldModifiers() {
+        return [...held];
+    }
+
+    /** Resolve when no modifier key is held (or after timeoutMs). Returns how long it waited. */
+    function whenModifiersReleased(timeoutMs) {
+        const started = Date.now();
+        const limit = typeof timeoutMs === 'number' ? timeoutMs : 1500;
+        return new Promise(resolve => {
+            const check = () => {
+                if (held.size === 0 || Date.now() - started >= limit) {
+                    resolve(Date.now() - started);
+                } else {
+                    setTimeout(check, 25);
+                }
+            };
+            check();
+        });
+    }
+
     function attach(target, hotkey, onTrigger, options) {
         const minIntervalMs = options && typeof options.minIntervalMs === 'number' ? options.minIntervalMs : 500;
         let pressedOnce = false;
         let lastTrigger = 0;
 
         const onKeyDown = (event) => {
+            if (MODIFIERS.includes(event.key)) {
+                held.add(event.key);
+            }
             if (!matches(event, hotkey)) {
                 return;
             }
@@ -74,6 +102,7 @@
             onTrigger(event);
         };
         const onKeyUp = (event) => {
+            held.delete(event.key);
             const released =
                 (hotkey.ctrl && event.key === 'Control') ||
                 (hotkey.shift && event.key === 'Shift') ||
@@ -83,7 +112,7 @@
                 pressedOnce = false;
             }
         };
-        const onBlur = () => { pressedOnce = false; };
+        const onBlur = () => { pressedOnce = false; held.clear(); };
 
         target.addEventListener('keydown', onKeyDown, true);
         target.addEventListener('keyup', onKeyUp, true);
@@ -100,5 +129,5 @@
         };
     }
 
-    return { parse, matches, attach };
+    return { parse, matches, attach, heldModifiers, whenModifiersReleased };
 });

@@ -160,10 +160,27 @@
 
     const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+    /**
+     * ProseMirror pastes the text/plain flavour while it believes Shift is held (view.input.shiftKey, set on
+     * keydown, cleared only by Shift's keyup). Our hotkey is Ctrl+Shift, so wait for the real release and
+     * then also send a synthetic Shift keyup to the editor before pasting.
+     */
+    async function releaseModifiers(root) {
+        let waited = 0;
+        if (typeof SlackPolishHotkey !== 'undefined' && SlackPolishHotkey.whenModifiersReleased) {
+            waited = await SlackPolishHotkey.whenModifiersReleased(2000);
+        }
+        for (const [key, code, keyCode] of [['Shift', 'ShiftLeft', 16], ['Control', 'ControlLeft', 17]]) {
+            root.dispatchEvent(new KeyboardEvent('keyup', { key, code, keyCode, which: keyCode, bubbles: true }));
+        }
+        return waited;
+    }
+
     /** Replace the current selection (default: everything) through the editor's paste pipeline. */
     async function writeBack(root, html, plain, options) {
         root.focus();
         if (!(options && options.keepSelection)) selectAll(root);
+        const waitedForKeysMs = await releaseModifiers(root);
         await wait(60); // ProseMirror syncs its selection from the DOM selection
         const data = new DataTransfer();
         data.setData('text/html', html);
@@ -171,7 +188,7 @@
         const notCancelled = root.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
         await wait(400);
         // A synthetic (untrusted) paste has no browser default action: if the editor did not handle it, nothing changed
-        return { handled: !notCancelled };
+        return { handled: !notCancelled, waitedForKeysMs };
     }
 
     /** Extract -> rebuild the SAME text -> write back -> compare. Proves the mechanism is lossless on this editor. */
@@ -189,6 +206,7 @@
         return {
             ok: paste.handled && textSame && nodesSame,
             pasteHandled: paste.handled,
+            waitedForKeysMs: paste.waitedForKeysMs,
             textSame,
             nodesSame,
             modelText: state.text,

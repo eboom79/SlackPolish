@@ -70,6 +70,10 @@ runTest('attach(): fires once per press, resets on release/blur, respects the mi
     listeners.keydown({ key: 'Shift', ctrlKey: true, shiftKey: true });
     assert(fired === 3, 'blur must reset the chord state');
     assert(typeof detach === 'function', 'attach returns a detach function');
+    listeners.keydown({ key: 'Control', ctrlKey: true, shiftKey: false }); listeners.keydown({ key: 'Shift', ctrlKey: true, shiftKey: true });
+    assert(JSON.stringify(Hotkey.heldModifiers().sort()) === JSON.stringify(['Control', 'Shift']), `held modifiers tracked: ${Hotkey.heldModifiers()}`);
+    listeners.keyup({ key: 'Shift' }); listeners.keyup({ key: 'Control' });
+    assert(Hotkey.heldModifiers().length === 0, 'released modifiers are forgotten');
     let limited = 0;
     Hotkey.attach(target, Hotkey.parse('Ctrl+Shift'), () => { limited++; }, { minIntervalMs: 60000 });
     listeners.keydown({ key: 'Shift', ctrlKey: true, shiftKey: true }); listeners.keyup({ key: 'Shift' });
@@ -177,6 +181,9 @@ runTest('Round-trip mode is opt-in, Atlassian-only, and reports paste handling',
     const adapter = fs.readFileSync(path.join(root, 'shared/atlassian-adapter.js'), 'utf8');
     assert(adapter.includes("new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })"), 'write-back goes through the paste pipeline');
     assert(adapter.includes('ok: paste.handled && textSame && nodesSame'), 'a paste the editor ignored must not count as a successful round trip');
+    assert(adapter.includes('await SlackPolishHotkey.whenModifiersReleased(2000)'), 'write-back must wait for the hotkey modifiers to be released (ProseMirror pastes plain text while Shift is held)');
+    assert(adapter.includes("new KeyboardEvent('keyup', { key, code, keyCode, which: keyCode, bubbles: true })"), 'and send a synthetic Shift/Control keyup before pasting');
+    assert(typeof Hotkey.heldModifiers === 'function' && typeof Hotkey.whenModifiersReleased === 'function', 'hotkey module must expose modifier tracking');
     assert(adapter.includes('const ZW = /[\\u200B\\u200C\\u200D\\uFEFF]/g;'), 'zero-width regex must use escapes');
     const popupSource = fs.readFileSync(path.join(root, 'popup/popup.js'), 'utf8');
     assert(popupSource.includes("chrome.storage.local.set({ roundTrip: box.checked })"), 'popup toggle persists the setting');
