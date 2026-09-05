@@ -31,7 +31,7 @@ runTest('run() starts the proxy with a SlackKeyResolver bound to the debug port;
     assert(source.includes('STORAGE_KEY = "slackpolish_openai_api_key"'), 'resolver reads the same localStorage key the Slack script saves');
     const resolver = source.slice(source.indexOf('class SlackKeyResolver'), source.indexOf('class _OpenAIProxyHandler'));
     assert(!/(?<![A-Za-z_.])open\(|write_text|json\.dump\(|\.write\(/.test(resolver), 'resolver must not persist the key');
-    assert(source.includes('if not origin.startswith("chrome-extension://"):'), 'shared key only for browser-extension origins');
+    assert(source.split('if not origin.startswith("chrome-extension://"):').length === 3, 'shared key and settings only for browser-extension origins');
 });
 
 const harness = `
@@ -61,8 +61,9 @@ class FakeSession:
     def __init__(self, target): self.target = target; sessions.append(target["url"])
     def connect(self): pass
     def evaluate_expression(self, expression):
-        assert "slackpolish_openai_api_key" in expression, expression
-        return {"id": 7, "result": {"result": {"type": "string", "value": "sk-from-slack"}}}
+        assert "slackpolish_openai_api_key" in expression and "slackpolish_settings" in expression, expression
+        slack_settings = {"language": "HEBREW", "style": "CONCISE", "personalPolish": "Use British spelling", "improveHotkey": "Ctrl+Alt", "apiKey": "should-not-leak", "addEmojiSignature": False, "smartContext": {"enabled": True}}
+        return {"id": 7, "result": {"result": {"type": "string", "value": json.dumps({"key": "sk-from-slack", "settings": json.dumps(slack_settings)})}}}
     def close(self): pass
 mod.SlackTargetSession = FakeSession
 
@@ -71,14 +72,21 @@ resolver = mod.SlackKeyResolver(9222)
 out["resolver_first"] = resolver.get()
 out["resolver_cached"] = resolver.get()
 out["resolver_sessions"] = sessions[:]
+out["resolver_settings"] = resolver.get_settings()
 
 class Fixed:
-    def __init__(self, key): self.key = key
+    def __init__(self, key, settings=None): self.key = key; self.settings = settings or {}
     def get(self): return self.key
+    def get_settings(self): return dict(self.settings)
 server = http.server.HTTPServer(("127.0.0.1", 0), mod._OpenAIProxyHandler)
-server.key_resolver = Fixed("sk-from-slack")
+server.key_resolver = Fixed("sk-from-slack", {"language": "HEBREW", "style": "CONCISE", "personalPolish": "Use British spelling", "improveHotkey": "Ctrl+Alt"})
 threading.Thread(target=server.serve_forever, daemon=True).start()
 port = server.server_address[1]
+def get(path, headers):
+    c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    c.request("GET", path, headers=headers)
+    r = c.getresponse(); data = r.read().decode(); c.close()
+    return r.status, data
 def post(path, headers, body):
     c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
     c.request("POST", path, body=json.dumps(body), headers=headers)
@@ -93,6 +101,12 @@ s, d = post("/v1/chat/completions", {"Content-Type": "application/json"}, chat)
 out["no_origin_no_auth"] = {"status": s, "calls": len(calls)}
 s, d = post("/v1/chat/completions", {"Content-Type": "application/json", "Authorization": "Bearer sk-own", "Origin": "chrome-extension://abc"}, chat)
 out["own_auth"] = {"status": s, "upstream": calls[-1], "calls": len(calls)}
+s, d = post("/slackpolish/settings", {"Content-Type": "application/json", "Origin": "chrome-extension://abcdefghijklmnopabcdefghijklmnop"}, {})
+out["settings_ext"] = {"status": s, "body": d}
+s, d = post("/slackpolish/settings", {"Content-Type": "application/json", "Origin": "https://evil.example"}, {})
+out["settings_web"] = {"status": s, "body": d}
+s, d = get("/slackpolish/settings", {"Origin": "chrome-extension://abc"})
+out["settings_404"] = {"status": s}
 server.key_resolver = Fixed("")
 s, d = post("/v1/chat/completions", {"Content-Type": "application/json", "Origin": "chrome-extension://abc"}, chat)
 out["ext_no_key_in_slack"] = {"status": s, "body": d, "calls": len(calls)}
@@ -113,6 +127,15 @@ runTest('SlackKeyResolver reads the key from the Slack page target only, and cac
     assert(result, 'harness did not run');
     assert(result.resolver_first === 'sk-from-slack' && result.resolver_cached === 'sk-from-slack', `resolver value: ${result.resolver_first}/${result.resolver_cached}`);
     assert(JSON.stringify(result.resolver_sessions) === JSON.stringify(['https://app.slack.com/client/T1/C1']), `one DevTools session on the Slack page only: ${JSON.stringify(result.resolver_sessions)}`);
+});
+
+runTest('Settings saved in Slack are shared with the extension (never the key), refused to web origins', () => {
+    assert(result.resolver_settings && result.resolver_settings.language === 'HEBREW' && result.resolver_settings.improveHotkey === 'Ctrl+Alt' && !('apiKey' in result.resolver_settings), `resolver settings without secrets: ${JSON.stringify(result.resolver_settings)}`);
+    const e = result.settings_ext;
+    const body = JSON.parse(e.body);
+    assert(e.status === 200 && body.source === 'slack' && body.hasApiKey === true && body.settings.style === 'CONCISE' && body.settings.personalPolish === 'Use British spelling', `GET /slackpolish/settings from the extension: ${e.status} ${e.body}`);
+    assert(!e.body.includes('should-not-leak') && !e.body.includes('sk-from-slack'), 'neither the key nor the apiKey field is in the settings response');
+    assert(result.settings_web.status === 401 && result.settings_404.status === 501, `web origin ${result.settings_web.status}, GET is not served ${result.settings_404.status}`);
 });
 
 runTest('Extension request without a key is forwarded with the key saved in Slack', () => {

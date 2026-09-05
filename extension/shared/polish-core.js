@@ -88,8 +88,9 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
             prompt += '\nIMPORTANT: Lines of the form "> __SLACKPOLISH_QUOTE_n__" are quotations of someone else\'s words. Return every such line exactly as "> __SLACKPOLISH_QUOTE_n__", in the same order, without rewriting, merging, removing or reordering them. For context only, the quoted lines read:';
             quotes.forEach(q => { prompt += `\n${q.token}: "${detokenize(q.text, entities)}"`; });
         }
-        if (cfg.CUSTOM_INSTRUCTIONS) {
-            prompt += `\n- Additional instructions: ${cfg.CUSTOM_INSTRUCTIONS}`;
+        const customInstructions = (p.customInstructions !== undefined ? p.customInstructions : cfg.CUSTOM_INSTRUCTIONS) || '';
+        if (String(customInstructions).trim()) {
+            prompt += `\n- Additional instructions: ${String(customInstructions).trim()}`;
         }
         return prompt;
     }

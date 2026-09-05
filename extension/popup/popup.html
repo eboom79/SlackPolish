@@ -46,11 +46,14 @@
 <section class="settings">
   <h2>Polish in Jira / Confluence</h2>
   <label class="row"><input type="checkbox" id="polish"> <span><b>Polish on Ctrl+Shift</b> in Atlassian comment editors (whole comment, or just the selected text)</span></label>
+  <label class="row"><input type="radio" name="settingsSource" id="followSlack" value="slack"> <span><b>Follow the SlackPolish settings saved in Slack</b> — style, language, personal polish and hotkey</span></label>
+  <div class="hint" id="slackStatus" style="margin:-2px 0 2px 22px">Reading the settings saved in Slack…</div>
+  <label class="row"><input type="radio" name="settingsSource" id="ownSettings" value="extension"> <span><b>Use the settings below</b></span></label>
   <label class="row"><input type="radio" name="keySource" id="keySlack" value="slack"> <span><b>Use the key saved in Slack</b> — through the running SlackPolish launcher; nothing is stored in the browser</span></label>
   <label class="row"><input type="radio" name="keySource" id="keyOwn" value="own"> <span><b>Use my own key</b></span> <input type="password" id="apiKey" placeholder="sk-…" autocomplete="off" spellcheck="false" style="flex:1"></label>
   <label>Style <select id="style"></select></label>
   <label>Language <select id="language"></select></label>
-  <div class="hint">Same prompts, styles, key and protections as in Slack: mentions, links, inline code, emoji and quoted lines are kept verbatim and verified after write-back. If anything looks wrong, Ctrl+Z restores the original.</div>
+  <div class="hint">Same prompts, styles, settings, key and protections as in Slack: mentions, links, inline code, emoji and quoted lines are kept verbatim and verified after write-back. If anything looks wrong, Ctrl+Z restores the original.</div>
 </section>
 <label id="roundtrip-row"><input type="checkbox" id="roundtrip"> <span><b>Diagnostic: round-trip write-back test</b> (Atlassian, when polishing is off): on Ctrl+Shift, re-insert the same comment through the editor and check nothing changed.</span></label>
 <div id="tally"></div>

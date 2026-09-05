@@ -66,8 +66,36 @@ async function polish(request) {
     }
 }
 
+/** The SlackPolish settings saved in Slack (language, style, personal polish, hotkey...), via the launcher proxy. */
+async function slackSettings() {
+    const { settings = {}, slackSettings: cached = null } = await chrome.storage.local.get(['settings', 'slackSettings']);
+    let origin = 'http://127.0.0.1:9223';
+    try { origin = new URL(settings.proxyBase || DEFAULT_PROXY_BASE).origin; } catch (error) { /* keep default */ }
+    try {
+        // POST: Chrome sends the extension's Origin header on POST, and the launcher only answers browser extensions
+        const response = await fetch(`${origin}/slackpolish/settings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(2500) });
+        if (!response.ok) {
+            const detail = await response.json().catch(() => ({}));
+            return { ok: false, error: (detail.error && detail.error.message) || `HTTP ${response.status}`, cached };
+        }
+        const data = await response.json();
+        const fresh = { settings: data.settings || {}, hasApiKey: !!data.hasApiKey, fetchedAt: Date.now() };
+        const same = cached && JSON.stringify(cached.settings) === JSON.stringify(fresh.settings) && cached.hasApiKey === fresh.hasApiKey;
+        if (!same) await chrome.storage.local.set({ slackSettings: fresh }); // only on change: content scripts listen to this key
+        return { ok: true, ...fresh, fetchedAt: same ? cached.fetchedAt : fresh.fetchedAt };
+    } catch (error) {
+        return { ok: false, error: 'SlackPolish is not running (the settings saved in Slack are not reachable)', cached };
+    }
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message) return false;
+    if (message.type === 'slackpolish-slack-settings') {
+        slackSettings()
+            .then(sendResponse)
+            .catch(error => sendResponse({ ok: false, error: String(error) }));
+        return true;
+    }
     if (message.type === 'slackpolish-hotkey') {
         appendEvent(message.event, sender)
             .then(count => sendResponse({ ok: true, count }))

@@ -3,7 +3,7 @@ const CONFIG = window.SLACKPOLISH_CONFIG || {};
 function polishSummary(p) {
     if (p.skipped === 'nothing-to-polish') return { cls: 'skip', text: '✨ nothing to polish (only links/tokens/quote markers)' };
     if (p.skipped === 'unchanged') return { cls: 'ok', text: '✨ polished: the model returned the text unchanged' };
-    if (p.ok) return { cls: 'ok', text: `✨ polished ${p.mode === 'selection' ? 'the selection' : 'the comment'} (${p.style || ''}, ${p.language || ''})${p.repaired && (p.repaired.appended.length || p.repaired.reanchored.length || p.repaired.substituted.length) ? ' — restored tokens the model dropped' : ''}` };
+    if (p.ok) return { cls: 'ok', text: `✨ polished ${p.mode === 'selection' ? 'the selection' : 'the comment'} (${p.style || ''}, ${p.language || ''}, settings from ${p.settingsSource === 'slack' ? 'Slack' : p.settingsSource === 'slack-cached' ? 'Slack (cached)' : 'this extension'})${p.repaired && (p.repaired.appended.length || p.repaired.reanchored.length || p.repaired.substituted.length) ? ' — restored tokens the model dropped' : ''}` };
     return { cls: 'bad', text: `✨ polish PROBLEM — ${p.error || 'unknown error'}` };
 }
 
@@ -72,6 +72,30 @@ async function checkActiveTab() {
     }
 }
 
+function describeSlackSettings(s) {
+    const styleName = (CONFIG.AVAILABLE_STYLES && CONFIG.AVAILABLE_STYLES[s.style] && CONFIG.AVAILABLE_STYLES[s.style].name) || s.style || 'default style';
+    const lang = CONFIG.SUPPORTED_LANGUAGES && CONFIG.SUPPORTED_LANGUAGES[s.language];
+    const languageName = lang ? `${lang.flag || ''} ${lang.name}`.trim() : (s.language || 'default language');
+    const parts = [styleName, languageName, `hotkey ${s.improveHotkey || 'Ctrl+Shift'}`];
+    if (s.personalPolish) parts.push(`personal polish: “${String(s.personalPolish).slice(0, 60)}${s.personalPolish.length > 60 ? '…' : ''}”`);
+    return parts.join(' · ');
+}
+
+function showSlackSettings() {
+    const line = document.getElementById('slackStatus');
+    chrome.runtime.sendMessage({ type: 'slackpolish-slack-settings' }, (reply) => {
+        if (chrome.runtime.lastError || !reply) { line.textContent = 'Could not reach the extension worker.'; return; }
+        if (reply.ok) {
+            line.textContent = `From Slack: ${describeSlackSettings(reply.settings || {})}${reply.hasApiKey ? '' : ' · no OpenAI key saved in Slack yet'}`;
+            return;
+        }
+        const cached = reply.cached;
+        line.textContent = cached
+            ? `Slack not reachable (${reply.error}). Last seen ${new Date(cached.fetchedAt).toLocaleString()}: ${describeSlackSettings(cached.settings || {})}`
+            : `Slack not reachable (${reply.error}). Start Slack through SlackPolish, or use the settings below.`;
+    });
+}
+
 function fillSelect(select, catalog, labelOf) {
     select.innerHTML = '';
     Object.entries(catalog || {}).forEach(([key, value]) => {
@@ -85,7 +109,12 @@ async function initSettings() {
     const keySlack = document.getElementById('keySlack');
     const keyOwn = document.getElementById('keyOwn');
     const keySource = () => (keyOwn.checked ? 'own' : 'slack');
-    const syncKeyInput = () => { apiKey.disabled = !keyOwn.checked; };
+    const followSlack = document.getElementById('followSlack');
+    const ownSettings = document.getElementById('ownSettings');
+    const syncKeyInput = () => {
+        apiKey.disabled = !keyOwn.checked;
+        style.disabled = language.disabled = followSlack.checked;
+    };
     const style = document.getElementById('style');
     const language = document.getElementById('language');
     fillSelect(style, CONFIG.AVAILABLE_STYLES, (v, k) => v.name || k);
@@ -94,16 +123,18 @@ async function initSettings() {
     const { settings = {} } = await chrome.storage.local.get('settings');
     polish.checked = settings.polish === true;
     (settings.keySource === 'own' ? keyOwn : keySlack).checked = true;
+    (settings.followSlack === false ? ownSettings : followSlack).checked = true;
     syncKeyInput();
+    showSlackSettings();
     apiKey.value = settings.apiKey || '';
     style.value = settings.style && CONFIG.AVAILABLE_STYLES && CONFIG.AVAILABLE_STYLES[settings.style] ? settings.style : 'TONE_POLISH';
     language.value = settings.language && CONFIG.SUPPORTED_LANGUAGES && CONFIG.SUPPORTED_LANGUAGES[settings.language] ? settings.language : 'ENGLISH';
 
     const save = async () => {
         const { settings: current = {} } = await chrome.storage.local.get('settings');
-        await chrome.storage.local.set({ settings: { ...current, polish: polish.checked, keySource: keySource(), apiKey: apiKey.value.trim(), style: style.value, language: language.value } });
+        await chrome.storage.local.set({ settings: { ...current, polish: polish.checked, followSlack: followSlack.checked, keySource: keySource(), apiKey: apiKey.value.trim(), style: style.value, language: language.value } });
     };
-    [polish, style, language, keySlack, keyOwn].forEach(el => el.addEventListener('change', () => { syncKeyInput(); save(); }));
+    [polish, style, language, keySlack, keyOwn, followSlack, ownSettings].forEach(el => el.addEventListener('change', () => { syncKeyInput(); save(); }));
     apiKey.addEventListener('change', save);
     apiKey.addEventListener('blur', save);
 

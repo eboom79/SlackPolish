@@ -2,7 +2,8 @@
  * Content script: on the SlackPolish hotkey, log where it was pressed and - on an Atlassian editor with
  * polishing enabled - polish the comment (or the selected part) with the same rules as in Slack:
  * mentions, links, inline code, emoji and quoted lines are protected and verified after write-back.
- * Events are persisted by the background worker in chrome.storage.local; see the popup.
+ * By default the settings saved in Slack (style, language, personal polish, hotkey) are followed; they are
+ * read through the SlackPolish launcher. Events are persisted by the background worker; see the popup.
  */
 (function () {
     if (window.__SLACKPOLISH_EXTENSION_HOTKEY_ATTACHED__) {
@@ -10,18 +11,34 @@
     }
     window.__SLACKPOLISH_EXTENSION_HOTKEY_ATTACHED__ = true;
 
-    const HOTKEY = 'Ctrl+Shift';
+    const DEFAULT_HOTKEY = 'Ctrl+Shift';
     // Revision of this content script, stamped on every event: tells whether a tab still runs an older script
-    const CONTENT_REVISION = 'r6-polish';
-    const hotkey = SlackPolishHotkey.parse(HOTKEY);
+    const CONTENT_REVISION = 'r7-slack-settings';
     const config = () => window.SLACKPOLISH_CONFIG || {};
+
+    // The hotkey in force on this page (Slack's improveHotkey when followed); re-attached when it changes
+    let activeHotkey = DEFAULT_HOTKEY;
+    let detachHotkey = null;
+
+    function usableHotkey(hotkeyString) {
+        const parsed = SlackPolishHotkey.parse(hotkeyString || '');
+        return parsed && (parsed.ctrl || parsed.alt || parsed.shift || parsed.tab) ? hotkeyString : DEFAULT_HOTKEY;
+    }
+
+    function applyHotkey(hotkeyString) {
+        const wanted = usableHotkey(hotkeyString);
+        if (detachHotkey && wanted === activeHotkey) return;
+        if (detachHotkey) detachHotkey();
+        activeHotkey = wanted;
+        detachHotkey = SlackPolishHotkey.attach(document, SlackPolishHotkey.parse(wanted), () => { handlePress(); });
+    }
 
     function describePage() {
         const appNameMeta = document.querySelector('meta[name="application-name"]');
         const surface = SlackPolishSurface.classify(location.hostname, { appName: appNameMeta ? appNameMeta.content : '' });
         return {
             time: new Date().toISOString(),
-            hotkey: HOTKEY,
+            hotkey: activeHotkey,
             revision: CONTENT_REVISION,
             surface,
             host: location.hostname,
@@ -55,6 +72,43 @@
         }
     }
 
+    /** The SlackPolish settings saved in Slack, via the launcher (worker caches the last good copy). */
+    async function fetchSlackSettings() {
+        const reply = await sendToWorker({ type: 'slackpolish-slack-settings' });
+        if (reply && reply.ok) return { settings: reply.settings || {}, source: 'slack' };
+        if (reply && reply.cached && reply.cached.settings) return { settings: reply.cached.settings, source: 'slack-cached', error: reply.error };
+        return { settings: null, source: 'unavailable', error: (reply && reply.error) || 'no reply' };
+    }
+
+    /**
+     * Effective polishing settings: Slack's (default, followSlack !== false) or the extension's own.
+     * Slack stores the same catalog keys (style CASUAL..., language ENGLISH...) plus personalPolish and improveHotkey.
+     */
+    async function resolveSettings(extensionSettings) {
+        const cfg = config();
+        const own = {
+            style: extensionSettings.style || 'TONE_POLISH',
+            languageKey: extensionSettings.language || 'ENGLISH',
+            personalPolish: '',
+            hotkey: DEFAULT_HOTKEY,
+            source: 'extension'
+        };
+        if (extensionSettings.followSlack === false) return own;
+        const slack = await fetchSlackSettings();
+        if (!slack.settings) return { ...own, slackError: slack.error };
+        const s = slack.settings;
+        const style = s.style && cfg.PROMPTS && cfg.PROMPTS.STYLES && cfg.PROMPTS.STYLES[s.style] ? s.style : own.style;
+        const languageKey = s.language && cfg.SUPPORTED_LANGUAGES && cfg.SUPPORTED_LANGUAGES[s.language] ? s.language : (s.language || own.languageKey);
+        return {
+            style,
+            languageKey,
+            personalPolish: (s.personalPolish || s.customInstructions || '').toString(),
+            hotkey: usableHotkey(s.improveHotkey),
+            source: slack.source,
+            slackError: slack.error
+        };
+    }
+
     /** The current selection when it is non-empty and lies inside the editor (polish only that part, as in Slack). */
     function selectionInside(root) {
         const selection = window.getSelection();
@@ -67,11 +121,12 @@
      * Extract -> prompt -> model (via the worker) -> repair tokens -> rebuild HTML -> paste -> verify.
      * Never throws; returns a result object that is logged with the event.
      */
-    async function polishAtlassian(root, settings) {
+    async function polishAtlassian(root, settings, effective) {
         const A = SlackPolishAtlassian;
         const Core = SlackPolishCore;
         const cfg = config();
-        const result = { ok: false, mode: 'message' };
+        const result = { ok: false, mode: 'message', settingsSource: effective.source };
+        if (effective.slackError) result.slackError = effective.slackError;
 
         const whole = A.extract(root);
         const range = selectionInside(root);
@@ -84,12 +139,13 @@
             return result;
         }
 
-        const style = settings.style || 'TONE_POLISH';
-        const languageKey = settings.language || 'ENGLISH';
+        const style = effective.style;
+        const languageKey = effective.languageKey;
         const language = (cfg.SUPPORTED_LANGUAGES && cfg.SUPPORTED_LANGUAGES[languageKey] && cfg.SUPPORTED_LANGUAGES[languageKey].name) || languageKey;
         result.style = style;
         result.language = language;
-        const prompt = Core.buildPrompt({ text: state.text, style, language, entities: state.entities, context: { issueTitle: document.title } });
+        if (effective.personalPolish) result.personalPolish = effective.personalPolish;
+        const prompt = Core.buildPrompt({ text: state.text, style, language, entities: state.entities, customInstructions: effective.personalPolish, context: { issueTitle: document.title } });
         const request = {
             type: 'slackpolish-polish',
             prompt,
@@ -158,12 +214,15 @@
         if (settings.polish && event.surface === 'atlassian' && event.atlassianEditor) {
             SlackPolishStatusBadge.set('busy', 'SlackPolish Improving');
             try {
-                event.polish = await polishAtlassian(root, settings);
+                const effective = await resolveSettings(settings);
+                event.settingsSource = effective.source;
+                applyHotkey(effective.hotkey); // Slack's hotkey may have changed since this page loaded
+                event.polish = await polishAtlassian(root, settings, effective);
             } catch (error) {
                 event.polish = { ok: false, error: String(error && error.message || error) };
             }
             const p = event.polish;
-            console.log('🔧 SLACKPOLISH_POLISH', JSON.stringify({ ok: p.ok, mode: p.mode, skipped: p.skipped, error: p.error, repaired: p.repaired && { removed: p.repaired.removed, reanchored: p.repaired.reanchored, appended: p.repaired.appended, substituted: p.repaired.substituted } }));
+            console.log('🔧 SLACKPOLISH_POLISH', JSON.stringify({ ok: p.ok, mode: p.mode, settings: p.settingsSource, style: p.style, language: p.language, skipped: p.skipped, error: p.error, repaired: p.repaired && { removed: p.repaired.removed, reanchored: p.repaired.reanchored, appended: p.repaired.appended, substituted: p.repaired.substituted } }));
             if (p.skipped === 'nothing-to-polish') {
                 SlackPolishStatusBadge.set('active', 'SlackPolish: nothing to polish', { removeAfterMs: 5000 });
             } else if (p.ok) {
@@ -194,14 +253,43 @@
         }
     }
 
-    SlackPolishHotkey.attach(document, hotkey, () => { handlePress(); });
+    // Listen right away with the default chord, then switch to the hotkey saved in Slack once it is known
+    applyHotkey(DEFAULT_HOTKEY);
+    async function refreshHotkey() {
+        try {
+            const effective = await resolveSettings(await getSettings());
+            applyHotkey(effective.hotkey);
+        } catch (error) {
+            // keep the current chord
+        }
+    }
+    refreshHotkey();
+    try {
+        chrome.storage.onChanged.addListener((changes, area) => {
+            if (area !== 'local') return;
+            if (changes.settings) {
+                // followSlack toggled in the popup: re-resolve (one fetch)
+                const before = (changes.settings.oldValue || {}).followSlack !== false;
+                const after = (changes.settings.newValue || {}).followSlack !== false;
+                if (before !== after) refreshHotkey();
+                return;
+            }
+            if (changes.slackSettings) {
+                // The worker stores the Slack settings only when they changed: switch chords without fetching again
+                const next = changes.slackSettings.newValue && changes.slackSettings.newValue.settings;
+                getSettings().then(settings => { if (settings.followSlack !== false && next) applyHotkey(next.improveHotkey); });
+            }
+        });
+    } catch (error) {
+        // extension reloaded under this page
+    }
 
     // Let the popup ask whether the content script is alive on this tab
     try {
         chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             if (message && message.type === 'slackpolish-ping') {
                 const page = describePage();
-                sendResponse({ ok: true, surface: page.surface, host: page.host, revision: CONTENT_REVISION });
+                sendResponse({ ok: true, surface: page.surface, host: page.host, revision: CONTENT_REVISION, hotkey: activeHotkey });
             }
         });
     } catch (error) {

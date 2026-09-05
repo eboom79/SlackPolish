@@ -61,6 +61,9 @@ runTest('Prompt: uses the shared style text verbatim, the Slack markers and the 
     assert(prompt.includes('Jira/Confluence'), 'Jira framing (Smart Context is Slack-only)');
     const withTitle = Core.buildPrompt({ text: 'x', style: 'GRAMMAR', language: 'Hebrew', entities: [], context: { issueTitle: '[RED-1] Replication aborts' } });
     assert(withTitle.includes('[RED-1] Replication aborts') && withTitle.includes('Do not reproduce or paraphrase this title') && withTitle.includes('Use Hebrew language.'), 'issue title as reference-only context, language honoured');
+    const personal = Core.buildPrompt({ text: 'x', style: 'CASUAL', language: 'English', entities: [], customInstructions: "Use 'Hi' not 'Hey'" });
+    assert(personal.endsWith("- Additional instructions: Use 'Hi' not 'Hey'") && slackScript.includes('- Additional instructions: ${CONFIG.CUSTOM_INSTRUCTIONS}'), 'personal polish appended exactly like the Slack script');
+    assert(!Core.buildPrompt({ text: 'x', style: 'CASUAL', language: 'English', entities: [], customInstructions: '  ' }).includes('Additional instructions'), 'blank personal polish adds nothing');
 });
 
 const entities = [
@@ -126,10 +129,10 @@ runTest('Verification, polishable guard and line counting', () => {
 });
 
 runTest('Wiring: content script polishes via the worker with settings, selection support, guards and verification', () => {
-    ['slackpolish-polish', 'SlackPolishCore', 'buildPrompt(', 'repairModelOutput', 'verifyEntities', 'extractFragment', 'nothing-to-polish', 'countContentLines', "keepSelection: !!range", 'SlackPolish Needs API Key', 'settings.polish'].forEach(s => assert(contentSource.includes(s), `content script has: ${s}`));
-    ['/chat/completions', 'headers.Authorization = `Bearer ${ownKey}`', 'settings.apiKey', "message.type === 'slackpolish-polish'", 'apiBase', "settings.keySource === 'own'", "DEFAULT_PROXY_BASE = 'http://127.0.0.1:9223/v1'", 'SlackPolish is not running'].forEach(s => assert(backgroundSource.includes(s), `worker has: ${s}`));
+    ['slackpolish-slack-settings', 'followSlack', 'improveHotkey', 'personalPolish', 'settingsSource', 'slackpolish-polish', 'SlackPolishCore', 'buildPrompt(', 'repairModelOutput', 'verifyEntities', 'extractFragment', 'nothing-to-polish', 'countContentLines', "keepSelection: !!range", 'SlackPolish Needs API Key', 'settings.polish'].forEach(s => assert(contentSource.includes(s), `content script has: ${s}`));
+    ["message.type === 'slackpolish-slack-settings'", '/slackpolish/settings', '/chat/completions', 'headers.Authorization = `Bearer ${ownKey}`', 'settings.apiKey', "message.type === 'slackpolish-polish'", 'apiBase', "settings.keySource === 'own'", "DEFAULT_PROXY_BASE = 'http://127.0.0.1:9223/v1'", 'SlackPolish is not running'].forEach(s => assert(backgroundSource.includes(s), `worker has: ${s}`));
     assert(/if \(useOwnKey\) headers\.Authorization/.test(backgroundSource), 'no Authorization header is sent when using the key saved in Slack (the launcher adds it)');
-    ['AVAILABLE_STYLES', 'SUPPORTED_LANGUAGES', "getElementById('apiKey')", "getElementById('keySlack')", 'keySource: keySource()', 'settings: {'].forEach(s => assert(popupSource.includes(s), `popup has: ${s}`));
+    ['AVAILABLE_STYLES', 'SUPPORTED_LANGUAGES', "getElementById('apiKey')", "getElementById('keySlack')", 'keySource: keySource()', 'followSlack: followSlack.checked', 'From Slack: ', 'settings: {'].forEach(s => assert(popupSource.includes(s), `popup has: ${s}`));
     assert(popupHtml.indexOf('../vendor/slack-config.js') < popupHtml.indexOf('popup.js"'), 'popup loads the shared config before its script');
     assert(!/api\.openai\.com/.test(contentSource), 'the content script never calls OpenAI itself (worker does, host permission)');
 });

@@ -100,35 +100,46 @@ def is_launcher_process_command(command_line):
 # ---------------------------------------------------------------------------
 
 class SlackKeyResolver:
-    """Looks up the OpenAI key that SlackPolish keeps in Slack's localStorage (entered once in the
-    SlackPolish settings inside Slack) over the DevTools endpoint, so other SlackPolish clients - the
-    Chrome extension - can use the same key without storing a copy anywhere. Cached briefly in memory;
-    never written to disk."""
+    """Looks up what SlackPolish keeps in Slack's localStorage - the OpenAI key and the user's settings
+    (language, style, personal polish, hotkey...) entered once in the SlackPolish settings inside Slack -
+    over the DevTools endpoint, so other SlackPolish clients - the Chrome extension - follow the same
+    configuration without storing a copy anywhere. Cached briefly in memory; never written to disk."""
 
     STORAGE_KEY = "slackpolish_openai_api_key"
+    SETTINGS_KEY = "slackpolish_settings"
+    # Settings fields that are Slack-only or secret and are therefore not shared
+    PRIVATE_SETTINGS = ("apiKey",)
 
     def __init__(self, debug_port, ttl=30.0, empty_ttl=3.0):
         self.debug_port = debug_port
         self.ttl = ttl
         self.empty_ttl = empty_ttl
         self._lock = threading.Lock()
-        self._value = None
+        self._state = None
         self._expires = 0.0
 
-    def get(self):
+    def _current(self):
         now = time.monotonic()
         with self._lock:
-            if self._value is not None and now < self._expires:
-                return self._value
-        value = ""
+            if self._state is not None and now < self._expires:
+                return self._state
+        state = {"key": "", "settings": {}}
         try:
-            value = self._lookup()
+            state = self._lookup()
         except Exception as error:
-            print_verbose(f"Slack key lookup failed: {error}")
+            print_verbose(f"Slack state lookup failed: {error}")
         with self._lock:
-            self._value = value
-            self._expires = time.monotonic() + (self.ttl if value else self.empty_ttl)
-        return value
+            self._state = state
+            self._expires = time.monotonic() + (self.ttl if state.get("key") else self.empty_ttl)
+        return state
+
+    def get(self):
+        """The OpenAI key saved in Slack ('' when none)."""
+        return self._current().get("key", "")
+
+    def get_settings(self):
+        """The SlackPolish settings saved in Slack (dict, without secrets; {} when none)."""
+        return dict(self._current().get("settings") or {})
 
     def _lookup(self):
         with urllib.request.urlopen(f"http://127.0.0.1:{self.debug_port}/json/list", timeout=2) as response:
@@ -141,7 +152,11 @@ class SlackKeyResolver:
             session = SlackTargetSession(target)
             try:
                 session.connect()
-                reply = session.evaluate_expression(f"localStorage.getItem({json.dumps(self.STORAGE_KEY)}) || ''")
+                expression = (
+                    "JSON.stringify({ key: localStorage.getItem(" + json.dumps(self.STORAGE_KEY) + ") || '', "
+                    "settings: localStorage.getItem(" + json.dumps(self.SETTINGS_KEY) + ") || '' })"
+                )
+                reply = session.evaluate_expression(expression)
             finally:
                 try:
                     session.close()
@@ -150,9 +165,25 @@ class SlackKeyResolver:
             result = (reply or {}).get("result", {}) if isinstance(reply, dict) else {}
             inner = result.get("result", result) if isinstance(result, dict) else {}
             value = inner.get("value") if isinstance(inner, dict) else None
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-        return ""
+            if not isinstance(value, str) or not value.strip():
+                continue
+            try:
+                payload = json.loads(value)
+            except ValueError:
+                continue
+            key = (payload.get("key") or "").strip() if isinstance(payload, dict) else ""
+            settings = {}
+            raw_settings = payload.get("settings") if isinstance(payload, dict) else None
+            if isinstance(raw_settings, str) and raw_settings.strip():
+                try:
+                    parsed = json.loads(raw_settings)
+                    if isinstance(parsed, dict):
+                        settings = {k: v for k, v in parsed.items() if k not in self.PRIVATE_SETTINGS}
+                except ValueError:
+                    settings = {}
+            if key or settings:
+                return {"key": key, "settings": settings}
+        return {"key": "", "settings": {}}
 
 
 class _OpenAIProxyHandler(http.server.BaseHTTPRequestHandler):
@@ -174,7 +205,23 @@ class _OpenAIProxyHandler(http.server.BaseHTTPRequestHandler):
         self._send_cors_headers()
         self.end_headers()
 
+    def _handle_settings(self):
+        """POST /slackpolish/settings: the SlackPolish settings saved in Slack (language, style, personal
+        polish, hotkey...), for the Chrome extension only (browser-extension origin), never the key.
+        A POST because Chrome omits the Origin header on extension GET requests."""
+        origin = self.headers.get("Origin", "") or ""
+        if not origin.startswith("chrome-extension://"):
+            self._respond(401, json.dumps({"error": {"message": "The settings saved in Slack are only shared with the SlackPolish browser extension"}}))
+            return
+        resolver = getattr(self.server, "key_resolver", None)
+        settings = resolver.get_settings() if resolver and hasattr(resolver, "get_settings") else {}
+        has_key = bool(resolver.get()) if resolver else False
+        self._respond(200, json.dumps({"source": "slack", "settings": settings, "hasApiKey": has_key}))
+
     def do_POST(self):
+        if self.path == "/slackpolish/settings":
+            self._handle_settings()
+            return
         if self.path == "/v1/chat/completions":
             self._handle_chat_completions()
             return

@@ -20,9 +20,14 @@ popup shows them, the polish results and lets you copy them as JSON or clear.
    `~/Library/Application Support/SlackPolish Runtime/chrome-extension/`
    (or load it straight from `extension/` in this repo).
 2. `chrome://extensions` → **Developer mode** → **Load unpacked** → choose that folder.
-3. Click the SlackPolish toolbar icon → **Polish in Jira / Confluence**: tick
-   **Polish on Ctrl+Shift** and pick style and language (same catalog as Slack).
-   By default the extension uses **the OpenAI key you already saved in Slack**:
+3. Click the SlackPolish toolbar icon → **Polish in Jira / Confluence** and tick
+   **Polish on Ctrl+Shift**. By default the extension **follows the SlackPolish
+   settings you saved in Slack** — style, language, personal polish and the
+   hotkey itself — read through the SlackPolish launcher, so changing them in
+   Slack changes them in Jira too. (The emoji signature stays Slack-only: it is
+   a Slack custom emoji.) Choose **Use the settings below** to give the
+   extension its own style and language instead.
+   Likewise it uses **the OpenAI key you already saved in Slack**:
    requests go to the SlackPolish launcher's local proxy (127.0.0.1:9223), which
    reads the key from Slack over DevTools and adds it — nothing is stored in the
    browser, and the proxy only does this for requests coming from a browser
@@ -65,7 +70,7 @@ you press the hotkey.
 - `shared/atlassian-adapter.js` — ProseMirror extract / rebuild / write-back
 - `shared/polish-core.js` — prompt, model-output repair, verification
 - `content/hotkey-logger.js` — content script (all URLs, top frame): logging + the polish flow
-- `background.js` — persists events, badge count, OpenAI call
+- `background.js` — persists events, badge count, OpenAI call, settings saved in Slack (via the launcher)
 - `popup/` — settings and the log
 
 ## Tests

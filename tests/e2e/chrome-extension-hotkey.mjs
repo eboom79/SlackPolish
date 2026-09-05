@@ -125,8 +125,19 @@ async function main() {
     // Mock OpenAI: deterministic "polish" of the text between the prompt markers. /v1 is faithful; /v1-drop behaves
     // like a careless model (drops the mention token, rewrites the quoted line, wraps the answer in quotation marks).
     const openaiCalls = [];
+    const slackSettingsCalls = [];
+    const mockSlackSettings = { language: 'HEBREW', style: 'CONCISE', personalPolish: 'Use British spelling', improveHotkey: 'Ctrl+Shift', addEmojiSignature: false, smartContext: { enabled: true } };
     const server = http.createServer((req, res) => {
         const route = req.url.split('?')[0];
+        const fromExtension = /^chrome-extension:\/\/[a-p]{32}$/.test(req.headers.origin || '');
+        if (route === '/slackpolish/settings') {
+            slackSettingsCalls.push({ method: req.method, origin: req.headers.origin });
+            res.setHeader('Content-Type', 'application/json');
+            if (req.method !== 'POST') { res.statusCode = 501; res.end('{}'); return; }
+            if (!fromExtension) { res.statusCode = 401; res.end(JSON.stringify({ error: { message: 'mock launcher: settings only for the extension origin' } })); return; }
+            res.end(JSON.stringify({ source: 'slack', settings: mockSlackSettings, hasApiKey: true }));
+            return;
+        }
         if (req.method === 'POST' && route.endsWith('/chat/completions')) {
             let raw = ''; req.on('data', c => { raw += c; });
             req.on('end', () => {
@@ -137,6 +148,7 @@ async function main() {
                 const mode = route.startsWith('/v1-drop') ? 'drop' : route.startsWith('/proxy-v1') ? 'proxy' : 'faithful';
                 openaiCalls.push({ mode, auth: req.headers.authorization, origin: req.headers.origin, model: body.model, temperature: body.temperature, prompt, text });
                 if (mode === 'proxy' && req.headers.authorization) { res.statusCode = 400; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ error: { message: 'mock proxy: the extension must not send a key when using the key saved in Slack' } })); return; }
+                if (mode === 'proxy' && !fromExtension) { res.statusCode = 401; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ error: { message: 'mock launcher: shared key only for the extension origin' } })); return; }
                 let out = text.split('\n').map((line, i) => {
                     if (/^>\s?/.test(line)) return line;
                     let l = line.replace(/\bpls\b/g, 'please').replace(/\bu\b/g, 'you').replace(/^see /, 'See ').replace(/^(• |\d+\. )item /, '$1Item ');
@@ -264,7 +276,15 @@ async function main() {
         check(first.editor && first.editor.kind === 'textarea' && first.editor.text === 'hello', `test page editor captured: ${first.editor && first.editor.kind} "${first.editor && first.editor.text}"`);
 
         // More pages: a Jira-like ProseMirror comment and a plain textarea
-        const openAndPress = async (url, focusJs, label, holdMs = 60, afterJs = null) => {
+        const KEYS = { ctrl: ['Control', 'ControlLeft', 17, 2], shift: ['Shift', 'ShiftLeft', 16, 8], alt: ['Alt', 'AltLeft', 18, 1] };
+        const pressChord = async (k, chord, holdMs) => {
+            const names = chord.toLowerCase().split('+');
+            let mods = 0;
+            for (const n of names) { mods |= KEYS[n][3]; await k('keyDown', KEYS[n][0], KEYS[n][1], KEYS[n][2], mods); }
+            await sleep(holdMs);
+            for (const n of [...names].reverse()) { mods &= ~KEYS[n][3]; await k('keyUp', KEYS[n][0], KEYS[n][1], KEYS[n][2], mods); }
+        };
+        const openAndPress = async (url, focusJs, label, holdMs = 60, afterJs = null, chords = {}) => {
             log(`▶ ${label}`);
             const { targetId: tid } = await browser.send('Target.createTarget', { url });
             const { sessionId: s } = await browser.send('Target.attachToTarget', { targetId: tid, flatten: true });
@@ -277,7 +297,13 @@ async function main() {
             const before = await browser.evaluate(w, `chrome.storage.local.get('events').then(r => (r.events || []).length)`, true);
             const k = (type, kk, code, vk, mods) => browser.send('Input.dispatchKeyEvent', { type, key: kk, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: mods }, s);
             await sleep(650);
-            await k('keyDown', 'Control', 'ControlLeft', 17, 2); await k('keyDown', 'Shift', 'ShiftLeft', 16, 10); await sleep(holdMs); await k('keyUp', 'Shift', 'ShiftLeft', 16, 2); await k('keyUp', 'Control', 'ControlLeft', 17, 0);
+            if (chords.negative) {
+                await pressChord(k, chords.negative, 60);
+                await sleep(1500);
+                const count = await browser.evaluate(w, `chrome.storage.local.get('events').then(r => (r.events || []).length)`, true);
+                check(count === before, `${chords.negative} does not trigger when Slack's hotkey is ${chords.press}: ${count - before} new events`);
+            }
+            await pressChord(k, chords.press || 'ctrl+shift', holdMs);
             const events = await waitFor(async () => { const v = await browser.evaluate(w, `chrome.storage.local.get('events').then(r => r.events || [])`, true); return v.length > before ? v : null; }, { timeoutMs: 12000, what: 'new stored event' }).catch(() => []);
             const last = events[events.length - 1];
             if (afterJs && last) last.__after = await browser.evaluate(s, afterJs, true).catch(err => `error: ${err.message}`);
@@ -376,7 +402,29 @@ async function main() {
         const np = (noProxy && noProxy.polish) || {};
         check(np.ok === false && /SlackPolish is not running/.test(np.error || '') && noProxy.__after && noProxy.__after.html.includes('pls check the'), `unreachable proxy -> "${np.error}", editor untouched`);
 
-        await setSettings({ polish: false, apiKey: '' });
+        // (g) default: follow the settings saved in Slack (style, language, personal polish)
+        await setSettings({ polish: true, keySource: 'slack', followSlack: true, apiKey: '', proxyBase: `${origin}/proxy-v1`, style: 'CASUAL', language: 'GERMAN' });
+        const followed = await openAndPress(`${origin}/pm.html`, focusEnd, 'Polish following the settings saved in Slack (Concise, Hebrew, personal polish)', 900, domAfter);
+        const fp = (followed && followed.polish) || {};
+        const fcall = openaiCalls[openaiCalls.length - 1] || {};
+        check(fp.ok === true && fp.settingsSource === 'slack' && fp.style === 'CONCISE' && fp.language === 'Hebrew', `settings from Slack applied: source=${fp.settingsSource} style=${fp.style} language=${fp.language}${fp.error ? ' error=' + fp.error : ''}`);
+        check(!!fcall.prompt && fcall.prompt.includes(CONFIG.PROMPTS.STYLES.CONCISE) && fcall.prompt.includes('Use Hebrew language.') && fcall.prompt.includes('- Additional instructions: Use British spelling') && !fcall.prompt.includes(CONFIG.PROMPTS.STYLES.CASUAL), 'prompt uses the Slack style, language and personal polish (not the extension\'s own selects)');
+        check(slackSettingsCalls.length > 0 && slackSettingsCalls.length < 40 && slackSettingsCalls.every(c => /^chrome-extension:\/\/[a-p]{32}$/.test(c.origin || '')), `settings were requested by POST from the extension origin, no request storm (${slackSettingsCalls.length} requests${slackSettingsCalls.some(c => !c.origin) ? ', some without origin' : ''}${slackSettingsCalls.some(c => c.method !== 'POST') ? ', some not POST' : ''})`);
+
+        // (h) the hotkey saved in Slack is followed too
+        mockSlackSettings.improveHotkey = 'Ctrl+Alt';
+        const altKey = await openAndPress(`${origin}/pm.html`, focusEnd, 'Hotkey saved in Slack is Ctrl+Alt: Ctrl+Shift ignored, Ctrl+Alt polishes', 900, domAfter, { press: 'ctrl+alt', negative: 'ctrl+shift' });
+        check(!!altKey && altKey.hotkey === 'Ctrl+Alt' && altKey.polish && altKey.polish.ok === true, `Ctrl+Alt triggered a polish with hotkey=${altKey && altKey.hotkey} ok=${altKey && altKey.polish && altKey.polish.ok}`);
+        mockSlackSettings.improveHotkey = 'Ctrl+Shift';
+
+        // (i) own settings when asked
+        await setSettings({ polish: true, keySource: 'slack', followSlack: false, apiKey: '', proxyBase: `${origin}/proxy-v1`, style: 'CASUAL', language: 'GERMAN' });
+        const own = await openAndPress(`${origin}/pm.html`, focusEnd, 'Extension\'s own settings when not following Slack', 900, domAfter);
+        const op = (own && own.polish) || {};
+        const ocall = openaiCalls[openaiCalls.length - 1] || {};
+        check(op.ok === true && op.settingsSource === 'extension' && op.style === 'CASUAL' && op.language === 'German' && !!ocall.prompt && ocall.prompt.includes(CONFIG.PROMPTS.STYLES.CASUAL) && ocall.prompt.includes('Use German language.') && !ocall.prompt.includes('British spelling'), `own settings: source=${op.settingsSource} style=${op.style} language=${op.language}`);
+
+        await setSettings({ polish: false, apiKey: '', proxyBase: `${origin}/proxy-v1` });
 
         // ---- The popup: settings selects come from the shared config, the toggle persists, the log renders ----
         {
@@ -389,13 +437,14 @@ async function main() {
             await sleep(500);
             const popup = await browser.evaluate(ps, `({ styles: [...document.querySelectorAll('#style option')].map(o => o.value), languages: document.querySelectorAll('#language option').length, styleLabel: document.querySelector('#style option[value=TONE_POLISH]').textContent, events: document.querySelectorAll('#events li').length, polishRows: document.querySelectorAll('#events .polish').length, okRows: document.querySelectorAll('#events .polish.ok').length, badRows: document.querySelectorAll('#events .polish.bad').length })`, true);
             check(popup.styles.join() === Object.keys(CONFIG.AVAILABLE_STYLES).join() && popup.languages === Object.keys(CONFIG.SUPPORTED_LANGUAGES).length && popup.styleLabel === CONFIG.AVAILABLE_STYLES.TONE_POLISH.name, `popup selects from the shared config: styles=${popup.styles.join(',')} languages=${popup.languages} label="${popup.styleLabel}"`);
-            check(popup.events >= 10 && popup.polishRows === 6 && popup.okRows === 4 && popup.badRows === 2, `popup log renders ${popup.events} events, ${popup.polishRows} polish rows (${popup.okRows} ok, ${popup.badRows} problem)`);
-            const keyUi = await browser.evaluate(ps, `({ slackChecked: document.getElementById('keySlack').checked, keyDisabled: document.getElementById('apiKey').disabled })`, true);
-            check(keyUi.slackChecked === true && keyUi.keyDisabled === true, `default key source is the key saved in Slack (own-key field disabled): ${JSON.stringify(keyUi)}`);
+            check(popup.events >= 13 && popup.polishRows === 9 && popup.okRows === 7 && popup.badRows === 2, `popup log renders ${popup.events} events, ${popup.polishRows} polish rows (${popup.okRows} ok, ${popup.badRows} problem)`);
+            const keyUi = await browser.evaluate(ps, `({ slackChecked: document.getElementById('keySlack').checked, keyDisabled: document.getElementById('apiKey').disabled, follow: document.getElementById('followSlack').checked, styleDisabled: document.getElementById('style').disabled, slackStatus: document.getElementById('slackStatus').textContent })`, true);
+            check(keyUi.slackChecked === true && keyUi.keyDisabled === true, `default key source is the key saved in Slack (own-key field disabled): ${JSON.stringify({ slackChecked: keyUi.slackChecked, keyDisabled: keyUi.keyDisabled })}`);
+            check(keyUi.follow === true && keyUi.styleDisabled === true && keyUi.slackStatus.startsWith('From Slack: ') && keyUi.slackStatus.includes(CONFIG.AVAILABLE_STYLES.CONCISE.name) && keyUi.slackStatus.includes('Hebrew') && keyUi.slackStatus.includes('hotkey Ctrl+Shift') && keyUi.slackStatus.includes('Use British spelling'), `popup follows Slack by default and shows its settings: "${keyUi.slackStatus}"`);
             await browser.evaluate(ps, `(() => { const p = document.getElementById('polish'); p.checked = true; p.dispatchEvent(new Event('change')); const own = document.getElementById('keyOwn'); own.checked = true; own.dispatchEvent(new Event('change')); const k = document.getElementById('apiKey'); k.value = 'sk-from-popup'; k.dispatchEvent(new Event('change')); const st = document.getElementById('style'); st.value = 'CONCISE'; st.dispatchEvent(new Event('change')); return document.getElementById('apiKey').disabled; })()`);
             await sleep(300);
             const saved = await browser.evaluate(w, `chrome.storage.local.get('settings').then(r => r.settings)`, true);
-            check(!!saved && saved.polish === true && saved.keySource === 'own' && saved.apiKey === 'sk-from-popup' && saved.style === 'CONCISE' && saved.language === 'ENGLISH', `popup saved settings: ${JSON.stringify(saved)}`);
+            check(!!saved && saved.polish === true && saved.followSlack === true && saved.keySource === 'own' && saved.apiKey === 'sk-from-popup' && saved.style === 'CONCISE' && saved.language === 'ENGLISH', `popup saved settings: ${JSON.stringify(saved)}`);
             await browser.send('Target.closeTarget', { targetId: pid }).catch(() => {});
             await setSettings({ polish: false, apiKey: '' });
         }
