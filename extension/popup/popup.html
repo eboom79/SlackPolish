@@ -2,63 +2,94 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>SlackPolish</title>
+<title>SlackPolish Settings</title>
 <style>
-  body { font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; width: 440px; color: #1d1c1d; }
-  header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #ddd; }
-  header img { width: 20px; height: 20px; }
-  header h1 { font-size: 14px; margin: 0; flex: 1; }
-  button { font: inherit; padding: 4px 8px; border: 1px solid #bbb; border-radius: 4px; background: #fff; cursor: pointer; }
-  button:hover { background: #f4f4f4; }
-  #status { padding: 6px 12px; font-size: 12px; border-bottom: 1px solid #eee; }
-  section.settings { padding: 8px 12px; border-bottom: 1px solid #eee; background: #fafafa; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 12px; }
-  section.settings h2 { grid-column: 1 / -1; font-size: 12px; margin: 0 0 2px; color: #1264a3; }
-  section.settings label { display: flex; flex-direction: column; gap: 2px; }
-  section.settings label.row { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 8px; }
-  section.settings input[type=password], section.settings select { font: inherit; padding: 3px 6px; border: 1px solid #bbb; border-radius: 4px; background: #fff; }
-  section.settings .hint { grid-column: 1 / -1; color: #666; }
-  #roundtrip-row { display: flex; gap: 8px; align-items: center; padding: 6px 12px; font-size: 12px; border-bottom: 1px solid #eee; background: #fffbe6; }
-  #tally { display: flex; gap: 12px; padding: 8px 12px; background: #f8f8f8; border-bottom: 1px solid #eee; }
-  #tally span b { display: inline-block; min-width: 1.5em; text-align: right; }
-  #events { max-height: 320px; overflow: auto; margin: 0; padding: 0; list-style: none; }
-  #events li { padding: 6px 12px; border-bottom: 1px solid #f0f0f0; display: grid; grid-template-columns: 74px 84px 1fr; gap: 8px; align-items: baseline; }
-  .time { color: #666; font-variant-numeric: tabular-nums; }
-  .surface { font-weight: 600; }
-  .surface.atlassian { color: #0052cc; } .surface.slack-web { color: #4a154b; } .surface.other { color: #616061; }
-  .where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .where small { color: #888; }
-  #empty { padding: 24px 12px; color: #666; text-align: center; }
-  details.editor, .roundtrip, .polish { grid-column: 1 / -1; font-size: 12px; color: #444; }
-  .roundtrip.ok, .polish.ok { color: #2e7d32; } .roundtrip.bad, .polish.bad { color: #b00; } .polish.skip { color: #8a6d00; }
-  details summary { cursor: pointer; }
-  details.editor summary { color: #1264a3; }
-  details pre { white-space: pre-wrap; word-break: break-word; background: #f6f6f6; padding: 6px 8px; border-radius: 4px; max-height: 180px; overflow: auto; margin: 4px 0 0; color: #333; }
+  /* Same look as the SlackPolish settings menu inside Slack (slack-settings.js) */
+  body { margin: 0; width: 460px; font-family: Arial, sans-serif; font-size: 13px; color: #1d1c1d; background: #fff; }
+  .menu { padding: 20px; }
+  .header { display: flex; align-items: center; margin-bottom: 20px; padding: 12px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border: 1px solid #dee2e6; }
+  .logo { background: white; border-radius: 8px; padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-right: 16px; display: flex; align-items: center; justify-content: center; }
+  .logo img { width: 48px; height: 48px; display: block; }
+  .title { font-weight: bold; font-size: 18px; color: #2c3e50; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #6c757d; }
+  .version { font-size: 11px; color: #999; margin-top: 2px; }
+  .field { margin-bottom: 12px; }
+  .field > label { display: block; margin-bottom: 4px; font-weight: bold; font-size: 13px; }
+  select, textarea, input[type=password], input[type=text] { width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; box-sizing: border-box; background: white; font-family: inherit; }
+  textarea { height: 60px; resize: vertical; }
+  .hint12 { font-size: 12px; color: #666; margin-top: 4px; }
+  .hint11 { font-size: 11px; color: #666; margin-top: 2px; }
+  .keyrow { position: relative; margin-bottom: 4px; }
+  .keyrow input { padding-right: 35px; font-family: monospace; }
+  .keyrow button { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 14px; padding: 2px; }
+  .check { display: flex; align-items: center; cursor: pointer; font-size: 13px; margin-bottom: 6px; }
+  .check input { margin: 0 6px 0 0; }
+  .actions { text-align: right; margin-top: 15px; display: flex; align-items: center; }
+  .actions .loglink { flex: 1; text-align: left; font-size: 11px; color: #007a5a; text-decoration: none; }
+  .actions button { padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; margin-left: 8px; }
+  #cancel-settings-btn { border: 1px solid #ddd; background: #f8f8f8; color: #333; }
+  #save-settings-btn { border: none; background: #007a5a; color: white; }
+  #notification { position: fixed; top: 12px; right: 12px; padding: 10px 14px; border-radius: 6px; color: white; font-size: 13px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 2px 10px rgba(0,0,0,0.2); background: #1264a3; }
+  #notification.error { background: #d93025; }
+  .sync-ok { color: #007a5a; } .sync-off { color: #b26a00; }
 </style>
 </head>
 <body>
-<header>
-  <img src="../icons/icon48.png" alt="">
-  <h1>SlackPolish <small id="count"></small></h1>
-  <button id="copy">Copy log as JSON</button>
-  <button id="clear">Clear</button>
-</header>
-<div id="status">Checking this tab…</div>
-<section class="settings">
-  <h2>Polish in Jira / Confluence</h2>
-  <label class="row"><input type="checkbox" id="polish"> <span><b>Polish on Ctrl+Shift</b> in Atlassian comment editors (whole comment, or just the selected text)</span></label>
-  <label class="row"><input type="radio" name="settingsSource" id="followSlack" value="slack"> <span><b>Follow the SlackPolish settings saved in Slack</b> — style, language, personal polish and hotkey</span></label>
-  <div class="hint" id="slackStatus" style="margin:-2px 0 2px 22px">Reading the settings saved in Slack…</div>
-  <label class="row"><input type="radio" name="settingsSource" id="ownSettings" value="extension"> <span><b>Use the settings below</b></span></label>
-  <label class="row"><input type="radio" name="keySource" id="keySlack" value="slack"> <span><b>Use the key saved in Slack</b> — through the running SlackPolish launcher; nothing is stored in the browser</span></label>
-  <label class="row"><input type="radio" name="keySource" id="keyOwn" value="own"> <span><b>Use my own key</b></span> <input type="password" id="apiKey" placeholder="sk-…" autocomplete="off" spellcheck="false" style="flex:1"></label>
-  <label>Style <select id="style"></select></label>
-  <label>Language <select id="language"></select></label>
-  <div class="hint">Same prompts, styles, settings, key and protections as in Slack: mentions, links, inline code, emoji and quoted lines are kept verbatim and verified after write-back. If anything looks wrong, Ctrl+Z restores the original.</div>
-</section>
-<label id="roundtrip-row"><input type="checkbox" id="roundtrip"> <span><b>Diagnostic: round-trip write-back test</b> (Atlassian, when polishing is off): on Ctrl+Shift, re-insert the same comment through the editor and check nothing changed.</span></label>
-<div id="tally"></div>
-<ul id="events"></ul>
-<div id="empty" hidden>No hotkey presses recorded yet. Press Ctrl+Shift on any page.</div>
+<div class="menu">
+  <div class="header">
+    <div class="logo"><img src="../icons/icon128.png" alt=""></div>
+    <div style="flex:1">
+      <div class="title">SlackPolish Settings</div>
+      <div class="subtitle">AI-powered text enhancement for Jira &amp; Confluence</div>
+      <div class="version" id="version"></div>
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="language-select">🌍 Language:</label>
+    <select id="language-select"></select>
+  </div>
+
+  <div class="field">
+    <label for="style-select">✨ Style:</label>
+    <select id="style-select"></select>
+  </div>
+
+  <div class="field">
+    <label for="hotkey-select">⌨️ Hotkey:</label>
+    <select id="hotkey-select"></select>
+    <div class="hint12">Choose your preferred hotkey combination. Ctrl+Tab is reserved by Chrome for switching tabs.</div>
+  </div>
+
+  <div class="field">
+    <label for="personal-polish">✨ Personal Style:</label>
+    <textarea id="personal-polish" placeholder="e.g., Use 'Hi' not 'Hey', avoid dashes, British spelling"></textarea>
+    <div class="hint11">Personal writing preferences for AI to consider.</div>
+  </div>
+
+  <div class="field">
+    <label for="api-key-input">🔑 OpenAI API Key</label>
+    <div class="keyrow">
+      <input type="password" id="api-key-input" placeholder="sk-..." autocomplete="off" spellcheck="false">
+      <button type="button" id="api-key-toggle" title="Show/Hide API key">👁️</button>
+    </div>
+    <div class="hint11">One key for Slack and Chrome: a key entered here or in Slack's SlackPolish settings is valid for both.</div>
+  </div>
+
+  <div class="field">
+    <label>🔄 Sync</label>
+    <label class="check"><input type="checkbox" id="sync-with-slack"> Sync settings with Slack</label>
+    <div class="hint11">On Save, language, style, hotkey and personal style are sent to SlackPolish in Slack. The OpenAI key is always shared.</div>
+    <div class="hint11" id="sync-status">Checking the SlackPolish launcher…</div>
+  </div>
+
+  <div class="actions">
+    <a href="#" id="open-log" class="loglink">Activity log</a>
+    <button id="cancel-settings-btn">Cancel</button>
+    <button id="save-settings-btn">Save</button>
+  </div>
+</div>
+<div id="notification" hidden></div>
 <script src="../vendor/slack-config.js"></script>
 <script src="popup.js"></script>
 </body>

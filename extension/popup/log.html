@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SlackPolish activity log</title>
+<style>
+  body { font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; max-width: 900px; color: #1d1c1d; }
+  header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #ddd; }
+  header img { width: 20px; height: 20px; }
+  header h1 { font-size: 14px; margin: 0; flex: 1; }
+  button { font: inherit; padding: 4px 8px; border: 1px solid #bbb; border-radius: 4px; background: #fff; cursor: pointer; }
+  button:hover { background: #f4f4f4; }
+  #roundtrip-row { display: flex; gap: 8px; align-items: center; padding: 6px 12px; font-size: 12px; border-bottom: 1px solid #eee; background: #fffbe6; }
+  #tally { display: flex; gap: 12px; padding: 8px 12px; background: #f8f8f8; border-bottom: 1px solid #eee; }
+  #tally span b { display: inline-block; min-width: 1.5em; text-align: right; }
+  #events { margin: 0; padding: 0; list-style: none; }
+  #events li { padding: 6px 12px; border-bottom: 1px solid #f0f0f0; display: grid; grid-template-columns: 74px 84px 1fr; gap: 8px; align-items: baseline; }
+  .time { color: #666; font-variant-numeric: tabular-nums; }
+  .surface { font-weight: 600; }
+  .surface.atlassian { color: #0052cc; } .surface.slack-web { color: #4a154b; } .surface.other { color: #616061; }
+  .where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .where small { color: #888; }
+  #empty { padding: 24px 12px; color: #666; text-align: center; }
+  details.editor, .roundtrip, .polish { grid-column: 1 / -1; font-size: 12px; color: #444; }
+  .roundtrip.ok, .polish.ok { color: #2e7d32; } .roundtrip.bad, .polish.bad { color: #b00; } .polish.skip { color: #8a6d00; }
+  details summary { cursor: pointer; }
+  details.editor summary { color: #1264a3; }
+  details pre { white-space: pre-wrap; word-break: break-word; background: #f6f6f6; padding: 6px 8px; border-radius: 4px; max-height: 240px; overflow: auto; margin: 4px 0 0; color: #333; }
+</style>
+</head>
+<body>
+<header>
+  <img src="../icons/icon48.png" alt="">
+  <h1>SlackPolish activity log <small id="count"></small></h1>
+  <button id="copy">Copy as JSON</button>
+  <button id="clear">Clear</button>
+</header>
+<label id="roundtrip-row"><input type="checkbox" id="roundtrip"> <span><b>Diagnostic: round-trip write-back test</b> (Atlassian): on the hotkey, re-insert the same comment through the editor and check nothing changed, instead of polishing.</span></label>
+<div id="tally"></div>
+<ul id="events"></ul>
+<div id="empty" hidden>No hotkey presses recorded yet.</div>
+<script src="log.js"></script>
+</body>
+</html>

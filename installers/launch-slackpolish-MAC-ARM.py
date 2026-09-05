@@ -100,15 +100,17 @@ def is_launcher_process_command(command_line):
 # ---------------------------------------------------------------------------
 
 class SlackKeyResolver:
-    """Looks up what SlackPolish keeps in Slack's localStorage - the OpenAI key and the user's settings
-    (language, style, personal polish, hotkey...) entered once in the SlackPolish settings inside Slack -
-    over the DevTools endpoint, so other SlackPolish clients - the Chrome extension - follow the same
-    configuration without storing a copy anywhere. Cached briefly in memory; never written to disk."""
+    """Reads and writes what SlackPolish keeps in Slack's localStorage - the OpenAI key and the user's
+    settings (language, style, hotkey, personal style) - over the DevTools endpoint. This is the bridge
+    that keeps the Chrome extension's own copy in step with Slack: a Save on either side is relayed once;
+    nothing is looked up when a text is polished. Cached briefly in memory; never written to disk."""
 
     STORAGE_KEY = "slackpolish_openai_api_key"
     SETTINGS_KEY = "slackpolish_settings"
     # Settings fields that are Slack-only or secret and are therefore not shared
     PRIVATE_SETTINGS = ("apiKey",)
+    # Fields both menus have; the only ones that travel between Slack and the extension
+    SHARED_FIELDS = ("language", "style", "improveHotkey", "personalPolish")
 
     def __init__(self, debug_port, ttl=30.0, empty_ttl=3.0):
         self.debug_port = debug_port
@@ -117,6 +119,10 @@ class SlackKeyResolver:
         self._lock = threading.Lock()
         self._state = None
         self._expires = 0.0
+
+    def invalidate(self):
+        with self._lock:
+            self._state = None
 
     def _current(self):
         now = time.monotonic()
@@ -141,21 +147,28 @@ class SlackKeyResolver:
         """The SlackPolish settings saved in Slack (dict, without secrets; {} when none)."""
         return dict(self._current().get("settings") or {})
 
-    def _lookup(self):
+    def shared_settings(self):
+        """The subset of Slack's settings that the extension menu also has, plus the sync flag and Save time."""
+        settings = self.get_settings()
+        shared = {key: settings[key] for key in self.SHARED_FIELDS if key in settings}
+        shared["syncWithChrome"] = settings.get("syncWithChrome") is True
+        if settings.get("savedAt"):
+            shared["savedAt"] = settings.get("savedAt")
+        return shared
+
+    def _slack_targets(self):
         with urllib.request.urlopen(f"http://127.0.0.1:{self.debug_port}/json/list", timeout=2) as response:
             targets = json.loads(response.read().decode("utf-8"))
-        for target in targets:
-            if target.get("type") != "page" or "app.slack.com" not in (target.get("url") or ""):
-                continue
-            if not target.get("webSocketDebuggerUrl"):
-                continue
+        return [
+            target for target in targets
+            if target.get("type") == "page" and "app.slack.com" in (target.get("url") or "") and target.get("webSocketDebuggerUrl")
+        ]
+
+    def _evaluate_in_slack(self, expression):
+        for target in self._slack_targets():
             session = SlackTargetSession(target)
             try:
                 session.connect()
-                expression = (
-                    "JSON.stringify({ key: localStorage.getItem(" + json.dumps(self.STORAGE_KEY) + ") || '', "
-                    "settings: localStorage.getItem(" + json.dumps(self.SETTINGS_KEY) + ") || '' })"
-                )
                 reply = session.evaluate_expression(expression)
             finally:
                 try:
@@ -165,32 +178,203 @@ class SlackKeyResolver:
             result = (reply or {}).get("result", {}) if isinstance(reply, dict) else {}
             inner = result.get("result", result) if isinstance(result, dict) else {}
             value = inner.get("value") if isinstance(inner, dict) else None
-            if not isinstance(value, str) or not value.strip():
-                continue
-            try:
-                payload = json.loads(value)
-            except ValueError:
-                continue
-            key = (payload.get("key") or "").strip() if isinstance(payload, dict) else ""
-            settings = {}
-            raw_settings = payload.get("settings") if isinstance(payload, dict) else None
-            if isinstance(raw_settings, str) and raw_settings.strip():
-                try:
-                    parsed = json.loads(raw_settings)
-                    if isinstance(parsed, dict):
-                        settings = {k: v for k, v in parsed.items() if k not in self.PRIVATE_SETTINGS}
-                except ValueError:
-                    settings = {}
-            if key or settings:
-                return {"key": key, "settings": settings}
-        return {"key": "", "settings": {}}
+            if value is not None:
+                return value
+        return None
 
+    def _lookup(self):
+        expression = (
+            "JSON.stringify({ key: localStorage.getItem(" + json.dumps(self.STORAGE_KEY) + ") || '', "
+            "settings: localStorage.getItem(" + json.dumps(self.SETTINGS_KEY) + ") || '' })"
+        )
+        value = self._evaluate_in_slack(expression)
+        if not isinstance(value, str) or not value.strip():
+            return {"key": "", "settings": {}}
+        try:
+            payload = json.loads(value)
+        except ValueError:
+            return {"key": "", "settings": {}}
+        key = (payload.get("key") or "").strip() if isinstance(payload, dict) else ""
+        settings = {}
+        raw_settings = payload.get("settings") if isinstance(payload, dict) else None
+        if isinstance(raw_settings, str) and raw_settings.strip():
+            try:
+                parsed = json.loads(raw_settings)
+                if isinstance(parsed, dict):
+                    settings = {k: v for k, v in parsed.items() if k not in self.PRIVATE_SETTINGS}
+            except ValueError:
+                settings = {}
+        return {"key": key, "settings": settings}
+
+    def write_settings(self, patch, api_key=None, saved_at=None):
+        """A Save in the extension menu: merge the shared fields (and the key) into Slack's localStorage and
+        tell the Slack scripts to reload, exactly as the Slack menu does. Returns (ok, error)."""
+        shared = {k: v for k, v in (patch or {}).items() if k in self.SHARED_FIELDS}
+        if shared and saved_at:
+            shared["savedAt"] = saved_at
+        if not shared and not api_key:
+            return True, None
+        key_statement = ""
+        if api_key:
+            key_statement = " localStorage.setItem(" + json.dumps(self.STORAGE_KEY) + ", " + json.dumps(api_key) + ");"
+        expression = (
+            "(() => { const key = " + json.dumps(self.SETTINGS_KEY) + ";"
+            " let current = {}; try { current = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch (e) { current = {}; }"
+            " const next = Object.assign({}, current, " + json.dumps(shared) + ");"
+            " localStorage.setItem(key, JSON.stringify(next));"
+            + key_statement +
+            " window.dispatchEvent(new CustomEvent('slackpolish-settings-updated', { detail: { settings: next, source: 'chrome-extension' } }));"
+            " return 'ok'; })()"
+        )
+        try:
+            value = self._evaluate_in_slack(expression)
+        finally:
+            self.invalidate()
+        if value == "ok":
+            return True, None
+        if value is None:
+            return False, "Slack page not found on the DevTools endpoint (is Slack running through SlackPolish?)"
+        return False, f"Slack did not confirm the write: {str(value)[:200]}"
+
+
+# ---------------------------------------------------------------------------
+# Settings-sync WebSocket (launcher <-> Chrome extension)
+# ---------------------------------------------------------------------------
+
+WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+LAUNCHER_SYNC_PROTOCOL = 1
+
+
+class WebSocketClosed(Exception):
+    pass
+
+
+def _ws_encode_text(text):
+    """Server -> client text frame (unmasked)."""
+    payload = text.encode("utf-8")
+    length = len(payload)
+    if length < 126:
+        header = struct.pack("!BB", 0x81, length)
+    elif length < (1 << 16):
+        header = struct.pack("!BBH", 0x81, 126, length)
+    else:
+        header = struct.pack("!BBQ", 0x81, 127, length)
+    return header + payload
+
+
+def _ws_read_frame(stream):
+    """Client -> server frame from a buffered stream. Returns (opcode, payload); raises WebSocketClosed on EOF."""
+    def read_exact(count):
+        data = b""
+        while len(data) < count:
+            chunk = stream.read(count - len(data))
+            if not chunk:
+                raise WebSocketClosed()
+            data += chunk
+        return data
+
+    header = read_exact(2)
+    opcode = header[0] & 0x0F
+    masked = (header[1] & 0x80) != 0
+    length = header[1] & 0x7F
+    if length == 126:
+        length = struct.unpack("!H", read_exact(2))[0]
+    elif length == 127:
+        length = struct.unpack("!Q", read_exact(8))[0]
+    mask = read_exact(4) if masked else b""
+    payload = read_exact(length) if length else b""
+    if masked:
+        payload = bytes(payload[i] ^ mask[i % 4] for i in range(length))
+    return opcode, payload
+
+
+class SyncClient:
+    """One connected extension (a service worker)."""
+
+    def __init__(self, connection, origin):
+        self.connection = connection
+        self.origin = origin
+        self._send_lock = threading.Lock()
+
+    def send_raw(self, frame):
+        with self._send_lock:
+            self.connection.sendall(frame)
+
+    def send_text(self, text):
+        self.send_raw(_ws_encode_text(text))
+
+    def send_json(self, message):
+        self.send_text(json.dumps(message))
+
+
+class SyncHub:
+    """The connected extensions. Pings every ``ping_interval`` seconds, which also keeps the extension's
+    service worker alive (Chrome extends its lifetime while WebSocket messages flow)."""
+
+    def __init__(self, ping_interval=20.0):
+        self._lock = threading.Lock()
+        self._clients = []
+        self.ping_interval = ping_interval
+        thread = threading.Thread(target=self._ping_loop, daemon=True)
+        thread.start()
+
+    def add(self, client):
+        with self._lock:
+            self._clients.append(client)
+
+    def remove(self, client):
+        with self._lock:
+            if client in self._clients:
+                self._clients.remove(client)
+
+    def count(self):
+        with self._lock:
+            return len(self._clients)
+
+    def broadcast(self, message):
+        text = json.dumps(message)
+        delivered = 0
+        with self._lock:
+            clients = list(self._clients)
+        for client in clients:
+            try:
+                client.send_text(text)
+                delivered += 1
+            except Exception:
+                self.remove(client)
+        return delivered
+
+    def _ping_loop(self):
+        while True:
+            time.sleep(self.ping_interval)
+            try:
+                self.broadcast({"type": "ping"})
+            except Exception:
+                pass
+
+
+def slack_state_for_extension(resolver):
+    """What the extension receives on connect: Slack's shared settings and the saved key."""
+    if resolver is None:
+        return {"settings": {}, "apiKey": ""}
+    try:
+        return {"settings": resolver.shared_settings(), "apiKey": resolver.get()}
+    except Exception as error:
+        print_verbose(f"Could not read Slack state: {error}")
+        return {"settings": {}, "apiKey": ""}
+
+
+# ---------------------------------------------------------------------------
+# Local OpenAI proxy server (+ settings sync)
+# ---------------------------------------------------------------------------
 
 class _OpenAIProxyHandler(http.server.BaseHTTPRequestHandler):
-    """Minimal HTTP handler that proxies POST /proxy/openai (envelope, used by the Slack scripts) and
-    POST /v1/chat/completions (OpenAI-shaped, used by the Chrome extension) to OpenAI."""
-
-    OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
+    """Minimal HTTP handler:
+      POST /proxy/openai       - envelope proxy used by the Slack scripts (unchanged)
+      POST /slackpolish/sync   - Slack saved its settings: relay to connected extensions (Slack origin only)
+      GET  /slackpolish/sync   - WebSocket for the Chrome extension (extension origin only): hello with
+                                 Slack's state, slack-saved relays, chrome-saved writes into Slack
+    """
 
     def log_message(self, format, *args):  # suppress default access log noise
         pass
@@ -205,25 +389,16 @@ class _OpenAIProxyHandler(http.server.BaseHTTPRequestHandler):
         self._send_cors_headers()
         self.end_headers()
 
-    def _handle_settings(self):
-        """POST /slackpolish/settings: the SlackPolish settings saved in Slack (language, style, personal
-        polish, hotkey...), for the Chrome extension only (browser-extension origin), never the key.
-        A POST because Chrome omits the Origin header on extension GET requests."""
-        origin = self.headers.get("Origin", "") or ""
-        if not origin.startswith("chrome-extension://"):
-            self._respond(401, json.dumps({"error": {"message": "The settings saved in Slack are only shared with the SlackPolish browser extension"}}))
+    def do_GET(self):
+        if self.path == "/slackpolish/sync" and "websocket" in (self.headers.get("Upgrade", "") or "").lower():
+            self._handle_sync_websocket()
             return
-        resolver = getattr(self.server, "key_resolver", None)
-        settings = resolver.get_settings() if resolver and hasattr(resolver, "get_settings") else {}
-        has_key = bool(resolver.get()) if resolver else False
-        self._respond(200, json.dumps({"source": "slack", "settings": settings, "hasApiKey": has_key}))
+        self.send_response(404)
+        self.end_headers()
 
     def do_POST(self):
-        if self.path == "/slackpolish/settings":
-            self._handle_settings()
-            return
-        if self.path == "/v1/chat/completions":
-            self._handle_chat_completions()
+        if self.path == "/slackpolish/sync":
+            self._handle_slack_save()
             return
         if self.path != "/proxy/openai":
             self.send_response(404)
@@ -267,41 +442,105 @@ class _OpenAIProxyHandler(http.server.BaseHTTPRequestHandler):
         except Exception as e:
             self._respond(502, json.dumps({"error": str(e)}))
 
-    def _handle_chat_completions(self):
-        """OpenAI-shaped endpoint for the SlackPolish Chrome extension. A request without its own
-        Authorization header is sent with the key saved in Slack - but only when it comes from a browser
-        extension (Origin chrome-extension://...), an origin web pages cannot forge. The key never leaves
-        this process."""
+    def _handle_slack_save(self):
+        """The Slack settings menu was saved. Settings travel only when 'Sync settings with Chrome' is
+        checked; the OpenAI key always (one key is valid for both). Accepted from the Slack origin only -
+        a web page cannot forge the Origin header."""
+        origin = self.headers.get("Origin", "") or ""
+        if not origin.startswith("https://app.slack.com"):
+            self._respond(401, json.dumps({"error": {"message": "Slack save notifications are accepted from Slack only"}}))
+            return
         try:
             length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length)
-            json.loads(body)
+            body = json.loads(self.rfile.read(length) or b"{}")
         except Exception as e:
             self._respond(400, json.dumps({"error": {"message": f"Bad request: {e}"}}))
             return
+        settings = body.get("settings") if isinstance(body.get("settings"), dict) else {}
+        sync_on = settings.get("syncWithChrome") is True
+        shared = {k: settings.get(k) for k in SlackKeyResolver.SHARED_FIELDS + ("syncWithChrome", "savedAt") if k in settings} if sync_on else None
+        message = {
+            "type": "slack-saved",
+            "settings": shared,
+            "syncWithChrome": sync_on,
+            "apiKey": (body.get("apiKey") or "").strip() if isinstance(body.get("apiKey"), str) else "",
+            "savedAt": settings.get("savedAt"),
+        }
+        resolver = getattr(self.server, "key_resolver", None)
+        if resolver is not None:
+            resolver.invalidate()
+        hub = getattr(self.server, "sync_hub", None)
+        delivered = hub.broadcast(message) if hub else 0
+        self._respond(200, json.dumps({"ok": True, "delivered": delivered}))
 
-        authorization = self.headers.get("Authorization", "")
-        if not authorization:
-            origin = self.headers.get("Origin", "") or ""
-            if not origin.startswith("chrome-extension://"):
-                self._respond(401, json.dumps({"error": {"message": "Missing Authorization header (the key saved in Slack is only shared with the SlackPolish browser extension)"}}))
-                return
-            resolver = getattr(self.server, "key_resolver", None)
-            key = resolver.get() if resolver else ""
-            if not key:
-                self._respond(401, json.dumps({"error": {"message": "No OpenAI key is saved in Slack yet: enter it in SlackPolish settings inside Slack, or choose your own key in the extension popup"}}))
-                return
-            authorization = f"Bearer {key}"
+    def _handle_sync_websocket(self):
+        origin = self.headers.get("Origin", "") or ""
+        if not origin.startswith("chrome-extension://"):
+            self.send_response(403)
+            self.end_headers()
+            return
+        key = self.headers.get("Sec-WebSocket-Key", "")
+        if not key:
+            self.send_response(400)
+            self.end_headers()
+            return
+        accept = base64.b64encode(hashlib.sha1((key + WS_GUID).encode("ascii")).digest()).decode("ascii")
+        self.send_response(101)
+        self.send_header("Upgrade", "websocket")
+        self.send_header("Connection", "Upgrade")
+        self.send_header("Sec-WebSocket-Accept", accept)
+        self.end_headers()
+        self.close_connection = True  # this handler owns the socket until the extension goes away
 
-        headers = {"Content-Type": "application/json", "Authorization": authorization}
+        resolver = getattr(self.server, "key_resolver", None)
+        hub = getattr(self.server, "sync_hub", None)
+        client = SyncClient(self.connection, origin)
+        if hub:
+            hub.add(client)
         try:
-            upstream_req = urllib.request.Request(self.OPENAI_CHAT_URL, data=body, headers=headers, method="POST")
-            with urllib.request.urlopen(upstream_req, timeout=60) as resp:
-                self._respond(resp.status, resp.read().decode("utf-8", errors="replace"))
-        except urllib.error.HTTPError as e:
-            self._respond(e.code, e.read().decode("utf-8", errors="replace"))
-        except Exception as e:
-            self._respond(502, json.dumps({"error": {"message": str(e)}}))
+            self.connection.settimeout(None)
+            client.send_json({"type": "hello", "protocol": LAUNCHER_SYNC_PROTOCOL, "launcherVersion": "mac-arm", "slack": slack_state_for_extension(resolver)})
+            while True:
+                opcode, payload = _ws_read_frame(self.rfile)
+                if opcode == 0x8:
+                    break
+                if opcode == 0x9:  # ping -> pong
+                    client.send_raw(struct.pack("!BB", 0x8A, len(payload)) + payload)
+                    continue
+                if opcode != 0x1:
+                    continue
+                try:
+                    message = json.loads(payload.decode("utf-8"))
+                except ValueError:
+                    continue
+                self._handle_sync_message(client, message, resolver)
+        except (WebSocketClosed, ConnectionError, OSError):
+            pass
+        except Exception as error:
+            print_verbose(f"Sync WebSocket error: {error}")
+        finally:
+            if hub:
+                hub.remove(client)
+            try:
+                self.connection.close()
+            except Exception:
+                pass
+
+    def _handle_sync_message(self, client, message, resolver):
+        kind = message.get("type") if isinstance(message, dict) else None
+        if kind == "pong":
+            return
+        if kind == "chrome-saved":
+            # A Save in the extension menu: settings only when its sync box was checked (else null), key always
+            ok, error = True, None
+            if resolver is None:
+                ok, error = False, "Slack is not connected"
+            else:
+                try:
+                    ok, error = resolver.write_settings(message.get("settings") or {}, (message.get("apiKey") or "").strip() or None, saved_at=message.get("savedAt"))
+                except Exception as exc:
+                    ok, error = False, str(exc)
+            client.send_json({"type": "chrome-saved-ack", "ok": ok, "error": error})
 
     def _respond(self, status, body_str):
         encoded = body_str.encode("utf-8")
@@ -313,22 +552,24 @@ class _OpenAIProxyHandler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(encoded)
 
 
-def start_openai_proxy(port, timeout=8.0, poll_interval=0.25, key_resolver=None):
-    """Start the OpenAI proxy HTTP server in a daemon thread. Returns the port.
-
-    ``key_resolver`` (a SlackKeyResolver) lets the /v1/chat/completions endpoint use the key saved in
-    Slack for requests from the SlackPolish Chrome extension.
+def start_openai_proxy(port, timeout=8.0, poll_interval=0.25, key_resolver=None, sync_ping_interval=20.0):
+    """Start the OpenAI proxy / settings-sync HTTP server in a daemon thread. Returns the bound port.
 
     The proxy port is normally held by the previous launcher instance until it
     exits, so binding is retried for up to ``timeout`` seconds. Must be called
     only after the single-instance lock has been acquired (which terminates any
     previous launcher); otherwise the bind can never succeed.
+
+    ``key_resolver`` (a SlackKeyResolver) is the bridge to Slack's saved settings and key for the
+    Chrome extension's settings sync (WebSocket on /slackpolish/sync).
     """
     deadline = time.monotonic() + timeout
     while True:
         try:
-            server = http.server.HTTPServer(("127.0.0.1", port), _OpenAIProxyHandler)
+            server = http.server.ThreadingHTTPServer(("127.0.0.1", port), _OpenAIProxyHandler)
+            server.daemon_threads = True
             server.key_resolver = key_resolver
+            server.sync_hub = SyncHub(ping_interval=sync_ping_interval)
             break
         except OSError as error:
             if error.errno not in (errno.EADDRINUSE, errno.EACCES) or time.monotonic() >= deadline:
@@ -339,8 +580,7 @@ def start_openai_proxy(port, timeout=8.0, poll_interval=0.25, key_resolver=None)
             time.sleep(poll_interval)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    return port
-
+    return server.server_address[1]
 
 
 def append_log_line(text):
@@ -495,7 +735,8 @@ class AlreadyRunningAndFocused(RuntimeError):
 
 
 class SimpleWebSocketClient:
-    def __init__(self, websocket_url):
+    def __init__(self, websocket_url, headers=None):
+        self.extra_headers = dict(headers or {})
         parsed = urllib.parse.urlparse(websocket_url)
         if parsed.scheme != "ws":
             raise ValueError(f"Unsupported WebSocket scheme: {parsed.scheme}")
@@ -520,7 +761,8 @@ class SimpleWebSocketClient:
             "Connection: Upgrade\r\n"
             f"Sec-WebSocket-Key: {key}\r\n"
             "Sec-WebSocket-Version: 13\r\n"
-            "\r\n"
+            + "".join(f"{name}: {value}\r\n" for name, value in self.extra_headers.items())
+            + "\r\n"
         )
         self.socket.sendall(request.encode("ascii"))
         response = self._recv_http_headers()
@@ -726,7 +968,7 @@ class SlackPolishMacLauncher:
         # after the lock so "replace running launcher" actually works.
         self._update_status(phase="starting-openai-proxy")
         start_openai_proxy(self.proxy_port, key_resolver=SlackKeyResolver(self.debug_port))
-        print_success(f"OpenAI proxy listening on 127.0.0.1:{self.proxy_port} (shares the key saved in Slack with the Chrome extension)")
+        print_success(f"OpenAI proxy listening on 127.0.0.1:{self.proxy_port} (settings sync with the Chrome extension on /slackpolish/sync)")
 
         try:
             if self.relaunch:

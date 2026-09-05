@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "SlackPolish",
   "version": "1.6.2",
-  "description": "SlackPolish for the browser: polishes Jira/Confluence comments with the same rules as in Slack (links, mentions, emoji, quotes and code preserved) and logs where the hotkey is pressed.",
+  "description": "SlackPolish for the browser: polishes Jira/Confluence comments with the same rules and settings as in Slack (links, mentions, emoji, quotes and code preserved) and logs where the hotkey is pressed.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -16,7 +16,8 @@
     "service_worker": "background.js"
   },
   "permissions": [
-    "storage"
+    "storage",
+    "alarms"
   ],
   "content_scripts": [
     {

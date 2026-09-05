@@ -33,6 +33,7 @@
             style: 'CASUAL',
             improveHotkey: 'Ctrl+Shift',
             personalPolish: '',
+            syncWithChrome: false,
             smartContext: {
                 enabled: true,
                 privacyMode: false
@@ -307,6 +308,20 @@
                             </div>
                         </div>
 
+                        <!-- Sync with the Chrome extension -->
+                        <div style="margin-bottom: 12px;">
+                            <label style="display: block; margin-bottom: 4px; font-weight: bold; font-size: 13px;">🔄 Sync</label>
+                            <div style="margin-bottom: 6px;">
+                                <label style="display: flex; align-items: center; cursor: pointer; font-size: 13px;">
+                                    <input type="checkbox" id="sync-with-chrome" ${currentSettings.syncWithChrome ? 'checked' : ''} style="margin-right: 6px;">
+                                    Sync settings with Chrome
+                                </label>
+                            </div>
+                            <div style="font-size: 11px; color: #666; margin-top: 2px;">
+                                On Save, language, style, hotkey and personal style are sent to the SlackPolish Chrome extension. The OpenAI key is always shared.
+                            </div>
+                        </div>
+
                         <!-- Developer Options (Hidden by default) -->
                         <div style="display: none; border-top: 1px solid #ddd; margin: 15px 0; padding-top: 15px;" id="developer-options">
                             <div style="text-align: center; margin-bottom: 10px;">
@@ -561,6 +576,8 @@
                     style: menu.querySelector('#style-select').value,
                     improveHotkey: menu.querySelector('#hotkey-select').value,
                     personalPolish: menu.querySelector('#personal-polish').value.trim(),
+                    syncWithChrome: menu.querySelector('#sync-with-chrome') ? menu.querySelector('#sync-with-chrome').checked : false,
+                    savedAt: Date.now(),
                     smartContext: {
                         enabled: menu.querySelector('#smart-context-enabled') ? menu.querySelector('#smart-context-enabled').checked : true,
                         privacyMode: menu.querySelector('#smart-context-privacy') ? menu.querySelector('#smart-context-privacy').checked : false
@@ -574,6 +591,7 @@
                 if (this.saveSettings(newSettings)) {
                     // Show success notification
                     this.showNotification('Settings saved successfully!', 'success');
+                    this.notifyChromeSync(newSettings);
                     menu.remove();
                 } else {
                     this.showNotification('Error saving settings', 'error');
@@ -595,6 +613,35 @@
                     menu.remove();
                 }
             });
+        },
+
+        // Tell the SlackPolish launcher that settings were saved so the Chrome extension can follow.
+        // Only a Save triggers this. Settings travel only when "Sync settings with Chrome" is checked;
+        // the OpenAI key is always shared (one key is valid for both). Fire-and-forget: Slack never waits on it.
+        notifyChromeSync: function(settings) {
+            try {
+                const port = window.__SLACKPOLISH_PROXY_PORT__ || 9223;
+                const shared = {
+                    language: settings.language,
+                    style: settings.style,
+                    improveHotkey: settings.improveHotkey,
+                    personalPolish: settings.personalPolish || '',
+                    syncWithChrome: settings.syncWithChrome === true,
+                    savedAt: settings.savedAt || Date.now()
+                };
+                const payload = { source: 'slack', settings: shared, apiKey: localStorage.getItem('slackpolish_openai_api_key') || '' };
+                fetch(`http://127.0.0.1:${port}/slackpolish/sync`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }).then(response => {
+                    utils.log(`Chrome sync notified (HTTP ${response.status})`);
+                }).catch(error => {
+                    utils.log('Chrome sync not reachable (SlackPolish launcher not running?): ' + error.message);
+                });
+            } catch (error) {
+                utils.log('Chrome sync skipped: ' + error.message);
+            }
         },
 
         // Show notification

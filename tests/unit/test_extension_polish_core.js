@@ -45,7 +45,7 @@ runTest('Manifest: config first, core before the content script, OpenAI host per
     assert(js[0] === 'vendor/slack-config.js', `config must load first: ${js[0]}`);
     assert(js.indexOf('shared/polish-core.js') > js.indexOf('shared/atlassian-adapter.js') && js.indexOf('shared/polish-core.js') < js.indexOf('content/hotkey-logger.js'), 'polish-core between adapter and content script');
     assert(manifest.host_permissions.includes('https://api.openai.com/*'), 'api.openai.com host permission');
-    assert(JSON.stringify(manifest.permissions) === JSON.stringify(['storage']), `permissions stay storage-only: ${JSON.stringify(manifest.permissions)}`);
+    assert(JSON.stringify(manifest.permissions) === JSON.stringify(['storage', 'alarms']), `permissions: storage + alarms (sync link keep-alive) only: ${JSON.stringify(manifest.permissions)}`);
     assert(fs.existsSync(path.join(ext, 'vendor/slack-config.js')) && fs.existsSync(path.join(ext, 'shared/polish-core.js')), 'files exist');
 });
 
@@ -129,10 +129,9 @@ runTest('Verification, polishable guard and line counting', () => {
 });
 
 runTest('Wiring: content script polishes via the worker with settings, selection support, guards and verification', () => {
-    ['slackpolish-slack-settings', 'followSlack', 'improveHotkey', 'personalPolish', 'settingsSource', 'slackpolish-polish', 'SlackPolishCore', 'buildPrompt(', 'repairModelOutput', 'verifyEntities', 'extractFragment', 'nothing-to-polish', 'countContentLines', "keepSelection: !!range", 'SlackPolish Needs API Key', 'settings.polish'].forEach(s => assert(contentSource.includes(s), `content script has: ${s}`));
-    ["message.type === 'slackpolish-slack-settings'", '/slackpolish/settings', '/chat/completions', 'headers.Authorization = `Bearer ${ownKey}`', 'settings.apiKey', "message.type === 'slackpolish-polish'", 'apiBase', "settings.keySource === 'own'", "DEFAULT_PROXY_BASE = 'http://127.0.0.1:9223/v1'", 'SlackPolish is not running'].forEach(s => assert(backgroundSource.includes(s), `worker has: ${s}`));
-    assert(/if \(useOwnKey\) headers\.Authorization/.test(backgroundSource), 'no Authorization header is sent when using the key saved in Slack (the launcher adds it)');
-    ['AVAILABLE_STYLES', 'SUPPORTED_LANGUAGES', "getElementById('apiKey')", "getElementById('keySlack')", 'keySource: keySource()', 'followSlack: followSlack.checked', 'From Slack: ', 'settings: {'].forEach(s => assert(popupSource.includes(s), `popup has: ${s}`));
+    ['improveHotkey', 'personalPolish', 'slackpolish-polish', 'SlackPolishCore', 'buildPrompt(', 'repairModelOutput', 'verifyEntities', 'extractFragment', 'nothing-to-polish', 'countContentLines', "keepSelection: !!range", 'SlackPolish Needs API Key'].forEach(s => assert(contentSource.includes(s), `content script has: ${s}`));
+    ['/chat/completions', 'Authorization: `Bearer ${apiKey}`', 'settings.apiKey', "message.type === 'slackpolish-polish'", 'apiBase', "message.type === 'slackpolish-save-settings'", "message.type === 'slackpolish-sync-status'", 'DEFAULT_SYNC_URL'].forEach(s => assert(backgroundSource.includes(s), `worker has: ${s}`));
+    ['AVAILABLE_STYLES', 'SUPPORTED_LANGUAGES', "getElementById('api-key-input')", "getElementById('sync-with-slack')", "type: 'slackpolish-save-settings'"].forEach(s => assert(popupSource.includes(s), `popup has: ${s}`));
     assert(popupHtml.indexOf('../vendor/slack-config.js') < popupHtml.indexOf('popup.js"'), 'popup loads the shared config before its script');
     assert(!/api\.openai\.com/.test(contentSource), 'the content script never calls OpenAI itself (worker does, host permission)');
 });

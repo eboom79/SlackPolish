@@ -20,28 +20,42 @@ popup shows them, the polish results and lets you copy them as JSON or clear.
    `~/Library/Application Support/SlackPolish Runtime/chrome-extension/`
    (or load it straight from `extension/` in this repo).
 2. `chrome://extensions` → **Developer mode** → **Load unpacked** → choose that folder.
-3. Click the SlackPolish toolbar icon → **Polish in Jira / Confluence** and tick
-   **Polish on Ctrl+Shift**. By default the extension **follows the SlackPolish
-   settings you saved in Slack** — style, language, personal polish and the
-   hotkey itself — read through the SlackPolish launcher, so changing them in
-   Slack changes them in Jira too. (The emoji signature stays Slack-only: it is
-   a Slack custom emoji.) Choose **Use the settings below** to give the
-   extension its own style and language instead.
-   Likewise it uses **the OpenAI key you already saved in Slack**:
-   requests go to the SlackPolish launcher's local proxy (127.0.0.1:9223), which
-   reads the key from Slack over DevTools and adds it — nothing is stored in the
-   browser, and the proxy only does this for requests coming from a browser
-   extension origin. Slack must be running through SlackPolish. Alternatively
-   choose **Use my own key** and paste one (kept in `chrome.storage.local`).
-4. Open a Jira issue, click into the comment editor, type, press **Ctrl+Shift**.
+3. Click the SlackPolish toolbar icon: the **settings menu is the same as the
+   SlackPolish menu in Slack** — Language, Style, Hotkey, Personal Style — plus
+   the OpenAI key and a **Sync settings with Slack** checkbox. Changes apply on
+   **Save**, like in Slack.
+4. Open a Jira issue, click into the comment editor, type, press the hotkey.
    The SlackPolish pill (bottom-left) shows *Improving* → *Active*.
 
 After a SlackPolish update, click **Reload** on the extension card.
 
-The model is called from the extension's background worker (host permissions
-for `api.openai.com` and the loopback proxy); the content script never talks to
-the network. The comment is sent to OpenAI only when polishing is enabled and
-you press the hotkey.
+## Settings and sync
+
+The extension keeps **its own copy** of the settings and the key in
+`chrome.storage.local`; a polish is one call from the extension to OpenAI and
+never touches the SlackPolish launcher.
+
+Both menus have a sync checkbox — **Sync settings with Chrome** in Slack,
+**Sync settings with Slack** in the extension. Settings (language, style,
+hotkey, personal style) travel **only when you press Save and only if the
+sender's box is checked**. The **OpenAI key is always shared**: a key entered
+in either menu is valid for both.
+
+The bridge is the SlackPolish launcher (it runs Slack with DevTools enabled):
+
+- the extension keeps a small WebSocket to the launcher
+  (`ws://127.0.0.1:9223/slackpolish/sync`, extension origin only). On connect
+  it receives Slack's current shared settings and key and catches up on a Save
+  it may have missed; the launcher pings every 20 s, which also keeps the
+  extension's worker alive
+- a Save in Slack posts to the launcher (Slack origin only), which relays it
+- a Save in the extension is written by the launcher into Slack's storage and
+  the Slack scripts reload it, exactly as after a Save in Slack's own menu
+- if the launcher is not running (Slack not started through SlackPolish), the
+  Save is kept and sent on the next connection
+
+Slack-only options (Smart Context, emoji signature, developer mode) are not
+mirrored. The emoji signature is a Slack custom emoji Jira cannot show.
 
 ## How a polish works
 
@@ -70,17 +84,19 @@ you press the hotkey.
 - `shared/atlassian-adapter.js` — ProseMirror extract / rebuild / write-back
 - `shared/polish-core.js` — prompt, model-output repair, verification
 - `content/hotkey-logger.js` — content script (all URLs, top frame): logging + the polish flow
-- `background.js` — persists events, badge count, OpenAI call, settings saved in Slack (via the launcher)
-- `popup/` — settings and the log
+- `background.js` — persists events, badge count, OpenAI call, settings-sync link to the launcher
+- `popup/popup.html` — the settings menu (mirror of Slack's); `popup/log.html` — activity log
 
 ## Tests
 
-`tests/unit/test_extension_hotkey_logger.js` and
-`tests/unit/test_extension_polish_core.js` (unit, part of `tests/run-all-tests.js`);
+`tests/unit/test_extension_hotkey_logger.js`, `tests/unit/test_extension_polish_core.js`
+and `tests/unit/test_settings_sync.js` (unit), `tests/installer/test_launcher_settings_sync.js`
+(launcher bridge with a fake Slack), all part of `tests/run-all-tests.js`;
 `tests/e2e/chrome-extension-hotkey.mjs` launches a throwaway browser with the
 extension, presses the real chord over CDP and polishes a real ProseMirror
-editor against a mock OpenAI endpoint (faithful model, selection only, careless
-model that drops tokens). Google Chrome's branded builds ignore
+editor against a mock OpenAI endpoint and a mock launcher (faithful model,
+selection only, careless model that drops tokens, Slack saves relayed, menu
+parity, a Save while the launcher is down). Google Chrome's branded builds ignore
 `--load-extension`, so the live test needs **Chrome for Testing** (or Chromium):
 
 ```bash
