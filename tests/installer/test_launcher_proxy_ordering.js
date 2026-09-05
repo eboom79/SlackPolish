@@ -32,7 +32,7 @@ console.log('🚀 Running Launcher Proxy Ordering Tests');
 console.log('========================================\n');
 
 runTest('__init__ no longer binds the proxy port', () => {
-    const initStart = source.indexOf('    def __init__(');
+    const initStart = source.indexOf('    def __init__(', source.indexOf('class SlackPolishMacLauncher'));
     const runStart = source.indexOf('    def run(self):');
     assert(initStart !== -1 && runStart !== -1 && runStart > initStart, 'Could not locate __init__/run');
     const initBody = source.slice(initStart, runStart);
@@ -43,7 +43,7 @@ runTest('run() binds the proxy only after the single-instance lock is acquired',
     const runStart = source.indexOf('    def run(self):');
     const runBody = source.slice(runStart, source.indexOf('\n    def ', runStart + 10));
     const lockIdx = runBody.indexOf('self._acquire_or_recover_single_instance_lock()');
-    const proxyIdx = runBody.indexOf('start_openai_proxy(self.proxy_port)');
+    const proxyIdx = runBody.indexOf('start_openai_proxy(self.proxy_port');
     assert(lockIdx !== -1, 'run() should acquire the single-instance lock');
     assert(proxyIdx !== -1, 'run() should start the OpenAI proxy');
     assert(lockIdx < proxyIdx, 'Lock acquisition must happen before the proxy bind');

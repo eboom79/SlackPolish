@@ -99,8 +99,67 @@ def is_launcher_process_command(command_line):
 # Local OpenAI proxy server
 # ---------------------------------------------------------------------------
 
+class SlackKeyResolver:
+    """Looks up the OpenAI key that SlackPolish keeps in Slack's localStorage (entered once in the
+    SlackPolish settings inside Slack) over the DevTools endpoint, so other SlackPolish clients - the
+    Chrome extension - can use the same key without storing a copy anywhere. Cached briefly in memory;
+    never written to disk."""
+
+    STORAGE_KEY = "slackpolish_openai_api_key"
+
+    def __init__(self, debug_port, ttl=30.0, empty_ttl=3.0):
+        self.debug_port = debug_port
+        self.ttl = ttl
+        self.empty_ttl = empty_ttl
+        self._lock = threading.Lock()
+        self._value = None
+        self._expires = 0.0
+
+    def get(self):
+        now = time.monotonic()
+        with self._lock:
+            if self._value is not None and now < self._expires:
+                return self._value
+        value = ""
+        try:
+            value = self._lookup()
+        except Exception as error:
+            print_verbose(f"Slack key lookup failed: {error}")
+        with self._lock:
+            self._value = value
+            self._expires = time.monotonic() + (self.ttl if value else self.empty_ttl)
+        return value
+
+    def _lookup(self):
+        with urllib.request.urlopen(f"http://127.0.0.1:{self.debug_port}/json/list", timeout=2) as response:
+            targets = json.loads(response.read().decode("utf-8"))
+        for target in targets:
+            if target.get("type") != "page" or "app.slack.com" not in (target.get("url") or ""):
+                continue
+            if not target.get("webSocketDebuggerUrl"):
+                continue
+            session = SlackTargetSession(target)
+            try:
+                session.connect()
+                reply = session.evaluate_expression(f"localStorage.getItem({json.dumps(self.STORAGE_KEY)}) || ''")
+            finally:
+                try:
+                    session.close()
+                except Exception:
+                    pass
+            result = (reply or {}).get("result", {}) if isinstance(reply, dict) else {}
+            inner = result.get("result", result) if isinstance(result, dict) else {}
+            value = inner.get("value") if isinstance(inner, dict) else None
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return ""
+
+
 class _OpenAIProxyHandler(http.server.BaseHTTPRequestHandler):
-    """Minimal HTTP handler that proxies POST /proxy/openai to OpenAI."""
+    """Minimal HTTP handler that proxies POST /proxy/openai (envelope, used by the Slack scripts) and
+    POST /v1/chat/completions (OpenAI-shaped, used by the Chrome extension) to OpenAI."""
+
+    OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 
     def log_message(self, format, *args):  # suppress default access log noise
         pass
@@ -116,6 +175,9 @@ class _OpenAIProxyHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
+        if self.path == "/v1/chat/completions":
+            self._handle_chat_completions()
+            return
         if self.path != "/proxy/openai":
             self.send_response(404)
             self.end_headers()
@@ -158,6 +220,42 @@ class _OpenAIProxyHandler(http.server.BaseHTTPRequestHandler):
         except Exception as e:
             self._respond(502, json.dumps({"error": str(e)}))
 
+    def _handle_chat_completions(self):
+        """OpenAI-shaped endpoint for the SlackPolish Chrome extension. A request without its own
+        Authorization header is sent with the key saved in Slack - but only when it comes from a browser
+        extension (Origin chrome-extension://...), an origin web pages cannot forge. The key never leaves
+        this process."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length)
+            json.loads(body)
+        except Exception as e:
+            self._respond(400, json.dumps({"error": {"message": f"Bad request: {e}"}}))
+            return
+
+        authorization = self.headers.get("Authorization", "")
+        if not authorization:
+            origin = self.headers.get("Origin", "") or ""
+            if not origin.startswith("chrome-extension://"):
+                self._respond(401, json.dumps({"error": {"message": "Missing Authorization header (the key saved in Slack is only shared with the SlackPolish browser extension)"}}))
+                return
+            resolver = getattr(self.server, "key_resolver", None)
+            key = resolver.get() if resolver else ""
+            if not key:
+                self._respond(401, json.dumps({"error": {"message": "No OpenAI key is saved in Slack yet: enter it in SlackPolish settings inside Slack, or choose your own key in the extension popup"}}))
+                return
+            authorization = f"Bearer {key}"
+
+        headers = {"Content-Type": "application/json", "Authorization": authorization}
+        try:
+            upstream_req = urllib.request.Request(self.OPENAI_CHAT_URL, data=body, headers=headers, method="POST")
+            with urllib.request.urlopen(upstream_req, timeout=60) as resp:
+                self._respond(resp.status, resp.read().decode("utf-8", errors="replace"))
+        except urllib.error.HTTPError as e:
+            self._respond(e.code, e.read().decode("utf-8", errors="replace"))
+        except Exception as e:
+            self._respond(502, json.dumps({"error": {"message": str(e)}}))
+
     def _respond(self, status, body_str):
         encoded = body_str.encode("utf-8")
         self.send_response(status)
@@ -168,8 +266,11 @@ class _OpenAIProxyHandler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(encoded)
 
 
-def start_openai_proxy(port, timeout=8.0, poll_interval=0.25):
+def start_openai_proxy(port, timeout=8.0, poll_interval=0.25, key_resolver=None):
     """Start the OpenAI proxy HTTP server in a daemon thread. Returns the port.
+
+    ``key_resolver`` (a SlackKeyResolver) lets the /v1/chat/completions endpoint use the key saved in
+    Slack for requests from the SlackPolish Chrome extension.
 
     The proxy port is normally held by the previous launcher instance until it
     exits, so binding is retried for up to ``timeout`` seconds. Must be called
@@ -180,6 +281,7 @@ def start_openai_proxy(port, timeout=8.0, poll_interval=0.25):
     while True:
         try:
             server = http.server.HTTPServer(("127.0.0.1", port), _OpenAIProxyHandler)
+            server.key_resolver = key_resolver
             break
         except OSError as error:
             if error.errno not in (errno.EADDRINUSE, errno.EACCES) or time.monotonic() >= deadline:
@@ -576,8 +678,8 @@ class SlackPolishMacLauncher:
         # The previous launcher (now terminated) held the proxy port; bind only
         # after the lock so "replace running launcher" actually works.
         self._update_status(phase="starting-openai-proxy")
-        start_openai_proxy(self.proxy_port)
-        print_success(f"OpenAI proxy listening on 127.0.0.1:{self.proxy_port}")
+        start_openai_proxy(self.proxy_port, key_resolver=SlackKeyResolver(self.debug_port))
+        print_success(f"OpenAI proxy listening on 127.0.0.1:{self.proxy_port} (shares the key saved in Slack with the Chrome extension)")
 
         try:
             if self.relaunch:

@@ -127,8 +127,9 @@ runTest('Verification, polishable guard and line counting', () => {
 
 runTest('Wiring: content script polishes via the worker with settings, selection support, guards and verification', () => {
     ['slackpolish-polish', 'SlackPolishCore', 'buildPrompt(', 'repairModelOutput', 'verifyEntities', 'extractFragment', 'nothing-to-polish', 'countContentLines', "keepSelection: !!range", 'SlackPolish Needs API Key', 'settings.polish'].forEach(s => assert(contentSource.includes(s), `content script has: ${s}`));
-    ['/chat/completions', 'Authorization: `Bearer ${apiKey}`', 'settings.apiKey', "message.type === 'slackpolish-polish'", 'apiBase'].forEach(s => assert(backgroundSource.includes(s), `worker has: ${s}`));
-    ['AVAILABLE_STYLES', 'SUPPORTED_LANGUAGES', "getElementById('apiKey')", 'settings: {'].forEach(s => assert(popupSource.includes(s), `popup has: ${s}`));
+    ['/chat/completions', 'headers.Authorization = `Bearer ${ownKey}`', 'settings.apiKey', "message.type === 'slackpolish-polish'", 'apiBase', "settings.keySource === 'own'", "DEFAULT_PROXY_BASE = 'http://127.0.0.1:9223/v1'", 'SlackPolish is not running'].forEach(s => assert(backgroundSource.includes(s), `worker has: ${s}`));
+    assert(/if \(useOwnKey\) headers\.Authorization/.test(backgroundSource), 'no Authorization header is sent when using the key saved in Slack (the launcher adds it)');
+    ['AVAILABLE_STYLES', 'SUPPORTED_LANGUAGES', "getElementById('apiKey')", "getElementById('keySlack')", 'keySource: keySource()', 'settings: {'].forEach(s => assert(popupSource.includes(s), `popup has: ${s}`));
     assert(popupHtml.indexOf('../vendor/slack-config.js') < popupHtml.indexOf('popup.js"'), 'popup loads the shared config before its script');
     assert(!/api\.openai\.com/.test(contentSource), 'the content script never calls OpenAI itself (worker does, host permission)');
 });

@@ -212,8 +212,10 @@ in Slack — mentions, links, inline code, emoji and quoted lines are kept verba
 and verified after write-back. It also logs where the hotkey is pressed (Slack,
 Atlassian or another site). The macOS installer stages it under
 `~/Library/Application Support/SlackPolish Runtime/chrome-extension/`; load it
-via `chrome://extensions` → Developer mode → Load unpacked, then enter your
-OpenAI key in the popup. See [extension/README.md](extension/README.md).
+via `chrome://extensions` → Developer mode → Load unpacked and enable polishing
+in the popup. It uses the OpenAI key you already saved in Slack (through the
+running SlackPolish launcher) or a key of its own. See
+[extension/README.md](extension/README.md).
 
 ## 🚫 Platform Support Status
 

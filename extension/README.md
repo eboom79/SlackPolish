@@ -20,17 +20,23 @@ popup shows them, the polish results and lets you copy them as JSON or clear.
    `~/Library/Application Support/SlackPolish Runtime/chrome-extension/`
    (or load it straight from `extension/` in this repo).
 2. `chrome://extensions` → **Developer mode** → **Load unpacked** → choose that folder.
-3. Click the SlackPolish toolbar icon → **Polish in Jira / Confluence**:
-   tick **Polish on Ctrl+Shift**, paste your **OpenAI API key**, pick style and
-   language. (Same catalog as Slack; the key stays in `chrome.storage.local`.)
+3. Click the SlackPolish toolbar icon → **Polish in Jira / Confluence**: tick
+   **Polish on Ctrl+Shift** and pick style and language (same catalog as Slack).
+   By default the extension uses **the OpenAI key you already saved in Slack**:
+   requests go to the SlackPolish launcher's local proxy (127.0.0.1:9223), which
+   reads the key from Slack over DevTools and adds it — nothing is stored in the
+   browser, and the proxy only does this for requests coming from a browser
+   extension origin. Slack must be running through SlackPolish. Alternatively
+   choose **Use my own key** and paste one (kept in `chrome.storage.local`).
 4. Open a Jira issue, click into the comment editor, type, press **Ctrl+Shift**.
    The SlackPolish pill (bottom-left) shows *Improving* → *Active*.
 
 After a SlackPolish update, click **Reload** on the extension card.
 
-The model is called from the extension's background worker (`api.openai.com`
-host permission); the content script never talks to the network. The comment is
-sent to OpenAI only when polishing is enabled and you press the hotkey.
+The model is called from the extension's background worker (host permissions
+for `api.openai.com` and the loopback proxy); the content script never talks to
+the network. The comment is sent to OpenAI only when polishing is enabled and
+you press the hotkey.
 
 ## How a polish works
 

@@ -134,8 +134,9 @@ async function main() {
                 const prompt = (body.messages && body.messages[0] && body.messages[0].content) || '';
                 const m = prompt.match(/=== MESSAGE TO IMPROVE \(improve ONLY the text between these markers\) ===\n([\s\S]*?)\n=== END OF MESSAGE TO IMPROVE ===/);
                 const text = m ? m[1] : '';
-                const mode = route.startsWith('/v1-drop') ? 'drop' : 'faithful';
-                openaiCalls.push({ mode, auth: req.headers.authorization, model: body.model, temperature: body.temperature, prompt, text });
+                const mode = route.startsWith('/v1-drop') ? 'drop' : route.startsWith('/proxy-v1') ? 'proxy' : 'faithful';
+                openaiCalls.push({ mode, auth: req.headers.authorization, origin: req.headers.origin, model: body.model, temperature: body.temperature, prompt, text });
+                if (mode === 'proxy' && req.headers.authorization) { res.statusCode = 400; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ error: { message: 'mock proxy: the extension must not send a key when using the key saved in Slack' } })); return; }
                 let out = text.split('\n').map((line, i) => {
                     if (/^>\s?/.test(line)) return line;
                     let l = line.replace(/\bpls\b/g, 'please').replace(/\bu\b/g, 'you').replace(/^see /, 'See ').replace(/^(• |\d+\. )item /, '$1Item ');
@@ -323,14 +324,14 @@ async function main() {
         const domAfter = `(() => { const ed = document.querySelector('.ProseMirror'); return { html: ed.innerHTML, text: ed.innerText, badge: ((document.getElementById('slackpolish-runtime-status') || {}).textContent || '').trim() || null }; })()`;
 
         // (a) polishing on, no API key: clear error, nothing written
-        await setSettings({ polish: true, apiKey: '', apiBase: `${origin}/v1`, style: 'TONE_POLISH', language: 'ENGLISH' });
+        await setSettings({ polish: true, keySource: 'own', apiKey: '', apiBase: `${origin}/v1`, style: 'TONE_POLISH', language: 'ENGLISH' });
         const noKey = await openAndPress(`${origin}/pm.html`, focusEnd, 'Polish without an API key', 200, domAfter);
         check(!!noKey && noKey.polishEnabled === true && noKey.polish && noKey.polish.ok === false && /API key/i.test(noKey.polish.error || ''), `no key -> error reported: ${noKey && noKey.polish && noKey.polish.error}`);
         check(!!noKey && noKey.__after && noKey.__after.badge === 'SlackPolish Needs API Key' && noKey.__after.html.includes('pls check the'), `badge "${noKey && noKey.__after && noKey.__after.badge}", editor untouched`);
         check(openaiCalls.length === 0, 'no request left the browser without a key');
 
         // (b) whole comment, faithful model
-        await setSettings({ polish: true, apiKey: 'test-key', apiBase: `${origin}/v1`, style: 'TONE_POLISH', language: 'ENGLISH' });
+        await setSettings({ polish: true, keySource: 'own', apiKey: 'test-key', apiBase: `${origin}/v1`, style: 'TONE_POLISH', language: 'ENGLISH' });
         const whole = await openAndPress(`${origin}/pm.html`, focusEnd, 'Polish the whole comment (mock model, keys held 900ms)', 900, domAfter);
         const wp = (whole && whole.polish) || {};
         check(wp.ok === true && wp.mode === 'message' && wp.pasteHandled === true && wp.verification && wp.verification.ok === true, `polish ok=${wp.ok} mode=${wp.mode} paste=${wp.pasteHandled} verify=${JSON.stringify(wp.verification)}${wp.error ? ' error=' + wp.error : ''}`);
@@ -353,13 +354,28 @@ async function main() {
         check(typeof pa.html === 'string' && /<p>hello <span[^>]*data-mention-id="557058:abc"[^>]*>.*?@Dana.*?<\/span> please check the <code>relase<\/code> job <span[^>]*data-emoji-short-name=":tada:"/.test(pa.html) && pa.html.includes('<blockquote><p>can u ship it by fri??</p></blockquote>') && pa.html.includes('<li><p>item one</p></li>'), `only the selection changed: ${(pa.text || '').split('\n')[0]}`);
 
         // (d) careless model: dropped mention, rewritten quote, quotation marks -> repaired before write-back
-        await setSettings({ polish: true, apiKey: 'test-key', apiBase: `${origin}/v1-drop`, style: 'PROFESSIONAL', language: 'ENGLISH' });
+        await setSettings({ polish: true, keySource: 'own', apiKey: 'test-key', apiBase: `${origin}/v1-drop`, style: 'PROFESSIONAL', language: 'ENGLISH' });
         const drop = await openAndPress(`${origin}/pm.html`, focusEnd, 'Careless model: dropped mention + rewritten quote (repair path)', 900, domAfter);
         const dp = (drop && drop.polish) || {};
         check(dp.ok === true && dp.repaired && dp.repaired.substituted.join() === '__SLACKPOLISH_QUOTE_1__' && dp.repaired.appended.join() === '__SLACKPOLISH_MENTION_1__', `repairs: ${JSON.stringify(dp.repaired && { substituted: dp.repaired.substituted, appended: dp.repaired.appended, reanchored: dp.repaired.reanchored, removed: dp.repaired.removed })}${dp.error ? ' error=' + dp.error : ''}`);
         const da = (drop && drop.__after) || {};
         check(typeof da.html === 'string' && da.html.includes('<blockquote><p>can u ship it by fri??</p></blockquote>') && !da.html.includes('Friday') && da.html.includes('data-mention-id="557058:abc"') && !da.html.includes('"Hello'), `quote verbatim, mention back, no quotation marks: ${(da.text || '').replace(/\n+/g, ' | ')}`);
         check(dp.verification && dp.verification.ok === true && openaiCalls.filter(c => c.mode === 'drop').length === 1, `verification ok after repair (${openaiCalls.length} mock calls total)`);
+
+        // (e) default key source: the key saved in Slack, through the launcher's local proxy (mock plays the proxy)
+        await setSettings({ polish: true, keySource: 'slack', apiKey: '', proxyBase: `${origin}/proxy-v1`, style: 'TONE_POLISH', language: 'ENGLISH' });
+        const viaSlack = await openAndPress(`${origin}/pm.html`, focusEnd, 'Polish with the key saved in Slack (via the launcher proxy, mocked)', 900, domAfter);
+        const vp = (viaSlack && viaSlack.polish) || {};
+        const proxyCall = openaiCalls.find(c => c.mode === 'proxy');
+        check(vp.ok === true && !!proxyCall && proxyCall.auth === undefined && /^chrome-extension:\/\/[a-p]{32}$/.test(proxyCall.origin || ''), `no key left the browser; request came from the extension origin: auth=${proxyCall && proxyCall.auth} origin=${proxyCall && proxyCall.origin} ok=${vp.ok}${vp.error ? ' error=' + vp.error : ''}`);
+        check(!!viaSlack && viaSlack.__after && viaSlack.__after.html.includes('<blockquote><p>can u ship it by fri??</p></blockquote>') && /please check the <code>relase<\/code>/.test(viaSlack.__after.html), 'polished through the proxy path too');
+
+        // (f) SlackPolish launcher not running: clear error, editor untouched
+        await setSettings({ polish: true, keySource: 'slack', apiKey: '', proxyBase: 'http://127.0.0.1:9/v1', style: 'TONE_POLISH', language: 'ENGLISH' });
+        const noProxy = await openAndPress(`${origin}/pm.html`, focusEnd, 'Launcher proxy unreachable', 200, domAfter);
+        const np = (noProxy && noProxy.polish) || {};
+        check(np.ok === false && /SlackPolish is not running/.test(np.error || '') && noProxy.__after && noProxy.__after.html.includes('pls check the'), `unreachable proxy -> "${np.error}", editor untouched`);
+
         await setSettings({ polish: false, apiKey: '' });
 
         // ---- The popup: settings selects come from the shared config, the toggle persists, the log renders ----
@@ -373,11 +389,13 @@ async function main() {
             await sleep(500);
             const popup = await browser.evaluate(ps, `({ styles: [...document.querySelectorAll('#style option')].map(o => o.value), languages: document.querySelectorAll('#language option').length, styleLabel: document.querySelector('#style option[value=TONE_POLISH]').textContent, events: document.querySelectorAll('#events li').length, polishRows: document.querySelectorAll('#events .polish').length, okRows: document.querySelectorAll('#events .polish.ok').length, badRows: document.querySelectorAll('#events .polish.bad').length })`, true);
             check(popup.styles.join() === Object.keys(CONFIG.AVAILABLE_STYLES).join() && popup.languages === Object.keys(CONFIG.SUPPORTED_LANGUAGES).length && popup.styleLabel === CONFIG.AVAILABLE_STYLES.TONE_POLISH.name, `popup selects from the shared config: styles=${popup.styles.join(',')} languages=${popup.languages} label="${popup.styleLabel}"`);
-            check(popup.events >= 8 && popup.polishRows === 4 && popup.okRows === 3 && popup.badRows === 1, `popup log renders ${popup.events} events, ${popup.polishRows} polish rows (${popup.okRows} ok, ${popup.badRows} problem)`);
-            await browser.evaluate(ps, `(() => { const p = document.getElementById('polish'); p.checked = true; p.dispatchEvent(new Event('change')); const k = document.getElementById('apiKey'); k.value = 'sk-from-popup'; k.dispatchEvent(new Event('change')); const st = document.getElementById('style'); st.value = 'CONCISE'; st.dispatchEvent(new Event('change')); return true; })()`);
+            check(popup.events >= 10 && popup.polishRows === 6 && popup.okRows === 4 && popup.badRows === 2, `popup log renders ${popup.events} events, ${popup.polishRows} polish rows (${popup.okRows} ok, ${popup.badRows} problem)`);
+            const keyUi = await browser.evaluate(ps, `({ slackChecked: document.getElementById('keySlack').checked, keyDisabled: document.getElementById('apiKey').disabled })`, true);
+            check(keyUi.slackChecked === true && keyUi.keyDisabled === true, `default key source is the key saved in Slack (own-key field disabled): ${JSON.stringify(keyUi)}`);
+            await browser.evaluate(ps, `(() => { const p = document.getElementById('polish'); p.checked = true; p.dispatchEvent(new Event('change')); const own = document.getElementById('keyOwn'); own.checked = true; own.dispatchEvent(new Event('change')); const k = document.getElementById('apiKey'); k.value = 'sk-from-popup'; k.dispatchEvent(new Event('change')); const st = document.getElementById('style'); st.value = 'CONCISE'; st.dispatchEvent(new Event('change')); return document.getElementById('apiKey').disabled; })()`);
             await sleep(300);
             const saved = await browser.evaluate(w, `chrome.storage.local.get('settings').then(r => r.settings)`, true);
-            check(!!saved && saved.polish === true && saved.apiKey === 'sk-from-popup' && saved.style === 'CONCISE' && saved.language === 'ENGLISH', `popup saved settings: ${JSON.stringify(saved)}`);
+            check(!!saved && saved.polish === true && saved.keySource === 'own' && saved.apiKey === 'sk-from-popup' && saved.style === 'CONCISE' && saved.language === 'ENGLISH', `popup saved settings: ${JSON.stringify(saved)}`);
             await browser.send('Target.closeTarget', { targetId: pid }).catch(() => {});
             await setSettings({ polish: false, apiKey: '' });
         }

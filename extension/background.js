@@ -16,14 +16,25 @@ async function appendEvent(event, sender) {
     return events.length;
 }
 
-/** Chat completion with the same request shape as the Slack script. `apiBase` is overridable for tests. */
+const DEFAULT_PROXY_BASE = 'http://127.0.0.1:9223/v1'; // the SlackPolish launcher's local proxy (debug port + 1)
+
+/**
+ * Chat completion with the same request shape as the Slack script.
+ * Key source (settings.keySource):
+ *  - 'slack' (default): no key in the browser; the request goes to the SlackPolish launcher's local proxy,
+ *    which adds the key saved in Slack (only for requests from a browser extension origin).
+ *  - 'own': settings.apiKey straight to OpenAI (settings.apiBase is overridable for tests).
+ */
 async function polish(request) {
     const { settings = {} } = await chrome.storage.local.get('settings');
-    const apiKey = (settings.apiKey || '').trim();
-    if (!apiKey) {
+    const useOwnKey = settings.keySource === 'own';
+    const ownKey = (settings.apiKey || '').trim();
+    if (useOwnKey && !ownKey) {
         return { ok: false, error: 'No OpenAI API key configured (SlackPolish popup → Polish settings).' };
     }
-    const apiBase = (settings.apiBase || 'https://api.openai.com/v1').replace(/\/$/, '');
+    const apiBase = (useOwnKey ? (settings.apiBase || 'https://api.openai.com/v1') : (settings.proxyBase || DEFAULT_PROXY_BASE)).replace(/\/$/, '');
+    const headers = { 'Content-Type': 'application/json' };
+    if (useOwnKey) headers.Authorization = `Bearer ${ownKey}`;
     const body = {
         model: request.model || settings.model || 'gpt-4-turbo',
         messages: [{ role: 'user', content: request.prompt }],
@@ -33,24 +44,23 @@ async function polish(request) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), request.timeoutMs || 45000);
     try {
-        const response = await fetch(`${apiBase}/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-            body: JSON.stringify(body),
-            signal: controller.signal
-        });
+        const response = await fetch(`${apiBase}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal });
         if (!response.ok) {
             const detail = await response.json().catch(() => ({}));
-            return { ok: false, error: (detail.error && detail.error.message) || `HTTP ${response.status}` };
+            return { ok: false, error: (detail.error && detail.error.message) || `HTTP ${response.status}`, keySource: useOwnKey ? 'own' : 'slack' };
         }
         const data = await response.json();
         const text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
         if (!text || !text.trim()) {
             return { ok: false, error: 'Empty response from the model' };
         }
-        return { ok: true, text, usage: data.usage || null, model: body.model };
+        return { ok: true, text, usage: data.usage || null, model: body.model, keySource: useOwnKey ? 'own' : 'slack' };
     } catch (error) {
-        return { ok: false, error: error.name === 'AbortError' ? 'The model request timed out' : String(error.message || error) };
+        if (error.name === 'AbortError') return { ok: false, error: 'The model request timed out' };
+        if (!useOwnKey) {
+            return { ok: false, keySource: 'slack', error: 'SlackPolish is not running, so the key saved in Slack is not reachable. Start Slack through SlackPolish, or choose "Use my own key" in the popup.' };
+        }
+        return { ok: false, error: String(error.message || error) };
     } finally {
         clearTimeout(timer);
     }

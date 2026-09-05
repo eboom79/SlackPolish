@@ -468,7 +468,7 @@ def main():
     extension_dir = stage_chrome_extension()
     if extension_dir:
         print("")
-        print("Chrome extension (hotkey logger, experimental):")
+        print("Chrome extension (polishes Jira/Confluence comments with the key saved in Slack):")
         print("  One time: open chrome://extensions, enable Developer mode, click 'Load unpacked' and choose:")
         print(f"    {extension_dir}")
         print("  After updates: click 'Reload' on the extension card (or restart Chrome).")

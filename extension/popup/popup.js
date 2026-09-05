@@ -82,6 +82,10 @@ function fillSelect(select, catalog, labelOf) {
 async function initSettings() {
     const polish = document.getElementById('polish');
     const apiKey = document.getElementById('apiKey');
+    const keySlack = document.getElementById('keySlack');
+    const keyOwn = document.getElementById('keyOwn');
+    const keySource = () => (keyOwn.checked ? 'own' : 'slack');
+    const syncKeyInput = () => { apiKey.disabled = !keyOwn.checked; };
     const style = document.getElementById('style');
     const language = document.getElementById('language');
     fillSelect(style, CONFIG.AVAILABLE_STYLES, (v, k) => v.name || k);
@@ -89,15 +93,17 @@ async function initSettings() {
 
     const { settings = {} } = await chrome.storage.local.get('settings');
     polish.checked = settings.polish === true;
+    (settings.keySource === 'own' ? keyOwn : keySlack).checked = true;
+    syncKeyInput();
     apiKey.value = settings.apiKey || '';
     style.value = settings.style && CONFIG.AVAILABLE_STYLES && CONFIG.AVAILABLE_STYLES[settings.style] ? settings.style : 'TONE_POLISH';
     language.value = settings.language && CONFIG.SUPPORTED_LANGUAGES && CONFIG.SUPPORTED_LANGUAGES[settings.language] ? settings.language : 'ENGLISH';
 
     const save = async () => {
         const { settings: current = {} } = await chrome.storage.local.get('settings');
-        await chrome.storage.local.set({ settings: { ...current, polish: polish.checked, apiKey: apiKey.value.trim(), style: style.value, language: language.value } });
+        await chrome.storage.local.set({ settings: { ...current, polish: polish.checked, keySource: keySource(), apiKey: apiKey.value.trim(), style: style.value, language: language.value } });
     };
-    [polish, style, language].forEach(el => el.addEventListener('change', save));
+    [polish, style, language, keySlack, keyOwn].forEach(el => el.addEventListener('change', () => { syncKeyInput(); save(); }));
     apiKey.addEventListener('change', save);
     apiKey.addEventListener('blur', save);
 
