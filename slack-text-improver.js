@@ -1183,6 +1183,106 @@
             this.notifySlackDraftChanged(element);
         },
 
+        mapPlainSpanToTokenized: function(tokenizedText, textState, plainStart, plainEnd) {
+            // Map a [start, end) span of the detokenised text onto the tokenised text. A span that cuts
+            // into a token is widened to cover the whole token so entities are never split.
+            const tokenRegex = /__SLACKPOLISH_(?:MENTION|LINK|QUOTE)_\d+__/g;
+            const segments = [];
+            let cursor = 0;
+            let match;
+            while ((match = tokenRegex.exec(tokenizedText)) !== null) {
+                if (match.index > cursor) {
+                    segments.push({ text: tokenizedText.slice(cursor, match.index), token: false });
+                }
+                segments.push({ text: match[0], token: true });
+                cursor = match.index + match[0].length;
+            }
+            if (cursor < tokenizedText.length) {
+                segments.push({ text: tokenizedText.slice(cursor), token: false });
+            }
+
+            let tokenPos = 0;
+            let plainPos = 0;
+            let start = -1;
+            let end = -1;
+            for (const segment of segments) {
+                const plainLength = segment.token ? this.detokenizeToPlainText(segment.text, textState).length : segment.text.length;
+                const segmentPlainEnd = plainPos + plainLength;
+                if (start === -1 && plainStart < segmentPlainEnd) {
+                    start = segment.token ? tokenPos : tokenPos + (plainStart - plainPos);
+                }
+                if (start !== -1 && plainEnd <= segmentPlainEnd) {
+                    end = segment.token ? (plainEnd > plainPos ? tokenPos + segment.text.length : tokenPos) : tokenPos + (plainEnd - plainPos);
+                    break;
+                }
+                plainPos = segmentPlainEnd;
+                tokenPos += segment.text.length;
+            }
+            if (start === -1) {
+                return null;
+            }
+            return { start, end: end === -1 ? tokenizedText.length : end };
+        },
+
+        mergeTextStateInto: function(targetState, sourceState, text) {
+            // Re-key the entities of `sourceState` (fresh ids in `targetState`) and rewrite `text` to match.
+            if (!sourceState) {
+                return text || '';
+            }
+            let result = text || '';
+            const remap = (list, key, counter) => {
+                (sourceState[list] || []).forEach(entity => {
+                    const token = `__SLACKPOLISH_${key}_${targetState[counter]}__`;
+                    targetState[counter] += 1;
+                    result = result.split(entity.token).join(token);
+                    (sourceState.quotes || []).forEach(quote => { quote.text = quote.text.split(entity.token).join(token); });
+                    targetState[list].push({ ...entity, token });
+                });
+            };
+            remap('mentions', 'MENTION', 'nextMentionId');
+            remap('links', 'LINK', 'nextLinkId');
+            remap('quotes', 'QUOTE', 'nextQuoteId');
+            return result;
+        },
+
+        rebuildMessageAroundSelection: function(element, improvedText, selectedText, selectionState) {
+            // Used when the selection range cannot be reconstructed: rebuild the WHOLE message through the
+            // entity-aware extractor so links, mentions, quotes and lists outside the selection survive.
+            const fullState = this.extractTextStateWithMentions(element);
+            const plainFull = this.detokenizeToPlainText(fullState.text, fullState);
+            let start = plainFull.indexOf(selectedText);
+            let length = selectedText.length;
+            if (start === -1) {
+                const normalizedSelected = selectedText.replace(/\s+/g, ' ').trim();
+                const map = [];
+                let normalized = '';
+                for (let index = 0; index < plainFull.length; index++) {
+                    const ch = plainFull[index];
+                    if (/\s/.test(ch)) {
+                        if (!normalized || normalized.endsWith(' ')) continue;
+                        normalized += ' ';
+                    } else {
+                        normalized += ch;
+                    }
+                    map.push(index);
+                }
+                const found = normalizedSelected ? normalized.indexOf(normalizedSelected) : -1;
+                if (found === -1) {
+                    return false;
+                }
+                start = map[found];
+                length = map[found + normalizedSelected.length - 1] - start + 1;
+            }
+            const span = this.mapPlainSpanToTokenized(fullState.text, fullState, start, start + length);
+            if (!span) {
+                return false;
+            }
+            const merged = this.mergeTextStateInto(fullState, selectionState, improvedText);
+            const rebuilt = fullState.text.slice(0, span.start) + merged + fullState.text.slice(span.end);
+            this.setTextWithFormatting(element, this.restoreMissingProtectedTokens(rebuilt, fullState), fullState);
+            return true;
+        },
+
         insertRichTextAtRange: function(range, improvedText, textState) {
             // Replace the range contents with text whose tokens are restored to their original nodes.
             const fragment = document.createDocumentFragment();
@@ -1227,9 +1327,8 @@
 
             } catch (error) {
                 utils.debug('❌ Error replacing selected text:', error);
-                // Fallback to full text replacement
-                utils.debug('🔄 Falling back to full text replacement');
-                this.setTextWithFormatting(element, improvedText, textState);
+                // Never replace the whole message with just the improved selection - leave it unchanged.
+                utils.showNotification('Could not apply the improvement to the selection - message left unchanged.', 'warning');
             }
         },
 
@@ -1348,29 +1447,27 @@
                     selection.addRange(newRange);
 
                     utils.debug('✅ Selected text replacement with preserved info completed');
+                } else if (element.classList.contains('ql-editor')) {
+                    // Range could not be reconstructed: rebuild the whole message entity-aware, so
+                    // links/quotes/mentions/lists outside the selection are preserved.
+                    utils.debug('⚠️ Could not create range, rebuilding the message around the selection');
+                    if (!this.rebuildMessageAroundSelection(element, improvedText, selectedText, textState)) {
+                        utils.showNotification('Could not apply the improvement to the selection - message left unchanged. Please select the text again.', 'warning');
+                        return;
+                    }
+                    this.notifySlackDraftChanged(element);
                 } else {
-                    // Fallback to manual text replacement
-                    utils.debug('⚠️ Could not create range, using manual replacement');
                     const beforeSelection = currentFullText.substring(0, selectionIndex);
                     const afterSelection = currentFullText.substring(selectionIndex + selectedText.length);
-                    const newFullText = beforeSelection + improvedText + afterSelection;
-
-                    if (element.classList.contains('ql-editor')) {
-                        this.setTextWithFormatting(element, newFullText, textState);
-                    } else {
-                        element.innerText = this.detokenizeToPlainText(newFullText, textState);
-                    }
-
+                    element.innerText = this.detokenizeToPlainText(beforeSelection + improvedText + afterSelection, textState);
                     this.notifySlackDraftChanged(element);
-
                     this.placeCaretAtTextPosition(element, selectionIndex + this.detokenizeToPlainText(improvedText, textState).length);
                 }
 
             } catch (error) {
                 utils.debug('❌ Error replacing selected text with preserved info:', error);
-                // Fallback to full text replacement
-                utils.debug('🔄 Falling back to full text replacement');
-                this.setTextWithFormatting(element, improvedText, textState);
+                // Never replace the whole message with just the improved selection - leave it unchanged.
+                utils.showNotification('Could not apply the improvement to the selection - message left unchanged.', 'warning');
             }
         },
 
@@ -3025,12 +3122,11 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
 
             if (improvedText) {
                 // Add emoji signature if enabled
-                let finalText = improvedText;
+                // Restore protected tokens first so anything re-appended lands before the signature
+                let finalText = utils.restoreMissingProtectedTokens(improvedText, textState);
                 if (CONFIG.ADD_EMOJI_SIGNATURE) {
-                    finalText = improvedText + ' :slack_polish:';
+                    finalText = finalText + ' :slack_polish:';
                 }
-
-                finalText = utils.restoreMissingProtectedTokens(finalText, textState);
 
                 utils.log(`Text improvement completed successfully (trigger-id: ${triggerCallId})`);
                 utils.debug('Setting improved text', {

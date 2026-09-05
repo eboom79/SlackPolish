@@ -70,13 +70,14 @@ runTest('Config Loading in Text Improver', () => {
 // Test 5: Emoji Addition Logic
 runTest('Emoji Addition Logic', () => {
     assert(textImproverContent.includes(' :slack_polish:'), 'Emoji signature text not found');
-    assert(textImproverContent.includes('finalText = improvedText + \' :slack_polish:\';'), 'Emoji addition logic not found');
+    assert(textImproverContent.includes('finalText = finalText + \' :slack_polish:\';'), 'Emoji addition logic not found');
+    assert(textImproverContent.indexOf('utils.restoreMissingProtectedTokens(improvedText, textState)') < textImproverContent.indexOf('finalText = finalText + \' :slack_polish:\';'), 'Protected tokens must be restored before the signature is appended');
 });
 
 // Test 6: Conditional Emoji Addition
 runTest('Conditional Emoji Addition', () => {
     assert(textImproverContent.includes('if (CONFIG.ADD_EMOJI_SIGNATURE)'), 'Conditional emoji logic not found');
-    assert(textImproverContent.includes('let finalText = improvedText;'), 'Final text initialization not found');
+    assert(textImproverContent.includes('let finalText = utils.restoreMissingProtectedTokens(improvedText, textState);'), 'Final text initialization not found');
 });
 
 // Test 7: Debug Logging
