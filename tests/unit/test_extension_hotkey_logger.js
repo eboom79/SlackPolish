@@ -28,7 +28,7 @@ runTest('Manifest: MV3, storage-only permission, scripts in dependency order, ve
     assert(!manifest.host_permissions, 'no host_permissions beyond the content script matches');
     const cs = manifest.content_scripts[0];
     assert(JSON.stringify(cs.matches) === JSON.stringify(['<all_urls>']), 'content script must run on all URLs');
-    assert(JSON.stringify(cs.js) === JSON.stringify(['shared/hotkey.js', 'shared/surface.js', 'shared/status-badge.js', 'content/hotkey-logger.js']), 'shared modules must load before the content script');
+    assert(JSON.stringify(cs.js) === JSON.stringify(['shared/hotkey.js', 'shared/surface.js', 'shared/status-badge.js', 'shared/editor.js', 'content/hotkey-logger.js']), 'shared modules must load before the content script');
     assert(!cs.all_frames, 'top frame only');
     assert(manifest.version === versionJson.version_string, `manifest version ${manifest.version} must match version.json ${versionJson.version_string}`);
     for (const rel of ['background.js', 'popup/popup.html', 'popup/popup.js', 'icons/icon16.png', 'icons/icon48.png', 'icons/icon128.png']) {
@@ -90,7 +90,7 @@ runTest('Surface classification', () => {
 });
 
 runTest('Logged event is privacy-safe and reaches the background worker', () => {
-    assert(contentSource.includes("console.log('🔧 SLACKPOLISH_HOTKEY', JSON.stringify(event));"), 'console line for live debugging');
+    assert(contentSource.includes("console.log('🔧 SLACKPOLISH_HOTKEY', JSON.stringify({ ...event, editor: event.editor && { ...event.editor, text: event.editor.text.slice(0, 200)"), 'console line for live debugging (editor text truncated)');
     assert(contentSource.includes("path: location.pathname,") && !contentSource.includes('location.search') && !contentSource.includes('location.href'), 'never record the query string / full URL');
     assert(contentSource.includes("chrome.runtime.sendMessage({ type: 'slackpolish-hotkey', event }"), 'event must be sent to the background worker');
     assert(contentSource.includes('meta[name="application-name"]'), 'self-hosted Jira detection via application-name meta');
@@ -121,6 +121,23 @@ runTest('The popup can check whether the content script is active on the tab', (
     assert(contentSource.includes("message.type === 'slackpolish-ping'"), 'content script must answer the popup ping');
     const popupSource = fs.readFileSync(path.join(root, 'popup/popup.js'), 'utf8');
     assert(popupSource.includes("{ type: 'slackpolish-ping' }") && popupSource.includes('Not active on this tab'), 'popup must report whether the content script is active on the current tab');
+});
+
+runTest('Editor detection: kinds are classified from tag/class/ancestry; text capture is wired and bounded', () => {
+    const Editor = require(path.join(root, 'shared/editor.js'));
+    assert(Editor.classify('div', 'ProseMirror') === 'prosemirror', 'Atlassian editor root');
+    assert(Editor.classify('div', '', { insideProseMirror: true }) === 'prosemirror', 'inside ak-editor-content-area');
+    assert(Editor.classify('div', 'ql-editor ql-blank') === 'quill', 'Slack web editor');
+    assert(Editor.classify('textarea', '') === 'textarea' && Editor.classify('input', '') === 'input', 'plain fields');
+    assert(Editor.classify('div', 'comment-box') === 'contenteditable', 'generic contenteditable');
+    assert(Editor.EDITOR_SELECTORS[0] === '.ProseMirror[contenteditable="true"]', 'ProseMirror must be the first fallback selector');
+    assert(contentSource.includes('editor: SlackPolishEditor.describe(SlackPolishEditor.findActive(document))'), 'event must carry the editor description');
+    assert(contentSource.includes("text: event.editor.text.slice(0, 200)"), 'console line must truncate the editor text');
+    const editorSource = fs.readFileSync(path.join(root, 'shared/editor.js'), 'utf8');
+    assert(editorSource.includes("const maxText = (options && options.maxText) || 5000;"), 'stored text must be bounded');
+    assert(editorSource.includes(".filter(n => n !== 'class' && n !== 'style').sort().join(',')"), 'vocabulary records attribute names only (never values)');
+    const popupSource = fs.readFileSync(path.join(root, 'popup/popup.js'), 'utf8');
+    assert(popupSource.includes("details.className = 'editor'"), 'popup must show the captured text');
 });
 
 console.log('\n===============================================');

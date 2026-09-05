@@ -9,8 +9,11 @@ persisted in `chrome.storage.local` (last 200 presses). Click the toolbar icon
 to see the tally per surface and the list, and to copy it as JSON.
 
 Recorded per press: time, surface (`atlassian` / `slack-web` / `other`), host,
-path, page title, and whether an editable field was focused. The query string
-is never recorded.
+path, page title, whether an editable field was focused, and — when one is —
+the **text of that editor** (e.g. the Jira comment you are writing) together with
+a compact description of its DOM (element kinds, class names and attribute
+*names*, never values). The query string is never recorded. Everything stays in
+`chrome.storage.local` on your machine; use **Clear** in the popup to wipe it.
 
 ## Install (one time)
 
@@ -30,6 +33,7 @@ Chrome) to pick up the new files.
 - `shared/hotkey.js` — chord detection, same semantics as the Slack script
 - `shared/surface.js` — host → surface classification
 - `shared/status-badge.js` — the SlackPolish status pill, copied from the Slack script
+- `shared/editor.js` — finds/describes the focused editor (ProseMirror, Quill, contenteditable, textarea)
 - `content/hotkey-logger.js` — content script (all URLs, top frame)
 - `background.js` — persists events, updates the badge
 - `popup/` — the toolbar popup

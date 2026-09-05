@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "SlackPolish",
   "version": "1.6.2",
-  "description": "SlackPolish hotkey logger: records where Ctrl+Shift is pressed (Slack, Atlassian/Jira, other) - the first step toward polishing outside Slack.",
+  "description": "SlackPolish hotkey logger: records where Ctrl+Shift is pressed (Slack, Atlassian/Jira, other) and the text of the focused editor - the first step toward polishing outside Slack.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -27,6 +27,7 @@
         "shared/hotkey.js",
         "shared/surface.js",
         "shared/status-badge.js",
+        "shared/editor.js",
         "content/hotkey-logger.js"
       ],
       "run_at": "document_idle"

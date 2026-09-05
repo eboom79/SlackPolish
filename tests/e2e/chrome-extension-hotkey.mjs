@@ -88,12 +88,25 @@ async function main() {
     if (!CHROME || !fs.existsSync(CHROME)) { log('⏭  No Chrome for Testing / Chromium found (branded Chrome ignores --load-extension). Install with:\n     npx @puppeteer/browsers install chrome@stable --path ~/Library/Caches/slackpolish-browsers\n   or set CHROME_BIN. Skipping.'); process.exit(0); }
     log(`Using ${CHROME}`);
 
+    const PAGES = {
+        '/test.html': '<!doctype html><html><head><title>SlackPolish extension test page</title></head><body><h1>test</h1><textarea id="t">hello</textarea></body></html>',
+        // Atlassian-editor-like Jira comment: ProseMirror root inside the ak content area, with a mention and a link
+        '/jira.html': '<!doctype html><html><head><title>[RED-1] Test issue - Jira</title><meta name="application-name" content="JIRA"></head><body>'
+            + '<div class="ak-editor-content-area"><div class="ProseMirror" contenteditable="true" aria-label="Main content area, start typing to enter text." data-editor-container-id="x1">'
+            + '<p>hello <span class="ak-mention" data-mention-id="557058:abc" data-access-level="CONTAINER">@Dana</span> pls check the relase</p>'
+            + '<p>see <a href="https://redis.io/docs/latest/" class="css-1qw9a4y" data-testid="link">the docs</a> today</p>'
+            + '<ul><li><p>item one</p></li><li><p>item two</p></li></ul></div></div></body></html>',
+        '/textarea.html': '<!doctype html><html><head><title>Plain textarea page</title></head><body><textarea id="c">a plain comment with a typpo</textarea></body></html>'
+    };
     const server = http.createServer((req, res) => {
+        const body = PAGES[req.url.split('?')[0]];
+        res.statusCode = body ? 200 : 404;
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.end('<!doctype html><html><head><title>SlackPolish extension test page</title></head><body><h1>test</h1><textarea id="t">hello</textarea></body></html>');
+        res.end(body || 'not found');
     });
     await new Promise(r => server.listen(0, '127.0.0.1', r));
-    const pageUrl = `http://127.0.0.1:${server.address().port}/test.html`;
+    const origin = `http://127.0.0.1:${server.address().port}`;
+    const pageUrl = `${origin}/test.html`;
 
     const debugPort = await freePort();
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'slackpolish-chrome-'));
@@ -196,6 +209,40 @@ async function main() {
         await sleep(700);
         const after = await browser.evaluate(w, `chrome.storage.local.get('events').then(r => (r.events || []).length)`, true);
         check(after === 2, `after a second press (with key repeat): ${after} events (want 2)`);
+        const first = (await browser.evaluate(w, `chrome.storage.local.get('events').then(r => r.events || [])`, true))[0];
+        check(first.editor && first.editor.kind === 'textarea' && first.editor.text === 'hello', `test page editor captured: ${first.editor && first.editor.kind} "${first.editor && first.editor.text}"`);
+
+        // More pages: a Jira-like ProseMirror comment and a plain textarea
+        const openAndPress = async (url, focusJs, label) => {
+            log(`▶ ${label}`);
+            const { targetId: tid } = await browser.send('Target.createTarget', { url });
+            const { sessionId: s } = await browser.send('Target.attachToTarget', { targetId: tid, flatten: true });
+            await browser.send('Runtime.enable', {}, s); await browser.send('Page.enable', {}, s);
+            await browser.waitForEvent(s, 'Page.loadEventFired').catch(() => {});
+            await browser.send('Emulation.setFocusEmulationEnabled', { enabled: true }, s).catch(() => {});
+            await browser.send('Page.bringToFront', {}, s).catch(() => {});
+            await sleep(700);
+            await browser.evaluate(s, focusJs);
+            const before = await browser.evaluate(w, `chrome.storage.local.get('events').then(r => (r.events || []).length)`, true);
+            const k = (type, kk, code, vk, mods) => browser.send('Input.dispatchKeyEvent', { type, key: kk, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: mods }, s);
+            await sleep(650);
+            await k('keyDown', 'Control', 'ControlLeft', 17, 2); await k('keyDown', 'Shift', 'ShiftLeft', 16, 10); await sleep(60); await k('keyUp', 'Shift', 'ShiftLeft', 16, 2); await k('keyUp', 'Control', 'ControlLeft', 17, 0);
+            const events = await waitFor(async () => { const v = await browser.evaluate(w, `chrome.storage.local.get('events').then(r => r.events || [])`, true); return v.length > before ? v : null; }, { timeoutMs: 5000, what: 'new stored event' }).catch(() => []);
+            await browser.send('Target.closeTarget', { targetId: tid }).catch(() => {});
+            return events[events.length - 1];
+        };
+
+        const jira = await openAndPress(`${origin}/jira.html`, `(() => { const ed = document.querySelector('.ProseMirror'); ed.focus(); const r = document.createRange(); r.selectNodeContents(ed.querySelector('p')); r.collapse(false); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); return document.activeElement.className; })()`, 'Jira-like ProseMirror comment');
+        check(!!jira && jira.surface === 'atlassian', `surface classified from application-name meta: ${jira && jira.surface}`);
+        check(!!jira && jira.editor && jira.editor.kind === 'prosemirror', `editor kind: ${jira && jira.editor && jira.editor.kind}`);
+        check(!!jira && jira.editor && jira.editor.text.includes('hello @Dana pls check the relase') && jira.editor.text.includes('see the docs today') && jira.editor.text.includes('item two'), `comment text captured: ${JSON.stringify(jira && jira.editor && jira.editor.text)}`);
+        check(!!jira && jira.editor && jira.editor.blocks.length === 3 && jira.editor.blocks[2].startsWith('ul:'), `block structure: ${JSON.stringify(jira && jira.editor && jira.editor.blocks)}`);
+        const vocab = (jira && jira.editor && jira.editor.vocabulary) || [];
+        check(vocab.some(v => v.startsWith('span.ak-mention[data-access-level,data-mention-id]')) && vocab.some(v => v.startsWith('a.css-1qw9a4y[data-testid,href]')), `DOM vocabulary lists mention/link markup (attribute names only): ${vocab.join(' | ')}`);
+        check(!JSON.stringify(jira).includes('557058:abc') && !JSON.stringify(jira).includes('redis.io/docs'), 'no attribute VALUES (mention id, href) leak into the event outside the visible text');
+
+        const plain = await openAndPress(`${origin}/textarea.html`, `document.getElementById('c').focus(); document.activeElement.id`, 'Plain textarea');
+        check(!!plain && plain.editor && plain.editor.kind === 'textarea' && plain.editor.text === 'a plain comment with a typpo', `textarea captured: ${JSON.stringify(plain && plain.editor && plain.editor.text)}`);
         browser.close();
     } catch (error) {
         check(false, `error: ${error.message}`);

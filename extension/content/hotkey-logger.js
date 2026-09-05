@@ -1,6 +1,6 @@
 /**
  * Content script: log where the SlackPolish hotkey is pressed.
- * Records surface, host, path and title - never the query string (it can carry tokens).
+ * Records surface, host, path, title and the focused editor's text + DOM vocabulary - never the query string.
  * Persisted by the background worker in chrome.storage.local; see the popup.
  */
 (function () {
@@ -22,7 +22,9 @@
             host: location.hostname,
             path: location.pathname,
             title: (document.title || '').slice(0, 120),
-            editorFocused: !!(document.activeElement && (document.activeElement.isContentEditable || /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)))
+            editorFocused: !!(document.activeElement && (document.activeElement.isContentEditable || /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName))),
+            // The editor's text and a compact DOM vocabulary (tag.class combos, attribute names - never values)
+            editor: SlackPolishEditor.describe(SlackPolishEditor.findActive(document))
         };
     }
 
@@ -35,7 +37,7 @@
 
     SlackPolishHotkey.attach(document, hotkey, () => {
         const event = describePage();
-        console.log('🔧 SLACKPOLISH_HOTKEY', JSON.stringify(event));
+        console.log('🔧 SLACKPOLISH_HOTKEY', JSON.stringify({ ...event, editor: event.editor && { ...event.editor, text: event.editor.text.slice(0, 200) + (event.editor.textLength > 200 ? '…' : '') } }));
         showBadge();
         try {
             chrome.runtime.sendMessage({ type: 'slackpolish-hotkey', event }, () => void chrome.runtime.lastError);

@@ -16,6 +16,14 @@ async function load() {
         const where = document.createElement('span'); where.className = 'where'; where.title = `${e.host}${e.path} — ${e.title}`;
         where.textContent = e.host; const small = document.createElement('small'); small.textContent = ` ${e.path}`; where.appendChild(small);
         li.append(time, surface, where);
+        if (e.editor && e.editor.kind && e.editor.kind !== 'none') {
+            const details = document.createElement('details'); details.className = 'editor';
+            const summary = document.createElement('summary');
+            summary.textContent = `${e.editor.kind} · ${e.editor.textLength} chars: ${(e.editor.text || '').replace(/\s+/g, ' ').slice(0, 70)}${e.editor.textLength > 70 ? '…' : ''}`;
+            const pre = document.createElement('pre'); pre.textContent = e.editor.text || '(empty)';
+            details.append(summary, pre);
+            li.appendChild(details);
+        }
         list.appendChild(li);
     });
 }
