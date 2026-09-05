@@ -100,10 +100,31 @@ async function main() {
             + '<span class="zeroWidthSpaceContainer">&#8203;</span><span class="editor-mention-primitive" spellcheck="false">@Dana</span><span class="inlineNodeViewAddZeroWidthSpace">&#8203;</span></span> pls check the relase</p>'
             + '<p data-prosemirror-node-name="paragraph" data-prosemirror-node-block="true" data-prosemirror-content-type="node" data-local-id="p2">see <a href="https://redis.io/docs/latest/" class="css-1qw9a4y" data-testid="link">the docs</a> today</p>'
             + '<ul data-prosemirror-node-name="bulletList" data-prosemirror-node-block="true"><li data-prosemirror-node-name="listItem"><p data-prosemirror-node-name="paragraph">item one</p></li><li data-prosemirror-node-name="listItem"><p data-prosemirror-node-name="paragraph">item two</p></li></ul></div></div></body></html>',
-        '/textarea.html': '<!doctype html><html><head><title>Plain textarea page</title></head><body><textarea id="c">a plain comment with a typpo</textarea></body></html>'
+        '/textarea.html': '<!doctype html><html><head><title>Plain textarea page</title></head><body><textarea id="c">a plain comment with a typpo</textarea></body></html>',
+        // A REAL ProseMirror editor (bundled fixture) with an Atlassian-like schema: mention + emoji inline node views
+        // rendered/parsed with the same attributes Jira uses, plus links, code marks, blockquote and lists.
+        '/pm.html': '<!doctype html><html><head><title>[RED-2] ProseMirror editor - Jira</title><meta name="application-name" content="JIRA"></head><body>'
+            + '<div class="ak-editor-content-area"><div id="pm-mount"></div></div>'
+            + '<script src="/prosemirror.bundle.js"></script><script>'
+            + 'const { EditorState, EditorView, Schema, DOMParser, basicSchema, addListNodes, history, undo, redo, keymap, baseKeymap } = PM;'
+            + 'const nodes = addListNodes(basicSchema.spec.nodes, "paragraph block*", "block")'
+            + '  .addToEnd("mention", { inline: true, group: "inline", atom: true, attrs: { id: {}, text: {} }, selectable: false,'
+            + '     toDOM: n => ["span", { class: "mentionView-content-wrap inlineNodeView", contenteditable: "false", "data-prosemirror-node-name": "mention", "data-prosemirror-node-inline": "true", "data-mention-id": n.attrs.id }, ["span", { class: "zeroWidthSpaceContainer" }, "\\u200B"], ["span", { class: "editor-mention-primitive" }, n.attrs.text], ["span", { class: "inlineNodeViewAddZeroWidthSpace" }, "\\u200B"]],'
+            + '     parseDOM: [{ tag: "span[data-mention-id]", getAttrs: d => ({ id: d.getAttribute("data-mention-id"), text: (d.querySelector(".editor-mention-primitive") || d).textContent.replace(/\\u200B/g, "") }) }] })'
+            + '  .addToEnd("emoji", { inline: true, group: "inline", atom: true, attrs: { shortName: {} }, selectable: false,'
+            + '     toDOM: n => ["span", { contenteditable: "false", "data-prosemirror-node-name": "emoji", "data-prosemirror-node-inline": "true", "data-emoji-short-name": n.attrs.shortName, "data-emoji-text": n.attrs.shortName }, ["span", { class: "emojiView-content-wrap", role: "img", "aria-label": n.attrs.shortName }, ["img", { class: "emoji-common-emoji-image", alt: n.attrs.shortName, src: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" }]]],'
+            + '     parseDOM: [{ tag: "span[data-emoji-short-name]", getAttrs: d => ({ shortName: d.getAttribute("data-emoji-short-name") }) }] });'
+            + 'const schema = new Schema({ nodes, marks: basicSchema.spec.marks });'
+            + 'const src = document.createElement("div"); src.innerHTML = \'<p>hello <span data-mention-id="557058:abc">@Dana</span> pls check the <code>relase</code> job <span data-emoji-short-name=":tada:"></span></p><p>see <a href="https://redis.io/docs/latest/">https://redis.io/docs/latest/</a> today</p><blockquote><p>can u ship it by fri??</p></blockquote><ul><li><p>item one</p></li><li><p>item two</p></li></ul>\';'
+            + 'const doc = DOMParser.fromSchema(schema).parse(src);'
+            + 'window.view = new EditorView(document.getElementById("pm-mount"), { state: EditorState.create({ doc, plugins: [history(), keymap({ "Mod-z": undo, "Mod-y": redo }), keymap(baseKeymap)] }), attributes: { id: "ak-editor-textarea", "aria-label": "Comment area, start typing to enter text.", role: "textbox" } });'
+            + '</script></body></html>'
     };
+    const bundle = fs.readFileSync(path.join(here, 'fixtures/prosemirror.bundle.js'));
     const server = http.createServer((req, res) => {
-        const body = PAGES[req.url.split('?')[0]];
+        const route = req.url.split('?')[0];
+        if (route === '/prosemirror.bundle.js') { res.setHeader('Content-Type', 'application/javascript'); res.end(bundle); return; }
+        const body = PAGES[route];
         res.statusCode = body ? 200 : 404;
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.end(body || 'not found');
@@ -231,7 +252,7 @@ async function main() {
             const k = (type, kk, code, vk, mods) => browser.send('Input.dispatchKeyEvent', { type, key: kk, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: mods }, s);
             await sleep(650);
             await k('keyDown', 'Control', 'ControlLeft', 17, 2); await k('keyDown', 'Shift', 'ShiftLeft', 16, 10); await sleep(60); await k('keyUp', 'Shift', 'ShiftLeft', 16, 2); await k('keyUp', 'Control', 'ControlLeft', 17, 0);
-            const events = await waitFor(async () => { const v = await browser.evaluate(w, `chrome.storage.local.get('events').then(r => r.events || [])`, true); return v.length > before ? v : null; }, { timeoutMs: 5000, what: 'new stored event' }).catch(() => []);
+            const events = await waitFor(async () => { const v = await browser.evaluate(w, `chrome.storage.local.get('events').then(r => r.events || [])`, true); return v.length > before ? v : null; }, { timeoutMs: 8000, what: 'new stored event' }).catch(() => []);
             await browser.send('Target.closeTarget', { targetId: tid }).catch(() => {});
             return events[events.length - 1];
         };
@@ -251,6 +272,18 @@ async function main() {
 
         const plain = await openAndPress(`${origin}/textarea.html`, `document.getElementById('c').focus(); document.activeElement.id`, 'Plain textarea');
         check(!!plain && plain.editor && plain.editor.kind === 'textarea' && plain.editor.text === 'a plain comment with a typpo', `textarea captured: ${JSON.stringify(plain && plain.editor && plain.editor.text)}`);
+
+        // Round-trip write-back on a REAL ProseMirror editor (opt-in setting)
+        await browser.evaluate(w, `chrome.storage.local.set({ roundTrip: true })`, true);
+        const rt = await openAndPress(`${origin}/pm.html`, `(() => { const ed = document.querySelector('.ProseMirror'); ed.focus(); const sel = getSelection(); const r = document.createRange(); r.setStart(ed.querySelector('p').firstChild, 2); r.collapse(true); sel.removeAllRanges(); sel.addRange(r); return document.activeElement.id; })()`, 'Real ProseMirror editor: round-trip write-back');
+        await browser.evaluate(w, `chrome.storage.local.set({ roundTrip: false })`, true);
+        const r = (rt && rt.roundTrip) || {};
+        check(!!rt && rt.editor && rt.editor.kind === 'prosemirror' && rt.editor.field === 'comment', `editor recognised: ${rt && rt.editor && rt.editor.kind}/${rt && rt.editor && rt.editor.field}`);
+        check(r.pasteHandled === true, `editor handled the synthetic paste: ${r.pasteHandled}`);
+        const kinds = (r.entities || []).map(e => e.kind).join(',');
+        check(kinds === 'MENTION,CODE,EMOJI,LINK', `entities tokenised in order: ${kinds}`);
+        check(typeof r.modelText === 'string' && r.modelText.split('\n')[0] === 'hello __SLACKPOLISH_MENTION_1__ pls check the __SLACKPOLISH_CODE_1__ job __SLACKPOLISH_EMOJI_1__' && r.modelText.includes('> can u ship it by fri??') && r.modelText.includes('• item one'), `model text: ${JSON.stringify(r.modelText)}`);
+        check(r.textSame === true && r.nodesSame === true && r.ok === true, `round trip lossless: text=${r.textSame} nodes=${r.nodesSame} ok=${r.ok}${r.error ? ' error=' + r.error : ''}\n      before: ${JSON.stringify(r.before && r.before.text)}\n      after : ${JSON.stringify(r.after && r.after.text)}`);
         browser.close();
     } catch (error) {
         check(false, `error: ${error.message}`);

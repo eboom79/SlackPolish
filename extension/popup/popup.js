@@ -16,6 +16,15 @@ async function load() {
         const where = document.createElement('span'); where.className = 'where'; where.title = `${e.host}${e.path} — ${e.title}`;
         where.textContent = e.host; const small = document.createElement('small'); small.textContent = ` ${e.path}`; where.appendChild(small);
         li.append(time, surface, where);
+        if (e.roundTrip) {
+            const rt = document.createElement('details'); rt.className = `roundtrip ${e.roundTrip.ok ? 'ok' : 'bad'}`;
+            const sum = document.createElement('summary');
+            sum.textContent = e.roundTrip.ok ? '↺ round-trip OK — write-back is lossless here' : `↺ round-trip PROBLEM — ${e.roundTrip.error || (!e.roundTrip.pasteHandled ? 'editor ignored the paste' : !e.roundTrip.textSame ? 'text changed' : 'nodes changed')}`;
+            const pre = document.createElement('pre');
+            pre.textContent = `model text:\n${e.roundTrip.modelText || ''}\n\nentities: ${JSON.stringify(e.roundTrip.entities || [])}\n\nbefore: ${JSON.stringify(e.roundTrip.before || {}, null, 1)}\n\nafter: ${JSON.stringify(e.roundTrip.after || {}, null, 1)}`;
+            rt.append(sum, pre);
+            li.appendChild(rt);
+        }
         if (e.editor && e.editor.kind && e.editor.kind !== 'none') {
             const details = document.createElement('details'); details.className = 'editor';
             const summary = document.createElement('summary');
@@ -55,6 +64,12 @@ document.getElementById('clear').addEventListener('click', async () => {
     }
 }
 
+(async () => {
+    const box = document.getElementById('roundtrip');
+    const { roundTrip = false } = await chrome.storage.local.get('roundTrip');
+    box.checked = !!roundTrip;
+    box.addEventListener('change', () => chrome.storage.local.set({ roundTrip: box.checked }));
+})();
 checkActiveTab();
 load();
 });

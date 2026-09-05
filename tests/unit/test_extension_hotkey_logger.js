@@ -28,7 +28,7 @@ runTest('Manifest: MV3, storage-only permission, scripts in dependency order, ve
     assert(!manifest.host_permissions, 'no host_permissions beyond the content script matches');
     const cs = manifest.content_scripts[0];
     assert(JSON.stringify(cs.matches) === JSON.stringify(['<all_urls>']), 'content script must run on all URLs');
-    assert(JSON.stringify(cs.js) === JSON.stringify(['shared/hotkey.js', 'shared/surface.js', 'shared/status-badge.js', 'shared/editor.js', 'content/hotkey-logger.js']), 'shared modules must load before the content script');
+    assert(JSON.stringify(cs.js) === JSON.stringify(['shared/hotkey.js', 'shared/surface.js', 'shared/status-badge.js', 'shared/editor.js', 'shared/atlassian-adapter.js', 'content/hotkey-logger.js']), 'shared modules must load before the content script');
     assert(!cs.all_frames, 'top frame only');
     assert(manifest.version === versionJson.version_string, `manifest version ${manifest.version} must match version.json ${versionJson.version_string}`);
     for (const rel of ['background.js', 'popup/popup.html', 'popup/popup.js', 'icons/icon16.png', 'icons/icon48.png', 'icons/icon128.png']) {
@@ -149,6 +149,36 @@ runTest('Atlassian specifics: zero-width padding stripped, field from aria-label
     assert(Editor.fieldFromAriaLabel('') === null && Editor.fieldFromAriaLabel(null) === null, 'unknown editors');
     const editorSource = fs.readFileSync(path.join(root, 'shared/editor.js'), 'utf8');
     assert(editorSource.includes("el.querySelectorAll('[data-prosemirror-node-name]')") && editorSource.includes("el.querySelectorAll('[data-prosemirror-node-inline]')"), 'describe() must summarise Atlassian node names and inline node views');
+});
+
+runTest('Atlassian adapter: HTML rebuild from model text restores entity nodes verbatim and Slack-style structure', () => {
+    const A = require(path.join(root, 'shared/atlassian-adapter.js'));
+    const entities = [
+        { token: '__SLACKPOLISH_MENTION_1__', kind: 'MENTION', text: '@Dana', html: '<span class="mentionView-content-wrap" data-mention-id="1">@Dana</span>' },
+        { token: '__SLACKPOLISH_LINK_1__', kind: 'LINK', text: 'https://x.io/a?b=1&c=2', html: '<a href="https://x.io/a?b=1&amp;c=2">https://x.io/a?b=1&amp;c=2</a>' },
+        { token: '__SLACKPOLISH_CODE_1__', kind: 'CODE', text: 'npm test', html: '<code>npm test</code>' },
+        { token: '__SLACKPOLISH_CODE_2__', kind: 'CODE', text: 'make deploy', html: '<pre><code>make deploy</code></pre>' }
+    ];
+    const text = '__SLACKPOLISH_MENTION_1__ please <run> __SLACKPOLISH_CODE_1__ & see __SLACKPOLISH_LINK_1__\n> quoted line\n> second quoted\n• item one\n• item two\n1. first\n2. second\n\n__SLACKPOLISH_CODE_2__\nlast';
+    const html = A.buildHtml(text, entities);
+    assert(html.startsWith('<p><span class="mentionView-content-wrap" data-mention-id="1">@Dana</span> please &lt;run&gt; <code>npm test</code> &amp; see <a href="https://x.io/a?b=1&amp;c=2">https://x.io/a?b=1&amp;c=2</a></p>'), `inline: ${html.slice(0, 200)}`);
+    assert(html.includes('<blockquote><p>quoted line</p><p>second quoted</p></blockquote>'), 'consecutive quote lines form one blockquote');
+    assert(html.includes('<ul><li><p>item one</p></li><li><p>item two</p></li></ul>'), 'bullets');
+    assert(html.includes('<ol><li><p>first</p></li><li><p>second</p></li></ol>'), 'numbered');
+    assert(html.includes('</ol><p></p><pre><code>make deploy</code></pre><p>last</p>'), `blank line -> empty paragraph, block code entity inserted as-is: ${html.slice(-120)}`);
+    assert(A.plainText(text, entities).startsWith('@Dana please <run> npm test & see https://x.io/a?b=1&c=2'), 'plain text detokenises for the text/plain clipboard flavour');
+    assert(!A.buildHtml('x __SLACKPOLISH_LINK_9__ y', entities).includes('<a'), 'unknown tokens are left as text, never invented');
+});
+
+runTest('Round-trip mode is opt-in, Atlassian-only, and reports paste handling', () => {
+    assert(contentSource.includes("settings = await chrome.storage.local.get('roundTrip')"), 'round trip must be read from settings');
+    assert(contentSource.includes("settings.roundTrip && event.surface === 'atlassian' && root && SlackPolishAtlassian.isAtlassianEditor(root)"), 'round trip only on Atlassian editors when enabled');
+    const adapter = fs.readFileSync(path.join(root, 'shared/atlassian-adapter.js'), 'utf8');
+    assert(adapter.includes("new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })"), 'write-back goes through the paste pipeline');
+    assert(adapter.includes('ok: paste.handled && textSame && nodesSame'), 'a paste the editor ignored must not count as a successful round trip');
+    assert(adapter.includes('const ZW = /[\\u200B\\u200C\\u200D\\uFEFF]/g;'), 'zero-width regex must use escapes');
+    const popupSource = fs.readFileSync(path.join(root, 'popup/popup.js'), 'utf8');
+    assert(popupSource.includes("chrome.storage.local.set({ roundTrip: box.checked })"), 'popup toggle persists the setting');
 });
 
 console.log('\n===============================================');

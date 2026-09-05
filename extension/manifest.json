@@ -28,6 +28,7 @@
         "shared/surface.js",
         "shared/status-badge.js",
         "shared/editor.js",
+        "shared/atlassian-adapter.js",
         "content/hotkey-logger.js"
       ],
       "run_at": "document_idle"

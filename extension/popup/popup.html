@@ -20,7 +20,8 @@
   .where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .where small { color: #888; }
   #empty { padding: 24px 12px; color: #666; text-align: center; }
-  details.editor { grid-column: 1 / -1; font-size: 12px; color: #444; }
+  details.editor, .roundtrip { grid-column: 1 / -1; font-size: 12px; color: #444; }
+  .roundtrip.ok { color: #2e7d32; } .roundtrip.bad { color: #b00; }
   details.editor summary { cursor: pointer; color: #1264a3; }
   details.editor pre { white-space: pre-wrap; word-break: break-word; background: #f6f6f6; padding: 6px 8px; border-radius: 4px; max-height: 180px; overflow: auto; margin: 4px 0 0; }
 </style>
@@ -33,6 +34,7 @@
   <button id="clear">Clear</button>
 </header>
 <div id="status" style="padding:6px 12px;font-size:12px;border-bottom:1px solid #eee">Checking this tab…</div>
+<label id="roundtrip-row" style="display:flex;gap:8px;align-items:center;padding:6px 12px;font-size:12px;border-bottom:1px solid #eee;background:#fffbe6"><input type="checkbox" id="roundtrip"> <span><b>Round-trip write-back test</b> (Atlassian only, experimental): on Ctrl+Shift, re-insert the same comment through the editor and check nothing changed. Undo with Ctrl+Z if needed.</span></label>
 <div id="tally"></div>
 <ul id="events"></ul>
 <div id="empty" hidden>No hotkey presses recorded yet. Press Ctrl+Shift on any page.</div>
