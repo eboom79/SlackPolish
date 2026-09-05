@@ -205,13 +205,15 @@ sudo python3 installers/install-slack-LINUX-X64.py
 
 ## 🧩 Chrome Extension (experimental)
 
-`extension/` contains a Chrome extension that, for now, only **logs where the
-SlackPolish hotkey (Ctrl+Shift) is pressed** — Slack, Atlassian/Jira or another
-site — as the first step toward polishing text outside Slack. It reads no text
-and makes no network calls. The macOS installer stages it under
+`extension/` contains a Chrome extension that brings SlackPolish to **Jira and
+Confluence comments**: press Ctrl+Shift in the comment editor and the comment (or
+the selected text) is polished with the same prompts, styles and protections as
+in Slack — mentions, links, inline code, emoji and quoted lines are kept verbatim
+and verified after write-back. It also logs where the hotkey is pressed (Slack,
+Atlassian or another site). The macOS installer stages it under
 `~/Library/Application Support/SlackPolish Runtime/chrome-extension/`; load it
-via `chrome://extensions` → Developer mode → Load unpacked. See
-[extension/README.md](extension/README.md).
+via `chrome://extensions` → Developer mode → Load unpacked, then enter your
+OpenAI key in the popup. See [extension/README.md](extension/README.md).
 
 ## 🚫 Platform Support Status
 

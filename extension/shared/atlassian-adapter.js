@@ -21,7 +21,7 @@
     root.SlackPolishAtlassian = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     const ZW = /[\u200B\u200C\u200D\uFEFF]/g;
-    const TOKEN_RE = /(__SLACKPOLISH_(?:MENTION|LINK|CODE|EMOJI|NODE)_\d+__)/g;
+    const TOKEN_RE = /(__SLACKPOLISH_(?:MENTION|LINK|CODE|EMOJI|NODE|QUOTE)_\d+__)/g;
     const BLOCK_HTML_RE = /^<(pre|div|table|ul|ol|blockquote|hr|figure)\b/i;
 
     function isAtlassianEditor(el) {
@@ -37,10 +37,12 @@
         return { text: '', entities: [], counters: {} };
     }
 
-    function tokenFor(state, kind, el, text) {
+    function tokenFor(state, kind, el, text, html) {
         state.counters[kind] = (state.counters[kind] || 0) + 1;
         const token = `__SLACKPOLISH_${kind}_${state.counters[kind]}__`;
-        state.entities.push({ token, kind, text: clean(text).trim(), html: el.outerHTML });
+        const entity = { token, kind, text: clean(text).trim(), html: html !== undefined ? html : el.outerHTML };
+        if (kind === 'LINK' && el.getAttribute) entity.href = el.getAttribute('href') || el.getAttribute('data-card-url') || '';
+        state.entities.push(entity);
         return token;
     }
 
@@ -73,7 +75,14 @@
         if (nn === 'paragraph' || tag === 'P') {
             lines.push(prefix + inlineText(el, state));
         } else if (nn === 'blockquote' || tag === 'BLOCKQUOTE') {
-            for (const child of el.children) lines.push(...blockLines(child, state, '> '));
+            // Quoted words are someone else's: each quoted paragraph becomes a QUOTE token (as in Slack).
+            // Its text keeps nested inline tokens; its html is the paragraph's inner HTML for write-back.
+            for (const child of el.children) {
+                const inner = inlineText(child, state);
+                if (!inner.trim()) continue;
+                lines.push('> ' + tokenFor(state, 'QUOTE', child, inner, child.innerHTML));
+                state.entities[state.entities.length - 1].text = inner; // keep raw (tokens inside)
+            }
         } else if (nn === 'bulletList' || tag === 'UL') {
             for (const item of el.children) lines.push(...blockLines(item, state, '• '));
         } else if (nn === 'orderedList' || tag === 'OL') {
@@ -96,12 +105,32 @@
         return lines;
     }
 
+    function finish(state, lines) {
+        state.text = lines.join('\n').replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+        return state;
+    }
+
     function extract(root) {
         const state = newState();
         const lines = [];
         for (const block of root.children) lines.push(...blockLines(block, state));
-        state.text = lines.join('\n').replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
-        return state;
+        return finish(state, lines);
+    }
+
+    /** Extract the selected part of the editor (DocumentFragment from range.cloneContents()). */
+    function extractFragment(fragment) {
+        const state = newState();
+        const lines = [];
+        const hasBlocks = [...fragment.childNodes].some(n => n.nodeType === 1 && (nodeName(n) || /^(P|BLOCKQUOTE|UL|OL|LI|PRE|H[1-6]|DIV)$/.test(n.tagName)));
+        if (hasBlocks) {
+            for (const node of fragment.childNodes) {
+                if (node.nodeType === 1) lines.push(...blockLines(node, state));
+                else if (node.nodeType === 3 && clean(node.textContent).trim()) lines.push(clean(node.textContent));
+            }
+        } else {
+            lines.push(inlineText(fragment, state));
+        }
+        return finish(state, lines);
     }
 
     const escapeHtml = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -111,7 +140,9 @@
         return text.split(TOKEN_RE).map(part => {
             if (!part) return '';
             const entity = find(entities, part);
-            return entity ? entity.html : escapeHtml(part);
+            if (entity) return entity.html;
+            // HTML parsing folds runs of spaces; alternate with non-breaking spaces so typed spacing survives
+            return escapeHtml(part).replace(/ {2,}/g, run => run.split('').map((c, i) => (i % 2 ? '&nbsp;' : ' ')).join(''));
         }).join('');
     }
 
@@ -125,7 +156,12 @@
             const line = lines[i];
             if (isQuote(line)) {
                 let inner = '';
-                while (i < lines.length && isQuote(lines[i])) { inner += `<p>${inlineHtml(lines[i].replace(/^>\s?/, ''), entities)}</p>`; i++; }
+                while (i < lines.length && isQuote(lines[i])) {
+                    const content = lines[i].replace(/^>\s?/, '').trim();
+                    const quote = /^__SLACKPOLISH_QUOTE_\d+__$/.test(content) ? find(entities, content) : null;
+                    inner += `<p>${quote ? inlineHtml(quote.text, entities) : inlineHtml(content, entities)}</p>`;
+                    i++;
+                }
                 html += `<blockquote>${inner}</blockquote>`;
                 continue;
             }
@@ -146,8 +182,14 @@
         return html;
     }
 
-    function plainText(text, entities) {
-        return String(text || '').replace(TOKEN_RE, token => { const e = find(entities, token); return e ? e.text : token; });
+    function plainText(text, entities, depth) {
+        depth = depth || 0;
+        if (depth > 5) return String(text || '');
+        return String(text || '').replace(TOKEN_RE, token => {
+            const e = find(entities, token);
+            if (!e) return token;
+            return e.kind === 'QUOTE' ? plainText(e.text, entities, depth + 1) : e.text;
+        });
     }
 
     function selectAll(root) {
@@ -217,5 +259,5 @@
         };
     }
 
-    return { TOKEN_RE, isAtlassianEditor, extract, buildHtml, plainText, inlineHtml, writeBack, roundTrip };
+    return { TOKEN_RE, isAtlassianEditor, extract, extractFragment, buildHtml, plainText, inlineHtml, writeBack, roundTrip };
 });

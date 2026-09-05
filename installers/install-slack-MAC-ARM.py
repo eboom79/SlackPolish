@@ -388,6 +388,9 @@ def stage_chrome_extension():
     if destination.exists():
         shutil.rmtree(destination)
     shutil.copytree(source, destination)
+    # The extension loads slack-config.js (prompts, styles, languages, model) from a vendored copy: keep it current
+    (destination / "vendor").mkdir(exist_ok=True)
+    shutil.copy2(REPO_ROOT / "slack-config.js", destination / "vendor" / "slack-config.js")
     print_success(f"Chrome extension staged at: {destination}")
     return destination
 

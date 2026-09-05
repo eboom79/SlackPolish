@@ -112,6 +112,9 @@ def save_version(version):
     # Update the Chrome extension manifest (same version string)
     update_extension_manifest(version)
 
+    # The extension ships a vendored copy of slack-config.js: keep it identical
+    refresh_extension_vendor_config()
+
 def update_extension_manifest(version):
     """Keep extension/manifest.json in step with version.json."""
     import os
@@ -128,6 +131,18 @@ def update_extension_manifest(version):
         print(f"✅ Updated extension/manifest.json with version {version['version_string']}")
     except Exception as e:
         print(f"❌ Error updating extension/manifest.json: {e}")
+
+
+def refresh_extension_vendor_config():
+    """Copy slack-config.js into extension/vendor/ (the extension loads prompts/styles from it)."""
+    import os, shutil
+    here = os.path.dirname(os.path.abspath(__file__))
+    vendor_dir = os.path.join(here, "extension", "vendor")
+    if not os.path.isdir(os.path.join(here, "extension")):
+        return
+    os.makedirs(vendor_dir, exist_ok=True)
+    shutil.copy2(os.path.join(here, "slack-config.js"), os.path.join(vendor_dir, "slack-config.js"))
+    print("✅ Refreshed extension/vendor/slack-config.js")
 
 
 def update_config_file(version):

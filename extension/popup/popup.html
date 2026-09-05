@@ -2,17 +2,25 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>SlackPolish hotkey log</title>
+<title>SlackPolish</title>
 <style>
-  body { font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; width: 420px; color: #1d1c1d; }
+  body { font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; width: 440px; color: #1d1c1d; }
   header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #ddd; }
   header img { width: 20px; height: 20px; }
   header h1 { font-size: 14px; margin: 0; flex: 1; }
   button { font: inherit; padding: 4px 8px; border: 1px solid #bbb; border-radius: 4px; background: #fff; cursor: pointer; }
   button:hover { background: #f4f4f4; }
+  #status { padding: 6px 12px; font-size: 12px; border-bottom: 1px solid #eee; }
+  section.settings { padding: 8px 12px; border-bottom: 1px solid #eee; background: #fafafa; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 12px; }
+  section.settings h2 { grid-column: 1 / -1; font-size: 12px; margin: 0 0 2px; color: #1264a3; }
+  section.settings label { display: flex; flex-direction: column; gap: 2px; }
+  section.settings label.row { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 8px; }
+  section.settings input[type=password], section.settings select { font: inherit; padding: 3px 6px; border: 1px solid #bbb; border-radius: 4px; background: #fff; }
+  section.settings .hint { grid-column: 1 / -1; color: #666; }
+  #roundtrip-row { display: flex; gap: 8px; align-items: center; padding: 6px 12px; font-size: 12px; border-bottom: 1px solid #eee; background: #fffbe6; }
   #tally { display: flex; gap: 12px; padding: 8px 12px; background: #f8f8f8; border-bottom: 1px solid #eee; }
   #tally span b { display: inline-block; min-width: 1.5em; text-align: right; }
-  #events { max-height: 360px; overflow: auto; margin: 0; padding: 0; list-style: none; }
+  #events { max-height: 320px; overflow: auto; margin: 0; padding: 0; list-style: none; }
   #events li { padding: 6px 12px; border-bottom: 1px solid #f0f0f0; display: grid; grid-template-columns: 74px 84px 1fr; gap: 8px; align-items: baseline; }
   .time { color: #666; font-variant-numeric: tabular-nums; }
   .surface { font-weight: 600; }
@@ -20,24 +28,34 @@
   .where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .where small { color: #888; }
   #empty { padding: 24px 12px; color: #666; text-align: center; }
-  details.editor, .roundtrip { grid-column: 1 / -1; font-size: 12px; color: #444; }
-  .roundtrip.ok { color: #2e7d32; } .roundtrip.bad { color: #b00; }
-  details.editor summary { cursor: pointer; color: #1264a3; }
-  details.editor pre { white-space: pre-wrap; word-break: break-word; background: #f6f6f6; padding: 6px 8px; border-radius: 4px; max-height: 180px; overflow: auto; margin: 4px 0 0; }
+  details.editor, .roundtrip, .polish { grid-column: 1 / -1; font-size: 12px; color: #444; }
+  .roundtrip.ok, .polish.ok { color: #2e7d32; } .roundtrip.bad, .polish.bad { color: #b00; } .polish.skip { color: #8a6d00; }
+  details summary { cursor: pointer; }
+  details.editor summary { color: #1264a3; }
+  details pre { white-space: pre-wrap; word-break: break-word; background: #f6f6f6; padding: 6px 8px; border-radius: 4px; max-height: 180px; overflow: auto; margin: 4px 0 0; color: #333; }
 </style>
 </head>
 <body>
 <header>
   <img src="../icons/icon48.png" alt="">
-  <h1>Hotkey log <small id="count"></small></h1>
-  <button id="copy">Copy as JSON</button>
+  <h1>SlackPolish <small id="count"></small></h1>
+  <button id="copy">Copy log as JSON</button>
   <button id="clear">Clear</button>
 </header>
-<div id="status" style="padding:6px 12px;font-size:12px;border-bottom:1px solid #eee">Checking this tab…</div>
-<label id="roundtrip-row" style="display:flex;gap:8px;align-items:center;padding:6px 12px;font-size:12px;border-bottom:1px solid #eee;background:#fffbe6"><input type="checkbox" id="roundtrip"> <span><b>Round-trip write-back test</b> (Atlassian only, experimental): on Ctrl+Shift, re-insert the same comment through the editor and check nothing changed. Undo with Ctrl+Z if needed.</span></label>
+<div id="status">Checking this tab…</div>
+<section class="settings">
+  <h2>Polish in Jira / Confluence</h2>
+  <label class="row"><input type="checkbox" id="polish"> <span><b>Polish on Ctrl+Shift</b> in Atlassian comment editors (whole comment, or just the selected text)</span></label>
+  <label>OpenAI API key <input type="password" id="apiKey" placeholder="sk-…" autocomplete="off" spellcheck="false"></label>
+  <label>Style <select id="style"></select></label>
+  <label>Language <select id="language"></select></label>
+  <div class="hint">Same prompts, styles and protections as in Slack: mentions, links, inline code, emoji and quoted lines are kept verbatim and verified after write-back. If anything looks wrong, Ctrl+Z restores the original.</div>
+</section>
+<label id="roundtrip-row"><input type="checkbox" id="roundtrip"> <span><b>Diagnostic: round-trip write-back test</b> (Atlassian, when polishing is off): on Ctrl+Shift, re-insert the same comment through the editor and check nothing changed.</span></label>
 <div id="tally"></div>
 <ul id="events"></ul>
 <div id="empty" hidden>No hotkey presses recorded yet. Press Ctrl+Shift on any page.</div>
+<script src="../vendor/slack-config.js"></script>
 <script src="popup.js"></script>
 </body>
 </html>

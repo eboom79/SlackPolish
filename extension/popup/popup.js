@@ -1,3 +1,12 @@
+const CONFIG = window.SLACKPOLISH_CONFIG || {};
+
+function polishSummary(p) {
+    if (p.skipped === 'nothing-to-polish') return { cls: 'skip', text: '✨ nothing to polish (only links/tokens/quote markers)' };
+    if (p.skipped === 'unchanged') return { cls: 'ok', text: '✨ polished: the model returned the text unchanged' };
+    if (p.ok) return { cls: 'ok', text: `✨ polished ${p.mode === 'selection' ? 'the selection' : 'the comment'} (${p.style || ''}, ${p.language || ''})${p.repaired && (p.repaired.appended.length || p.repaired.reanchored.length || p.repaired.substituted.length) ? ' — restored tokens the model dropped' : ''}` };
+    return { cls: 'bad', text: `✨ polish PROBLEM — ${p.error || 'unknown error'}` };
+}
+
 async function load() {
     const { events = [] } = await chrome.storage.local.get('events');
     const list = document.getElementById('events');
@@ -16,6 +25,15 @@ async function load() {
         const where = document.createElement('span'); where.className = 'where'; where.title = `${e.host}${e.path} — ${e.title}`;
         where.textContent = e.host; const small = document.createElement('small'); small.textContent = ` ${e.path}`; where.appendChild(small);
         li.append(time, surface, where);
+        if (e.polish) {
+            const p = e.polish; const s = polishSummary(p);
+            const det = document.createElement('details'); det.className = `polish ${s.cls}`;
+            const sum = document.createElement('summary'); sum.textContent = s.text;
+            const pre = document.createElement('pre');
+            pre.textContent = `before (model text):\n${p.modelText || ''}\n\nmodel response:\n${p.response || ''}\n\nafter repair:\n${(p.repaired && p.repaired.text) || ''}\n\nrepairs: ${JSON.stringify(p.repaired ? { removed: p.repaired.removed, reanchored: p.repaired.reanchored, appended: p.repaired.appended, substituted: p.repaired.substituted } : {})}\n\neditor after write-back:\n${p.modelTextAfter || ''}\n\nverification: ${JSON.stringify(p.verification || {})}${p.error ? `\n\nerror: ${p.error}` : ''}`;
+            det.append(sum, pre);
+            li.appendChild(det);
+        }
         if (e.roundTrip) {
             const rt = document.createElement('details'); rt.className = `roundtrip ${e.roundTrip.ok ? 'ok' : 'bad'}`;
             const sum = document.createElement('summary');
@@ -37,6 +55,58 @@ async function load() {
     });
 }
 
+async function checkActiveTab() {
+    const status = document.getElementById('status');
+    try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab || !tab.id) { status.textContent = 'No active tab.'; return; }
+        chrome.tabs.sendMessage(tab.id, { type: 'slackpolish-ping' }, (reply) => {
+            if (chrome.runtime.lastError || !reply || !reply.ok) {
+                status.innerHTML = '<span style="color:#b00">Not active on this tab.</span> Reload the page (tabs opened before the extension was loaded do not have it; chrome:// pages never do), click into the page, then press Ctrl+Shift.';
+                return;
+            }
+            status.innerHTML = `<span style="color:#2e7d32">Active on this tab</span> — ${reply.host} (${reply.surface}). Click into the editor and press Ctrl+Shift; the SlackPolish badge appears bottom-left.`;
+        });
+    } catch (error) {
+        status.textContent = `Could not check the active tab: ${error.message}`;
+    }
+}
+
+function fillSelect(select, catalog, labelOf) {
+    select.innerHTML = '';
+    Object.entries(catalog || {}).forEach(([key, value]) => {
+        const option = document.createElement('option'); option.value = key; option.textContent = labelOf(value, key); select.appendChild(option);
+    });
+}
+
+async function initSettings() {
+    const polish = document.getElementById('polish');
+    const apiKey = document.getElementById('apiKey');
+    const style = document.getElementById('style');
+    const language = document.getElementById('language');
+    fillSelect(style, CONFIG.AVAILABLE_STYLES, (v, k) => v.name || k);
+    fillSelect(language, CONFIG.SUPPORTED_LANGUAGES, (v, k) => `${v.flag || ''} ${v.name || k}`.trim());
+
+    const { settings = {} } = await chrome.storage.local.get('settings');
+    polish.checked = settings.polish === true;
+    apiKey.value = settings.apiKey || '';
+    style.value = settings.style && CONFIG.AVAILABLE_STYLES && CONFIG.AVAILABLE_STYLES[settings.style] ? settings.style : 'TONE_POLISH';
+    language.value = settings.language && CONFIG.SUPPORTED_LANGUAGES && CONFIG.SUPPORTED_LANGUAGES[settings.language] ? settings.language : 'ENGLISH';
+
+    const save = async () => {
+        const { settings: current = {} } = await chrome.storage.local.get('settings');
+        await chrome.storage.local.set({ settings: { ...current, polish: polish.checked, apiKey: apiKey.value.trim(), style: style.value, language: language.value } });
+    };
+    [polish, style, language].forEach(el => el.addEventListener('change', save));
+    apiKey.addEventListener('change', save);
+    apiKey.addEventListener('blur', save);
+
+    const box = document.getElementById('roundtrip');
+    const { roundTrip = false } = await chrome.storage.local.get('roundTrip');
+    box.checked = !!roundTrip;
+    box.addEventListener('change', () => chrome.storage.local.set({ roundTrip: box.checked }));
+}
+
 document.getElementById('copy').addEventListener('click', async () => {
     const { events = [] } = await chrome.storage.local.get('events');
     await navigator.clipboard.writeText(JSON.stringify(events, null, 2));
@@ -47,31 +117,10 @@ document.getElementById('copy').addEventListener('click', async () => {
 document.getElementById('clear').addEventListener('click', async () => {
     await chrome.storage.local.set({ events: [] });
     await chrome.action.setBadgeText({ text: '' });
-    async function checkActiveTab() {
-    const status = document.getElementById('status');
-    try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!tab || !tab.id) { status.textContent = 'No active tab.'; return; }
-        chrome.tabs.sendMessage(tab.id, { type: 'slackpolish-ping' }, (reply) => {
-            if (chrome.runtime.lastError || !reply || !reply.ok) {
-                status.innerHTML = '<span style="color:#b00">Not active on this tab.</span> Reload the page (tabs opened before the extension was loaded do not have it; chrome:// pages never do), click into the page, then press Ctrl+Shift.';
-                return;
-            }
-            status.innerHTML = `<span style="color:#2e7d32">Active on this tab</span> — ${reply.host} (${reply.surface}). Click into the page and press Ctrl+Shift; the SlackPolish badge appears bottom-left.`;
-        });
-    } catch (error) {
-        status.textContent = `Could not check the active tab: ${error.message}`;
-    }
-}
-
-(async () => {
-    const box = document.getElementById('roundtrip');
-    const { roundTrip = false } = await chrome.storage.local.get('roundTrip');
-    box.checked = !!roundTrip;
-    box.addEventListener('change', () => chrome.storage.local.set({ roundTrip: box.checked }));
-})();
-checkActiveTab();
-load();
+    load();
 });
 
+chrome.storage.onChanged.addListener((changes) => { if (changes.events) load(); });
+initSettings();
+checkActiveTab();
 load();

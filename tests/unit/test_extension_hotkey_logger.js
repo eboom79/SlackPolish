@@ -25,10 +25,10 @@ console.log('===============================================\n');
 runTest('Manifest: MV3, storage-only permission, scripts in dependency order, version in sync', () => {
     assert(manifest.manifest_version === 3, 'must be Manifest V3');
     assert(JSON.stringify(manifest.permissions) === JSON.stringify(['storage']), `permissions must be exactly ["storage"], got ${JSON.stringify(manifest.permissions)}`);
-    assert(!manifest.host_permissions, 'no host_permissions beyond the content script matches');
+    assert(JSON.stringify(manifest.host_permissions) === JSON.stringify(['https://api.openai.com/*', 'http://127.0.0.1/*']), `host_permissions: only OpenAI (polishing) and loopback (test mock), got ${JSON.stringify(manifest.host_permissions)}`);
     const cs = manifest.content_scripts[0];
     assert(JSON.stringify(cs.matches) === JSON.stringify(['<all_urls>']), 'content script must run on all URLs');
-    assert(JSON.stringify(cs.js) === JSON.stringify(['shared/hotkey.js', 'shared/surface.js', 'shared/status-badge.js', 'shared/editor.js', 'shared/atlassian-adapter.js', 'content/hotkey-logger.js']), 'shared modules must load before the content script');
+    assert(JSON.stringify(cs.js) === JSON.stringify(['vendor/slack-config.js', 'shared/hotkey.js', 'shared/surface.js', 'shared/status-badge.js', 'shared/editor.js', 'shared/atlassian-adapter.js', 'shared/polish-core.js', 'content/hotkey-logger.js']), `shared modules must load before the content script: ${JSON.stringify(cs.js)}`);
     assert(!cs.all_frames, 'top frame only');
     assert(manifest.version === versionJson.version_string, `manifest version ${manifest.version} must match version.json ${versionJson.version_string}`);
     for (const rel of ['background.js', 'popup/popup.html', 'popup/popup.js', 'icons/icon16.png', 'icons/icon48.png', 'icons/icon128.png']) {
@@ -175,8 +175,9 @@ runTest('Atlassian adapter: HTML rebuild from model text restores entity nodes v
 });
 
 runTest('Round-trip mode is opt-in, Atlassian-only, and reports paste handling', () => {
-    assert(contentSource.includes("settings = await chrome.storage.local.get('roundTrip')"), 'round trip must be read from settings');
-    assert(contentSource.includes("settings.roundTrip && event.surface === 'atlassian' && root && SlackPolishAtlassian.isAtlassianEditor(root)"), 'round trip only on Atlassian editors when enabled');
+    assert(contentSource.includes("chrome.storage.local.get(['settings', 'roundTrip'])"), 'round trip must be read from settings');
+    assert(contentSource.includes("settings.roundTrip && event.surface === 'atlassian' && event.atlassianEditor"), 'round trip only on Atlassian editors when enabled');
+    assert(contentSource.includes("settings.polish && event.surface === 'atlassian' && event.atlassianEditor"), 'polishing only on Atlassian editors when enabled (takes precedence over the diagnostic)');
     assert(contentSource.includes("const CONTENT_REVISION = '") && contentSource.includes('revision: CONTENT_REVISION,') && contentSource.includes('event.roundTripEnabled = settings.roundTrip === true;'), 'events must carry the script revision and the toggle state for diagnosis');
     const adapter = fs.readFileSync(path.join(root, 'shared/atlassian-adapter.js'), 'utf8');
     assert(adapter.includes("new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })"), 'write-back goes through the paste pipeline');

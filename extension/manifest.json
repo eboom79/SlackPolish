@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "SlackPolish",
   "version": "1.6.2",
-  "description": "SlackPolish hotkey logger: records where Ctrl+Shift is pressed (Slack, Atlassian/Jira, other) and the text of the focused editor - the first step toward polishing outside Slack.",
+  "description": "SlackPolish for the browser: polishes Jira/Confluence comments with the same rules as in Slack (links, mentions, emoji, quotes and code preserved) and logs where the hotkey is pressed.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -24,14 +24,20 @@
         "<all_urls>"
       ],
       "js": [
+        "vendor/slack-config.js",
         "shared/hotkey.js",
         "shared/surface.js",
         "shared/status-badge.js",
         "shared/editor.js",
         "shared/atlassian-adapter.js",
+        "shared/polish-core.js",
         "content/hotkey-logger.js"
       ],
       "run_at": "document_idle"
     }
+  ],
+  "host_permissions": [
+    "https://api.openai.com/*",
+    "http://127.0.0.1/*"
   ]
 }
