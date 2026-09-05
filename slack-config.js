@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.6.1",
-    BUILD: 1,
-    BUILD_DATE: "2026-06-25",
-    DESCRIPTION: "Slack 4.50 / Electron 42 compatibility and smart-context prompt fix",
+    VERSION: "1.6.2",
+    BUILD: 2,
+    BUILD_DATE: "2026-09-05",
+    DESCRIPTION: "Quotes, links, code, emoji and formatting preserved; launcher and installer fixes",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)

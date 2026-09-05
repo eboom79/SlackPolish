@@ -1,8 +1,8 @@
 {
     "major": 1,
     "minor": 6,
-    "build": 1,
-    "version_string": "1.6.1",
-    "description": "Slack 4.50 / Electron 42 compatibility and smart-context prompt fix",
-    "date": "2026-06-25"
+    "build": 2,
+    "version_string": "1.6.2",
+    "description": "Quotes, links, code, emoji and formatting preserved; launcher and installer fixes",
+    "date": "2026-09-05"
 }
