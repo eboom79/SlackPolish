@@ -76,7 +76,7 @@ ok, err = resolver.write_settings({"style": "GRAMMAR", "improveHotkey": "Ctrl+Sh
 out["write"] = {"ok": ok, "err": err, "expression": evaluated[-1]}
 
 # --- live server: WebSocket hello, Slack save relay, chrome-saved write, ping, legacy proxy ---
-port = mod.start_openai_proxy(0, timeout=2.0, key_resolver=resolver, sync_ping_interval=0.4)
+port = mod.start_openai_proxy(0, timeout=2.0, key_resolver=resolver, sync_ping_interval=0.05)
 ext_origin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
 import socket as _socket
 raw = _socket.create_connection(("127.0.0.1", port), timeout=5)
@@ -85,7 +85,19 @@ out["status_line"] = raw.recv(4096).decode("latin-1").split("\\r\\n")[0]
 raw.close()
 ws = mod.SimpleWebSocketClient(f"ws://127.0.0.1:{port}/slackpolish/sync", headers={"Origin": ext_origin})
 ws.connect()
-hello = ws._recv_message(timeout=3)
+def recv_type(kind, timeout=5):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            m = ws._recv_message(timeout=max(0.1, deadline - time.time()))
+        except Exception:
+            return None
+        if m and m.get("type") == kind:
+            return m
+    return None
+first = ws._recv_message(timeout=3)
+out["first_message_type"] = first and first.get("type")
+hello = first if first and first.get("type") == "hello" else recv_type("hello")
 out["hello"] = hello
 
 try:
@@ -102,30 +114,18 @@ def post(path, headers, body):
 slack_settings = {"language": "GERMAN", "style": "PROFESSIONAL", "improveHotkey": "Ctrl+Alt", "personalPolish": "short", "syncWithChrome": True, "savedAt": 1700000002000, "smartContext": {"enabled": True}}
 s, d = post("/slackpolish/sync", {"Content-Type": "application/json", "Origin": "https://app.slack.com"}, {"source": "slack", "settings": slack_settings, "apiKey": "sk-from-slack"})
 out["slack_save"] = {"status": s, "body": d}
-out["relayed"] = ws._recv_message(timeout=3)
+out["relayed"] = recv_type("slack-saved")
 s, d = post("/slackpolish/sync", {"Content-Type": "application/json", "Origin": "https://evil.example"}, {"source": "slack", "settings": slack_settings, "apiKey": "sk-evil"})
 out["web_save"] = {"status": s}
 s, d = post("/slackpolish/sync", {"Content-Type": "application/json", "Origin": "https://app.slack.com"}, {"source": "slack", "settings": dict(slack_settings, syncWithChrome=False, savedAt=1700000003000), "apiKey": "sk-new"})
-out["relayed_off"] = ws._recv_message(timeout=3)
+out["relayed_off"] = recv_type("slack-saved")
 
 ws._send_text(json.dumps({"type": "chrome-saved", "settings": {"language": "FRENCH", "style": "CASUAL", "improveHotkey": "Ctrl+Shift", "personalPolish": ""}, "apiKey": "sk-from-chrome", "savedAt": 1700000004000}))
-ack = None
-deadline = time.time() + 3
-while time.time() < deadline:
-    m = ws._recv_message(timeout=2)
-    if m and m.get("type") == "chrome-saved-ack": ack = m; break
+ack = recv_type("chrome-saved-ack")
 out["ack"] = ack
 out["write_expression"] = evaluated[-1]
 
-pinged = False
-deadline = time.time() + 3
-while time.time() < deadline:
-    try:
-        m = ws._recv_message(timeout=1.5)
-    except Exception:
-        break
-    if m and m.get("type") == "ping": pinged = True; break
-out["pinged"] = pinged
+out["pinged"] = recv_type("ping", timeout=3) is not None
 ws._send_text(json.dumps({"type": "pong"}))
 ws.close()
 
@@ -152,6 +152,7 @@ runTest('Resolver: shared settings (no secrets, no Slack-only fields) and a corr
 
 runTest('WebSocket: extension gets hello with Slack state; web origins are refused', () => {
     assert(r.status_line === 'HTTP/1.1 101 Switching Protocols', `handshake status line as browsers require: ${r.status_line}`);
+    assert(r.first_message_type === 'hello', `the first message must be hello, never a ping: ${r.first_message_type}`);
     assert(r.hello && r.hello.type === 'hello' && r.hello.slack && r.hello.slack.apiKey === 'sk-from-slack' && r.hello.slack.settings.style === 'CONCISE' && r.hello.slack.settings.syncWithChrome === true, `hello: ${JSON.stringify(r.hello)}`);
     assert(/handshake failed: HTTP\/1\.[01] 403/.test(r.web_ws), `web origin refused: ${r.web_ws}`);
 });
