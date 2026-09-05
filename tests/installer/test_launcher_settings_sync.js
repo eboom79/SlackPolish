@@ -75,6 +75,19 @@ out["key"] = resolver.get()
 ok, err = resolver.write_settings({"style": "GRAMMAR", "improveHotkey": "Ctrl+Shift", "smartContext": {"enabled": False}}, "sk-from-chrome", saved_at=1700000001000)
 out["write"] = {"ok": ok, "err": err, "expression": evaluated[-1]}
 
+# --- the launcher's own WebSocket client must not drop a frame that arrives together with the handshake ---
+class FakeSock:
+    def __init__(self, chunks): self.chunks = list(chunks)
+    def recv(self, n): return self.chunks.pop(0) if self.chunks else b""
+    def settimeout(self, t): pass
+    def sendall(self, b): pass
+    def close(self): pass
+coalesced = mod.SimpleWebSocketClient("ws://127.0.0.1:1/x")
+coalesced.socket = FakeSock([b"HTTP/1.1 101 Switching Protocols\\r\\nUpgrade: websocket\\r\\n\\r\\n" + mod._ws_encode_text(json.dumps({"type": "hello", "n": 1})) + mod._ws_encode_text(json.dumps({"type": "ping"}))])
+out["coalesced_status"] = coalesced._recv_http_headers().split("\\r\\n")[0]
+out["coalesced_first"] = coalesced._recv_message(timeout=1)
+out["coalesced_second"] = coalesced._recv_message(timeout=1)
+
 # --- live server: WebSocket hello, Slack save relay, chrome-saved write, ping, legacy proxy ---
 port = mod.start_openai_proxy(0, timeout=2.0, key_resolver=resolver, sync_ping_interval=0.05)
 ext_origin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
@@ -152,6 +165,7 @@ runTest('Resolver: shared settings (no secrets, no Slack-only fields) and a corr
 
 runTest('WebSocket: extension gets hello with Slack state; web origins are refused', () => {
     assert(r.status_line === 'HTTP/1.1 101 Switching Protocols', `handshake status line as browsers require: ${r.status_line}`);
+    assert(r.coalesced_status === 'HTTP/1.1 101 Switching Protocols' && r.coalesced_first && r.coalesced_first.type === 'hello' && r.coalesced_second && r.coalesced_second.type === 'ping', `a frame arriving in the same read as the handshake headers is kept: ${JSON.stringify([r.coalesced_status, r.coalesced_first, r.coalesced_second])}`);
     assert(r.first_message_type === 'hello', `the first message must be hello, never a ping: ${r.first_message_type}`);
     assert(r.hello && r.hello.type === 'hello' && r.hello.slack && r.hello.slack.apiKey === 'sk-from-slack' && r.hello.slack.settings.style === 'CONCISE' && r.hello.slack.settings.syncWithChrome === true, `hello: ${JSON.stringify(r.hello)}`);
     assert(/handshake failed: HTTP\/1\.[01] 403/.test(r.web_ws), `web origin refused: ${r.web_ws}`);

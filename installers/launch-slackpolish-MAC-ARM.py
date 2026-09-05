@@ -817,7 +817,12 @@ class SimpleWebSocketClient:
             if not chunk:
                 break
             data += chunk
-        return data.decode("utf-8", errors="replace")
+        head, separator, rest = data.partition(b"\r\n\r\n")
+        if separator and rest:
+            # Frames the server sent right after the handshake (e.g. the sync hello) can arrive in the same
+            # read as the headers; keep them for _recv_message instead of dropping them.
+            self.recv_buffer = rest + self.recv_buffer
+        return head.decode("utf-8", errors="replace")
 
     def _send_text(self, text):
         payload = text.encode("utf-8")
