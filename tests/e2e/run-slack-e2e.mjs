@@ -54,6 +54,17 @@ async function runStep(composer, step) {
         case 'newline': await composer.newline(); return { ok: true };
         case 'tab': await composer.tab(); return { ok: true };
         case 'backspace': await composer.backspace(); return { ok: true };
+        case 'mention': return composer.mention(step.query, step.labelIncludes);
+        case 'polish': {
+            await composer.waitForNoToasts();
+            await composer.focus();
+            await composer.pressHotkey(step.hotkey || 'Ctrl+Shift');
+            const polish = await composer.waitForPolish();
+            if (!polish.triggered) return { ok: false, reason: 'intermediate polish did not trigger' };
+            if (polish.finalState !== 'active') return { ok: false, reason: `intermediate polish ended in state ${polish.finalState}` };
+            await sleep(600);
+            return { ok: true, note: `intermediate polish ok (${(polish.durationMs / 1000).toFixed(1)}s)` };
+        }
         case 'paste': await composer.paste(step.text); return { ok: true };
         case 'waitFor': {
             const ok = await composer.waitForComposer(step.js, { timeoutMs: step.timeoutMs || 8000 });
@@ -120,17 +131,43 @@ async function main() {
                     log(`  in : ${short(before.lines.join(' ⏎ '))}`);
                     const pre = scenario.precondition ? scenario.precondition(before) : { ok: true };
                     if (!pre.ok) {
+                        log(`  dom: ${JSON.stringify(before.counts)}${before.otherTags.length ? ' other tags: ' + before.otherTags.join(', ') : ''}`);
+                        log(`  html: ${short(before.html, 400)}`);
                         result.status = 'SKIP';
                         result.notes.push(`precondition not met (composer state): ${pre.detail}`);
                         log(`  ⏭  skipped — precondition not met: ${pre.detail}`);
                     } else if (DRY_RUN) {
                         log(`  dom: ${JSON.stringify(before.counts)}${before.slugs.length ? ' slugs=' + JSON.stringify(before.slugs.map(s => s.url)) : ''}`);
+                        if (before.otherTags.length) log(`  other tags: ${before.otherTags.join(', ')}`);
+                        if (before.codeSpans.length) log(`  code: ${JSON.stringify(before.codeSpans)}`);
+                        if (before.preBlocks.length) log(`  pre: ${JSON.stringify(before.preBlocks)}`);
+                        if (before.emojis.length) log(`  emojis: ${JSON.stringify(before.emojis)}`);
+                        if (before.mentionDetails.length) log(`  mentions: ${JSON.stringify(before.mentionDetails)}`);
+                        log(`  html: ${short(before.html, 600)}`);
                     } else {
+                        await composer.waitForNoToasts();
                         await composer.focus();
                         await composer.pressHotkey(hotkey);
                         const polish = await composer.waitForPolish();
-                        result.polish = polish;
-                        if (!polish.triggered) throw new Error(`hotkey did not trigger a polish (state=${polish.finalState}${polish.toasts.length ? ', toasts: ' + polish.toasts.join(' | ') : ''})`);
+                        result.polish = { ...polish, logs: (polish.logs || []).slice(-40) };
+                        const nothingToPolish = polish.toasts.some(t => /Nothing to polish/i.test(t));
+                        if (!polish.triggered && !nothingToPolish) throw new Error(`hotkey did not trigger a polish (state=${polish.finalState}${polish.toasts.length ? ', toasts: ' + polish.toasts.join(' | ') : ''})`);
+                        if (nothingToPolish) {
+                            const afterNoop = await composer.snapshot();
+                            result.after = { text: afterNoop.text, html: afterNoop.html, counts: afterNoop.counts };
+                            log(`  out: (SlackPolish said "Nothing to polish" — no API call)`);
+                            const unchanged = afterNoop.html === before.html;
+                            result.hard = [
+                                { ok: !!scenario.expectNoop, detail: scenario.expectNoop ? 'no-op was expected for this message' : 'UNEXPECTED no-op: SlackPolish refused to polish' },
+                                { ok: unchanged, detail: unchanged ? 'composer unchanged' : 'composer changed despite no-op' }
+                            ];
+                            const messagesAfterNoop = await composer.messageCount();
+                            result.hard.push({ ok: messagesAfterNoop === messagesBefore, detail: messagesAfterNoop === messagesBefore ? 'nothing was sent' : 'MESSAGE COUNT CHANGED' });
+                            for (const h of result.hard) log(`  ${h.ok ? '✅' : '❌'} ${h.detail}`);
+                            if (result.hard.some(h => !h.ok)) result.status = 'FAIL';
+                            throw { skipRest: true };
+                        }
+                        if (scenario.expectNoop) { result.hard = [{ ok: false, detail: 'expected "Nothing to polish", but a polish ran' }]; }
                         const after = await composer.snapshot();
                         result.after = { text: after.text, html: after.html, counts: after.counts, slugs: after.slugs, anchors: after.anchors, mentions: after.mentions };
                         log(`  out: ${short(after.lines.join(' ⏎ '))}  (${(polish.durationMs / 1000).toFixed(1)}s)`);
@@ -150,9 +187,11 @@ async function main() {
                     }
                 }
             } catch (error) {
-                result.status = 'ERROR';
-                result.error = error.message;
-                log(`  💥 ${error.message}`);
+                if (!(error && error.skipRest)) {
+                    result.status = 'ERROR';
+                    result.error = error.message;
+                    log(`  💥 ${error.message}`);
+                }
             }
             result.durationMs = Date.now() - t0;
             if (aborted) break;
