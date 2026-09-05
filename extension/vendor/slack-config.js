@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.6.2",
-    BUILD: 2,
-    BUILD_DATE: "2026-09-05",
-    DESCRIPTION: "Quotes, links, code, emoji and formatting preserved; launcher and installer fixes",
+    VERSION: "1.6.3",
+    BUILD: 3,
+    BUILD_DATE: "2026-09-06",
+    DESCRIPTION: "Chrome extension polishes Jira/Confluence comments with the Slack rules; settings and key synced with Slack on Save",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SlackPolish",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "description": "SlackPolish for the browser: polishes Jira/Confluence comments with the same rules and settings as in Slack (links, mentions, emoji, quotes and code preserved) and logs where the hotkey is pressed.",
   "icons": {
     "16": "icons/icon16.png",
