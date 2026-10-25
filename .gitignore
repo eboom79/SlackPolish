@@ -69,6 +69,8 @@ downloads/
 eggs/
 .eggs/
 lib/
+# ...but the live Slack E2E helpers (tests/e2e/lib/cdp.mjs, composer.mjs) must be tracked
+!tests/e2e/lib/
 lib64/
 parts/
 sdist/
