@@ -1,8 +1,8 @@
 {
     "major": 1,
     "minor": 7,
-    "build": 0,
-    "version_string": "1.7.0",
-    "description": "Renamed to JustPolish: one polisher for Slack, Jira and Confluence",
-    "date": "2026-09-06"
+    "build": 1,
+    "version_string": "1.7.1",
+    "description": "OpenAI model retirement fix: new default model with a verified fallback chain",
+    "date": "2026-10-25"
 }

@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.7.0",
-    BUILD: 0,
-    BUILD_DATE: "2026-09-06",
-    DESCRIPTION: "Renamed to JustPolish: one polisher for Slack, Jira and Confluence",
+    VERSION: "1.7.1",
+    BUILD: 1,
+    BUILD_DATE: "2026-10-25",
+    DESCRIPTION: "OpenAI model retirement fix: new default model with a verified fallback chain",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
