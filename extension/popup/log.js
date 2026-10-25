@@ -1,7 +1,7 @@
 function polishSummary(p) {
     if (p.skipped === 'nothing-to-polish') return { cls: 'skip', text: '✨ nothing to polish (only links/tokens/quote markers)' };
     if (p.skipped === 'unchanged') return { cls: 'ok', text: '✨ polished: the model returned the text unchanged' };
-    if (p.ok) return { cls: 'ok', text: `✨ polished ${p.mode === 'selection' ? 'the selection' : 'the comment'} (${p.style || ''}, ${p.language || ''})${p.repaired && (p.repaired.appended.length || p.repaired.reanchored.length || p.repaired.substituted.length) ? ' — restored tokens the model dropped' : ''}` };
+    if (p.ok) return { cls: 'ok', text: `✨ polished ${p.mode === 'selection' ? 'the selection' : 'the comment'} (${p.style || ''}, ${p.language || ''}${p.model ? ', ' + p.model : ''})${p.modelSwitchedFrom ? ` — ${p.modelSwitchedFrom} was retired by OpenAI` : ''}${p.repaired && (p.repaired.appended.length || p.repaired.reanchored.length || p.repaired.substituted.length) ? ' — restored tokens the model dropped' : ''}` };
     return { cls: 'bad', text: `✨ polish PROBLEM — ${p.error || 'unknown error'}` };
 }
 

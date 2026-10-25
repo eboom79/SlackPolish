@@ -16,6 +16,7 @@ const launcher = read('installers/launch-slackpolish-MAC-ARM.py');
 const popupHtml = read('extension/popup/popup.html');
 const popupJs = read('extension/popup/popup.js');
 const background = read('extension/background.js');
+const openaiRequest = read('extension/shared/openai-request.js');
 const content = read('extension/content/hotkey-logger.js');
 const manifest = JSON.parse(read('extension/manifest.json'));
 
@@ -69,7 +70,7 @@ runTest('Extension menu mirrors the Slack menu: same fields, labels, option text
 
 runTest('Extension: settings and key are local; polishing calls OpenAI directly; sync only on Save', () => {
     assert(!content.includes('slackpolish-slack-settings') && !content.includes('proxyBase') && content.includes('applyHotkey(settings.improveHotkey)'), 'the hotkey path reads chrome.storage only');
-    assert(background.includes("DEFAULT_SYNC_URL = 'ws://127.0.0.1:9223/slackpolish/sync'") && background.includes("'https://api.openai.com/v1'") && background.includes('Authorization: `Bearer ${apiKey}`'), 'direct OpenAI call, sync over a WebSocket');
+    assert(background.includes("DEFAULT_SYNC_URL = 'ws://127.0.0.1:9223/slackpolish/sync'") && background.includes("'https://api.openai.com/v1'") && background.includes("importScripts('shared/openai-request.js')") && openaiRequest.includes('Authorization: `Bearer ${apiKey}`'), 'direct OpenAI call (shared client), sync over a WebSocket');
     assert(!background.includes('/slackpolish/settings') && !background.includes('keySource'), 'no per-polish launcher lookups, no separate key option');
     assert(background.includes("type: 'chrome-saved'") && background.includes("message.type === 'slack-saved'") && background.includes("message.type === 'hello'") && background.includes("message.type === 'chrome-saved-ack'"), 'sync protocol');
     assert(background.includes("settings: next.syncWithSlack ? Object.fromEntries(SHARED_FIELDS.map(f => [f, next[f]])) : null") && background.includes("apiKey: next.apiKey || ''"), 'settings only when the box is checked, key always');

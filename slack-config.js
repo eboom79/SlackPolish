@@ -32,7 +32,8 @@ window.SLACKPOLISH_CONFIG = {
     // NOTE: API key is stored in localStorage, not here for security
     //
     // COST ESTIMATION (as of 2025, prices may change):
-    // gpt-4-turbo: $10.00 per 1M input tokens, $30.00 per 1M output tokens
+    // Prices depend on the model (see https://openai.com/api/pricing). The estimates below were made for
+    // gpt-4-turbo ($10 / $30 per 1M tokens) and are an upper bound for the current default models.
     //
     // Typical usage costs:
     // • Text improvement (500 tokens): ~$0.015 per improvement
@@ -46,8 +47,14 @@ window.SLACKPOLISH_CONFIG = {
     // Total: ~$2.00/month for moderate usage
 
     // Model Selection
-    OPENAI_MODEL: 'gpt-4-turbo',     // High-quality model for better text improvement and summaries
-                                     // Alternative: 'gpt-3.5-turbo' (cheaper but lower quality)
+    // OpenAI retires models on a schedule (gpt-4-turbo stopped on 2026-10-23). The model below is tried
+    // first; when OpenAI answers "model_not_found" the fallbacks are tried in order and the working one is
+    // remembered, so a retirement never stops a polish. Newer models (GPT-5 family) take a different request
+    // shape (max_completion_tokens, default temperature only on some); the client adapts automatically.
+    // Verified on 2026-10-25 with a token-protected polishing prompt: all four below keep mentions, links and
+    // quote lines intact (gpt-5.4-mini ~1.0s, gpt-5.4 ~1.5s, gpt-5.1 ~1.2s, gpt-4.1 ~1.0s).
+    OPENAI_MODEL: 'gpt-5.4-mini',    // Fast, current generation, no announced retirement; keeps edits minimal
+    OPENAI_MODEL_FALLBACKS: ['gpt-5.4', 'gpt-5.1', 'gpt-4.1'],  // gpt-5.1 retires 2027-04-01, gpt-4.1 on 2027-01-14
 
     // Text Improvement Settings
     OPENAI_MAX_TOKENS: 500,          // Maximum tokens for text improvement responses
@@ -74,7 +81,7 @@ window.SLACKPOLISH_CONFIG = {
     // CHANNEL SUMMARY TOKEN LIMITS
     // ========================================
     // Token limits for different summary types
-    // Note: gpt-4-turbo supports up to 4096 completion tokens
+    // Note: kept well below any model's completion limit (older GPT-4 models allowed 4096)
 
     EXECUTIVE_SUMMARY_MAX_TOKENS: 2000,      // Executive Summary: structured bullet points
                                              //

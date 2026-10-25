@@ -6,7 +6,10 @@
  *    pushed here, a Save in the extension menu is pushed to Slack. Settings travel only when the sender's
  *    "Sync settings with …" box is checked; the OpenAI key is always shared (one key is valid for both).
  */
+importScripts('shared/openai-request.js');
+
 const MAX_EVENTS = 200;
+const DEFAULT_MODEL = 'gpt-5.4-mini'; // same as OPENAI_MODEL in slack-config.js (the content script passes the config's value)
 const DEFAULT_SYNC_URL = 'ws://127.0.0.1:9223/slackpolish/sync'; // the JustPolish launcher (debug port + 1)
 const SHARED_FIELDS = ['language', 'style', 'improveHotkey', 'personalPolish'];
 
@@ -36,44 +39,33 @@ async function setSync(patch) {
     return sync;
 }
 
-/** Chat completion with the same request shape as the Slack script, straight to OpenAI with the local key. */
+/**
+ * Chat completion straight to OpenAI with the local key, through the shared client: the configured model
+ * first, then the fallbacks the content script passes from the shared config; a model OpenAI reports as
+ * retired is remembered in chrome.storage so later polishes skip it.
+ */
 async function polish(request) {
     const settings = await getSettings();
     const apiKey = (settings.apiKey || '').trim();
     if (!apiKey) {
         return { ok: false, error: 'No OpenAI API key yet. Enter it in the JustPolish settings (toolbar icon) or in Slack - one key is valid for both.' };
     }
-    const apiBase = (settings.apiBase || 'https://api.openai.com/v1').replace(/\/$/, '');
-    const body = {
-        model: request.model || settings.model || 'gpt-4-turbo',
-        messages: [{ role: 'user', content: request.prompt }],
-        max_tokens: request.maxTokens || settings.maxTokens || 800,
-        temperature: typeof request.temperature === 'number' ? request.temperature : (settings.temperature ?? 0.3)
-    };
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), request.timeoutMs || 45000);
-    try {
-        const response = await fetch(`${apiBase}/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-            body: JSON.stringify(body),
-            signal: controller.signal
-        });
-        if (!response.ok) {
-            const detail = await response.json().catch(() => ({}));
-            return { ok: false, error: (detail.error && detail.error.message) || `HTTP ${response.status}` };
+    const { modelRetired = {} } = await chrome.storage.local.get('modelRetired');
+    return SlackPolishOpenAIRequest.chatCompletionWithFallback({
+        apiBase: settings.apiBase || 'https://api.openai.com/v1',
+        apiKey,
+        model: request.model || settings.model || DEFAULT_MODEL,
+        fallbacks: Array.isArray(request.fallbacks) ? request.fallbacks : [],
+        prompt: request.prompt,
+        maxTokens: request.maxTokens || settings.maxTokens || 800,
+        temperature: typeof request.temperature === 'number' ? request.temperature : (settings.temperature ?? 0.3),
+        timeoutMs: request.timeoutMs || 45000,
+        retired: modelRetired,
+        onRetired: async (model, message) => {
+            modelRetired[model] = { at: new Date().toISOString(), message: String(message || '').slice(0, 200) };
+            await chrome.storage.local.set({ modelRetired });
         }
-        const data = await response.json();
-        const text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-        if (!text || !text.trim()) {
-            return { ok: false, error: 'Empty response from the model' };
-        }
-        return { ok: true, text, usage: data.usage || null, model: body.model };
-    } catch (error) {
-        return { ok: false, error: error.name === 'AbortError' ? 'The model request timed out' : String(error.message || error) };
-    } finally {
-        clearTimeout(timer);
-    }
+    });
 }
 
 // ---------------------------------------------------------------------------

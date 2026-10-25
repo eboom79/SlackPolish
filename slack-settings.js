@@ -487,7 +487,7 @@
             // Test API Key functionality
             testApiKeyBtn.addEventListener('click', async function() {
                 const apiKey = apiKeyInput.value.trim();
-                const model = 'gpt-4-turbo'; // Use default model for testing
+                const model = window.SLACKPOLISH_CONFIG?.OPENAI_MODEL; // The configured model; the shared client falls back if OpenAI retired it
 
                 if (!apiKey) {
                     apiTestStatus.textContent = '❌ Please enter an API key first';

@@ -90,6 +90,9 @@ async function main() {
     if (!CHROME || !fs.existsSync(CHROME)) { log('⏭  No Chrome for Testing / Chromium found (branded Chrome ignores --load-extension). Install with:\n     npx @puppeteer/browsers install chrome@stable --path ~/Library/Caches/slackpolish-browsers\n   or set CHROME_BIN. Skipping.'); process.exit(0); }
     log(`Using ${CHROME}`);
 
+    const slackCfgCtx = { window: {}, console };
+    vm.runInNewContext(fs.readFileSync(path.join(here, '../../slack-config.js'), 'utf8'), slackCfgCtx);
+    const SLACK_CONFIG = slackCfgCtx.window.SLACKPOLISH_CONFIG;
     const PAGES = {
         '/test.html': '<!doctype html><html><head><title>JustPolish extension test page</title></head><body><h1>test</h1><textarea id="t">hello</textarea></body></html>',
         // Atlassian-editor-like Jira comment: ProseMirror root inside the ak content area, with a mention and a link
@@ -157,10 +160,16 @@ async function main() {
                 const prompt = (body.messages && body.messages[0] && body.messages[0].content) || '';
                 const m = prompt.match(/=== MESSAGE TO IMPROVE \(improve ONLY the text between these markers\) ===\n([\s\S]*?)\n=== END OF MESSAGE TO IMPROVE ===/);
                 const text = m ? m[1] : '';
-                const mode = route.startsWith('/v1-drop') ? 'drop' : 'faithful';
-                openaiCalls.push({ mode, auth: req.headers.authorization, model: body.model, temperature: body.temperature, prompt, text });
+                const mode = route.startsWith('/v1-drop') ? 'drop' : route.startsWith('/v1-retired') ? 'retired' : route.startsWith('/v1-strict') ? 'strict' : 'faithful';
+                openaiCalls.push({ mode, auth: req.headers.authorization, model: body.model, temperature: body.temperature, maxTokens: body.max_tokens, maxCompletionTokens: body.max_completion_tokens, prompt, text });
                 res.setHeader('Content-Type', 'application/json');
                 if (!req.headers.authorization) { res.statusCode = 401; res.end(JSON.stringify({ error: { message: 'mock OpenAI: missing Authorization' } })); return; }
+                // Like OpenAI: the GPT-5 family rejects max_tokens (max_completion_tokens is the parameter)
+                if (/^(gpt-5|o\d)/.test(body.model) && body.max_tokens !== undefined) { res.statusCode = 400; res.end(JSON.stringify({ error: { message: "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.", type: 'invalid_request_error', code: 'unsupported_parameter', param: 'max_tokens' } })); return; }
+                // /v1-retired: the configured default model has been retired (what happened to gpt-4-turbo on 2026-10-23)
+                if (mode === 'retired' && body.model === SLACK_CONFIG.OPENAI_MODEL) { res.statusCode = 404; res.end(JSON.stringify({ error: { message: `The model \`${body.model}\` has been deprecated, learn more here: https://platform.openai.com/docs/deprecations`, type: 'invalid_request_error', code: 'model_not_found', param: null } })); return; }
+                // /v1-strict: a model that only accepts the default temperature
+                if (mode === 'strict' && body.temperature !== undefined) { res.statusCode = 400; res.end(JSON.stringify({ error: { message: `Unsupported value: 'temperature' does not support ${body.temperature} with this model. Only the default (1) value is supported.`, type: 'invalid_request_error', code: 'unsupported_value', param: 'temperature' } })); return; }
                 let out = text.split('\n').map((line, i) => {
                     if (/^>\s?/.test(line)) return line;
                     let l = line.replace(/\bpls\b/g, 'please').replace(/\bu\b/g, 'you').replace(/^see /, 'See ').replace(/^(• |\d+\. )item /, '$1Item ');
@@ -402,7 +411,8 @@ async function main() {
         const wp = (whole && whole.polish) || {};
         const call = openaiCalls[openaiCalls.length - 1] || {};
         check(wp.ok === true && wp.mode === 'message' && wp.pasteHandled === true && wp.verification && wp.verification.ok === true, `polish ok=${wp.ok} mode=${wp.mode} paste=${wp.pasteHandled} verify=${JSON.stringify(wp.verification)}${wp.error ? ' error=' + wp.error : ''}`);
-        check(openaiCalls.length === 1 && call.auth === 'Bearer sk-from-slack' && call.model === 'gpt-4-turbo' && call.temperature === 0.3, `one OpenAI request with the key saved in Slack: auth=${call.auth} model=${call.model}`);
+        check(openaiCalls.length === 1 && call.auth === 'Bearer sk-from-slack' && call.model === SLACK_CONFIG.OPENAI_MODEL && call.temperature === 0.3, `one OpenAI request with the key saved in Slack: auth=${call.auth} model=${call.model}`);
+        check(call.maxCompletionTokens >= 500 && call.maxTokens === undefined, `GPT-5-family request shape (max_completion_tokens=${call.maxCompletionTokens}, max_tokens=${call.maxTokens})`);
         check(!!call.prompt && call.prompt.includes(CONFIG.PROMPTS.STYLES.CONCISE) && call.prompt.includes('Use Hebrew language.') && call.prompt.includes('- Additional instructions: Use British spelling') && call.prompt.includes('__SLACKPOLISH_QUOTE_1__: "can u ship it by fri??"'), 'prompt: Slack style, language and personal style, token + quote rules');
         check(call.text === 'hello __SLACKPOLISH_MENTION_1__ pls check the __SLACKPOLISH_CODE_1__ job __SLACKPOLISH_EMOJI_1__\nsee __SLACKPOLISH_LINK_1__ today\n> __SLACKPOLISH_QUOTE_1__\n• item one\n• item two', `model saw tokens, not entities: ${JSON.stringify(call.text)}`);
         check(launcherCalls.length === launcherBefore && launcherReceived.filter(m => m.type !== 'pong').length === wsBefore, `polishing did not contact the launcher (${launcherCalls.length - launcherBefore} requests, ${launcherReceived.filter(m => m.type !== 'pong').length - wsBefore} messages)`);
@@ -422,6 +432,34 @@ async function main() {
         const drop = await openAndPress(`${origin}/pm.html`, focusEnd, 'Careless model: dropped mention + rewritten quote (repair path)', 900, domAfter);
         const dp = (drop && drop.polish) || {}; const da = (drop && drop.__after) || {};
         check(dp.ok === true && dp.repaired && dp.repaired.substituted.join() === '__SLACKPOLISH_QUOTE_1__' && dp.repaired.appended.join() === '__SLACKPOLISH_MENTION_1__' && typeof da.html === 'string' && da.html.includes('<blockquote><p>can u ship it by fri??</p></blockquote>') && !da.html.includes('Friday') && da.html.includes('data-mention-id="557058:abc"') && !da.html.includes('"Hello'), `repairs: ${JSON.stringify(dp.repaired && { substituted: dp.repaired.substituted, appended: dp.repaired.appended })}${dp.error ? ' error=' + dp.error : ''}`);
+        await setSettings({ apiBase: `${origin}/v1` });
+
+        // (d2) OpenAI retired the configured model: the extension falls back, remembers, and skips it next time
+        await setSettings({ apiBase: `${origin}/v1-retired` });
+        await browser.evaluate(w, `chrome.storage.local.remove('modelRetired')`, true);
+        const callsBeforeRetired = openaiCalls.length;
+        const retiredRun = await openAndPress(`${origin}/pm.html`, focusEnd, 'Configured model retired by OpenAI (fallback path)', 900, domAfter);
+        const rp = (retiredRun && retiredRun.polish) || {};
+        const retiredCalls = openaiCalls.slice(callsBeforeRetired);
+        const fallbackModel = SLACK_CONFIG.OPENAI_MODEL_FALLBACKS[0];
+        check(rp.ok === true && rp.model && rp.model.startsWith(fallbackModel) && rp.modelSwitchedFrom === SLACK_CONFIG.OPENAI_MODEL, `polished with the fallback: model=${rp.model} switchedFrom=${rp.modelSwitchedFrom}${rp.error ? ' error=' + rp.error : ''}`);
+        check(retiredCalls.length === 2 && retiredCalls[0].model === SLACK_CONFIG.OPENAI_MODEL && retiredCalls[1].model === fallbackModel, `two requests: ${retiredCalls.map(c => c.model).join(' -> ')}`);
+        const remembered = await browser.evaluate(w, `chrome.storage.local.get('modelRetired').then(r => r.modelRetired || {})`, true);
+        check(!!remembered[SLACK_CONFIG.OPENAI_MODEL] && /deprecated/.test(remembered[SLACK_CONFIG.OPENAI_MODEL].message || ''), `retirement remembered in storage: ${JSON.stringify(Object.keys(remembered))}`);
+        const callsBeforeSecond = openaiCalls.length;
+        const secondRun = await openAndPress(`${origin}/pm.html`, focusEnd, 'Next polish skips the retired model', 900, domAfter);
+        const secondCalls = openaiCalls.slice(callsBeforeSecond);
+        check(!!secondRun && secondRun.polish && secondRun.polish.ok === true && secondCalls.length === 1 && secondCalls[0].model === fallbackModel, `one request straight to ${fallbackModel}: ${secondCalls.map(c => c.model)}`);
+        await browser.evaluate(w, `chrome.storage.local.remove('modelRetired')`, true);
+        const logRows = await browser.evaluate(w, `chrome.storage.local.get('events').then(r => (r.events || []).filter(e => e.polish && e.polish.modelSwitchedFrom).length)`, true);
+        check(logRows >= 1, `activity log records the switch (${logRows} entries)`);
+
+        // (d3) a model that only accepts the default temperature: the request is adapted, not failed
+        await setSettings({ apiBase: `${origin}/v1-strict` });
+        const callsBeforeStrict = openaiCalls.length;
+        const strictRun = await openAndPress(`${origin}/pm.html`, focusEnd, 'Model rejects a non-default temperature (adaptation path)', 900, domAfter);
+        const strictCalls = openaiCalls.slice(callsBeforeStrict);
+        check(!!strictRun && strictRun.polish && strictRun.polish.ok === true && strictCalls.length === 2 && strictCalls[0].temperature === 0.3 && strictCalls[1].temperature === undefined && strictCalls[1].model === SLACK_CONFIG.OPENAI_MODEL, `temperature dropped on retry of the same model: ${strictCalls.map(c => `${c.model}@${c.temperature}`).join(', ')}`);
         await setSettings({ apiBase: `${origin}/v1` });
 
         // (e) a Save in Slack with "Sync settings with Chrome" checked: relayed immediately, no hotkey involved

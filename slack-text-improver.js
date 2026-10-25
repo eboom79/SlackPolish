@@ -7,7 +7,7 @@
     // Configuration - will be overridden by slack-config.js and localStorage
     let CONFIG = {
         OPENAI_API_KEY: '',
-        MODEL: 'gpt-4-turbo',
+        MODEL: 'gpt-5.4-mini',
         STYLE: 'professional',
         LANGUAGE: 'English (USA)',
         CUSTOM_INSTRUCTIONS: '',
@@ -2897,51 +2897,20 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
                 apiKeyLength: CONFIG.OPENAI_API_KEY ? CONFIG.OPENAI_API_KEY.length : 0
             });
 
-            const requestBody = {
-                model: CONFIG.MODEL,
-                messages: [
-                    {
-                        role: 'user',
-                        content: prompt
-                    }
-                ],
-                max_tokens: window.SLACKPOLISH_CONFIG?.OPENAI_MAX_TOKENS || 500,
+            const result = await chatCompletionWithFallback(CONFIG.OPENAI_API_KEY, CONFIG.MODEL, prompt, {
+                maxTokens: window.SLACKPOLISH_CONFIG?.OPENAI_MAX_TOKENS || 500,
                 temperature: this.getImprovementTemperature()
-            };
-
-            utils.debug('API request body', requestBody);
-
-            const response = await fetchWithRetry('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${CONFIG.OPENAI_API_KEY}`
-                },
-                body: JSON.stringify(requestBody)
             });
-
-            utils.debug('API response received', {
-                status: response.status,
-                statusText: response.statusText,
-                ok: response.ok
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                utils.debug('API error', { status: response.status, errorData });
-                throw new Error(errorData.error?.message || `HTTP ${response.status}`);
-            }
-
-            const data = await response.json();
-            const result = data.choices?.[0]?.message?.content || '';
 
             utils.debug('API response processed', {
-                hasChoices: !!data.choices?.length,
-                resultLength: result.length,
-                usage: data.usage
+                model: result.model,
+                servedBy: result.servedBy,
+                switchedFrom: result.switchedFrom || null,
+                resultLength: result.text.length,
+                usage: result.usage
             });
 
-            return result;
+            return result.text;
         }
     };
 
@@ -4766,6 +4735,7 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
 
     // XHR-based fetch replacement. Electron 42's renderer fetch() can be blocked
     // by internal sandbox restrictions; XMLHttpRequest uses the classic network stack.
+    // === OPENAI CLIENT START ===
     async function fetchWithRetry(url, options) {
         const proxyPort = window.__SLACKPOLISH_PROXY_PORT__ || 9224;
         const proxyUrl = `http://127.0.0.1:${proxyPort}/proxy/openai`;
@@ -4800,12 +4770,163 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
         };
     }
 
-    // Initialize global OpenAI system
-    function initializeGlobalOpenAISystem() {
-        if (window.SlackPolishOpenAI) return; // Already initialized
+    // ---------------------------------------------------------------------------------------------
+    // OpenAI model fallback + request-shape adaptation.
+    // OpenAI retires models on a schedule (gpt-4-turbo stopped on 2026-10-23 with "model_not_found").
+    // The configured model is tried first, then OPENAI_MODEL_FALLBACKS in order; a model seen retired is
+    // remembered (localStorage) so the next call goes straight to a working one. Newer models reject
+    // `max_tokens` (they take `max_completion_tokens`) or a non-default `temperature`: such 400s are
+    // answered by adapting the request and retrying the same model.
+    // The pure helpers below are byte-for-byte the same as in extension/shared/openai-request.js;
+    // tests/unit/test_model_fallback.js asserts that.
+    // ---------------------------------------------------------------------------------------------
+    const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
+    const MODEL_RETIRED_KEY = 'slackpolish_model_retired';
 
+    function openAIModelCandidates(model, fallbacks) {
+        const list = [model].concat(Array.isArray(fallbacks) ? fallbacks : []);
+        return list.filter((m, i) => typeof m === 'string' && m.trim() && list.indexOf(m) === i);
+    }
+
+    function openAIUsesCompletionTokens(model) {
+        return /^(gpt-5|o\d)/i.test(String(model || ''));
+    }
+
+    function buildOpenAIChatBody(model, prompt, options, adaptations) {
+        const body = { model, messages: [{ role: 'user', content: prompt }] };
+        const limit = options && options.maxTokens;
+        if (limit) {
+            const useCompletionTokens = (adaptations && adaptations.completionTokens) || openAIUsesCompletionTokens(model);
+            const key = useCompletionTokens ? 'max_completion_tokens' : 'max_tokens';
+            if (!(adaptations && adaptations.dropped && adaptations.dropped.includes(key))) body[key] = limit;
+        }
+        if (options && typeof options.temperature === 'number' && !(adaptations && adaptations.dropped && adaptations.dropped.includes('temperature'))) {
+            body.temperature = options.temperature;
+        }
+        return body;
+    }
+
+    function classifyOpenAIError(status, errorData) {
+        const error = (errorData && errorData.error) || {};
+        const message = error.message || ('HTTP ' + status);
+        const code = error.code || error.type || null;
+        if (code === 'model_not_found' || /has been deprecated|no longer supported|has been retired|does not exist/i.test(message)) {
+            return { kind: 'retired', message, code: 'model_not_found' };
+        }
+        if (code === 'unsupported_parameter' || code === 'unsupported_value') {
+            const match = /'([A-Za-z_]+)'/.exec(message);
+            return { kind: 'unsupported', param: error.param || (match ? match[1] : null), message, code };
+        }
+        return { kind: 'other', message, code };
+    }
+
+    function adaptOpenAIRequest(adaptations, param) {
+        const next = { completionTokens: !!(adaptations && adaptations.completionTokens), dropped: ((adaptations && adaptations.dropped) || []).slice() };
+        if (param === 'max_tokens' && !next.completionTokens) next.completionTokens = true;
+        else if (param && !next.dropped.includes(param)) next.dropped.push(param);
+        else return null; // nothing left to adapt for this model
+        return next;
+    }
+
+    function loadRetiredModels() {
+        try {
+            const value = JSON.parse(localStorage.getItem(MODEL_RETIRED_KEY) || '{}');
+            return value && typeof value === 'object' ? value : {};
+        } catch (error) {
+            return {};
+        }
+    }
+
+    function rememberRetiredModel(model, message) {
+        try {
+            const value = loadRetiredModels();
+            value[model] = { at: new Date().toISOString(), message: String(message || '').slice(0, 200) };
+            localStorage.setItem(MODEL_RETIRED_KEY, JSON.stringify(value));
+        } catch (error) {
+            // remembering is an optimisation only
+        }
+    }
+
+    function notifyModelSwitch(from, to) {
+        const hook = window.SlackPolishOpenAI && window.SlackPolishOpenAI.onModelSwitch;
+        if (typeof hook === 'function') {
+            try { hook({ from, to }); } catch (error) { /* notification only */ }
+        }
+    }
+
+    /**
+     * One chat completion with model fallback and request adaptation (through the local proxy).
+     * Resolves { text, model, servedBy, usage, data, switchedFrom? }; rejects with an Error carrying
+     * status / code / model when no candidate could answer.
+     */
+    async function chatCompletionWithFallback(apiKey, model, prompt, options) {
+        options = options || {};
+        const config = window.SLACKPOLISH_CONFIG || {};
+        const all = openAIModelCandidates(model || config.OPENAI_MODEL, options.fallbacks || config.OPENAI_MODEL_FALLBACKS);
+        const retired = loadRetiredModels();
+        let candidates = all.filter(m => !retired[m]);
+        if (!candidates.length) candidates = all; // everything we know is retired: try anyway
+        const tried = [];
+        for (const candidate of candidates) {
+            let adaptations = { completionTokens: false, dropped: [] };
+            for (let attempt = 0; attempt < 4; attempt++) {
+                const body = buildOpenAIChatBody(candidate, prompt, options, adaptations);
+                const response = await fetchWithRetry(OPENAI_CHAT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                    body: JSON.stringify(body)
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    const text = data.choices?.[0]?.message?.content || '';
+                    const result = { text, model: candidate, servedBy: data.model || candidate, usage: data.usage || null, data };
+                    if (candidate !== all[0]) {
+                        result.switchedFrom = all[0];
+                        notifyModelSwitch(all[0], candidate);
+                    }
+                    return result;
+                }
+                let errorData = {};
+                try { errorData = await response.json(); } catch (error) { errorData = {}; }
+                const problem = classifyOpenAIError(response.status, errorData);
+                if (problem.kind === 'retired') {
+                    rememberRetiredModel(candidate, problem.message);
+                    tried.push(`${candidate} (${problem.message})`);
+                    break;
+                }
+                if (problem.kind === 'unsupported') {
+                    const next = adaptOpenAIRequest(adaptations, problem.param);
+                    if (next) { adaptations = next; continue; }
+                }
+                const error = new Error(problem.message);
+                error.status = response.status;
+                error.code = problem.code;
+                error.model = candidate;
+                throw error;
+            }
+        }
+        const error = new Error(`No usable OpenAI model: ${tried.join('; ') || all.join(', ')}. Set OPENAI_MODEL in slack-config.js to a current model.`);
+        error.status = 404;
+        error.code = 'model_not_found';
+        throw error;
+    }
+
+    // Initialize global OpenAI system. Always (re)defined: when the launcher re-injects a new runtime build
+    // into a live Slack page, the previous build's module object is still on window - keeping it would
+    // leave the old client (old request shape, old models) in use. The module is stateless; init() sets
+    // the onModelSwitch hook right after this call.
+    function initializeGlobalOpenAISystem() {
         window.SlackPolishOpenAI = {
-            async testApiKey(apiKey, model = 'gpt-4-turbo') {
+            // Set by the text improver: called once per fallback so the user learns the configured model was retired
+            onModelSwitch: null,
+
+            /** Shared client for every OpenAI call (text improvement, summaries, key test): fallback + adaptation. */
+            chatCompletion(apiKey, model, prompt, options) {
+                return chatCompletionWithFallback(apiKey, model, prompt, options);
+            },
+
+            async testApiKey(apiKey, model) {
+                model = model || window.SLACKPOLISH_CONFIG?.OPENAI_MODEL;
                 if (window.SlackPolishDebug) {
                     window.SlackPolishDebug.addLog('openai', 'Testing API key', {
                         hasApiKey: !!apiKey,
@@ -4815,70 +4936,43 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
                 }
 
                 try {
-                    const response = await fetchWithRetry('https://api.openai.com/v1/chat/completions', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${apiKey}`
-                        },
-                        body: JSON.stringify({
-                            model: model,
-                            messages: [{
-                                role: 'user',
-                                content: 'Test message - please respond with just "OK"'
-                            }],
-                            max_tokens: 10,
-                            temperature: 0
-                        })
+                    const result = await chatCompletionWithFallback(apiKey, model, 'Test message - please respond with just "OK"', {
+                        maxTokens: 10,
+                        temperature: 0
                     });
 
                     if (window.SlackPolishDebug) {
-                        window.SlackPolishDebug.addLog('openai', 'API test response received', {
-                            status: response.status,
-                            statusText: response.statusText,
-                            ok: response.ok
+                        window.SlackPolishDebug.addLog('openai', 'API test successful', {
+                            model: result.servedBy,
+                            switchedFrom: result.switchedFrom || null,
+                            usage: result.usage,
+                            response: result.text
                         });
                     }
 
-                    if (response.ok) {
-                        const data = await response.json();
-                        const usage = data.usage;
-
-                        if (window.SlackPolishDebug) {
-                            window.SlackPolishDebug.addLog('openai', 'API test successful', {
-                                model: data.model,
-                                usage: usage,
-                                response: data.choices?.[0]?.message?.content
-                            });
+                    return {
+                        success: true,
+                        message: `✅ API key is valid! Model: ${result.servedBy}${result.switchedFrom ? ` (${result.switchedFrom} was retired by OpenAI)` : ''}`,
+                        data: {
+                            model: result.servedBy,
+                            usage: result.usage
                         }
-
-                        return {
-                            success: true,
-                            message: `✅ API key is valid! Model: ${data.model || model}`,
-                            data: {
-                                model: data.model,
-                                usage: usage
-                            }
-                        };
-                    } else {
-                        const errorData = await response.json().catch(() => ({}));
-                        const errorMessage = errorData.error?.message || `HTTP ${response.status}: ${response.statusText}`;
-
+                    };
+                } catch (error) {
+                    if (error && error.status) {
                         if (window.SlackPolishDebug) {
                             window.SlackPolishDebug.addLog('openai', 'API test failed', {
-                                status: response.status,
-                                error: errorMessage,
-                                errorData
+                                status: error.status,
+                                code: error.code,
+                                error: error.message
                             });
                         }
-
                         return {
                             success: false,
-                            message: `❌ ${errorMessage}`,
-                            error: errorData
+                            message: `❌ ${error.message}`,
+                            error
                         };
                     }
-                } catch (error) {
                     const detail = `name=${error.name} msg=${error.message} cause=${error.cause?.message ?? error.cause}`;
                     console.error('[JustPolish] testApiKey fetch error:', detail, error);
                     if (window.SlackPolishDebug) {
@@ -4907,49 +5001,27 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
                 }
 
                 try {
-                    const requestBody = {
-                        model: model,
-                        messages: [{ role: 'user', content: prompt }],
-                        max_tokens: options.maxTokens || window.SLACKPOLISH_CONFIG?.OPENAI_MAX_TOKENS || 500,
+                    const result = await chatCompletionWithFallback(apiKey, model, prompt, {
+                        maxTokens: options.maxTokens || window.SLACKPOLISH_CONFIG?.OPENAI_MAX_TOKENS || 500,
                         temperature: options.temperature || window.SLACKPOLISH_CONFIG?.OPENAI_TEMPERATURE || 0.7
-                    };
-
-                    const response = await fetchWithRetry('https://api.openai.com/v1/chat/completions', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${apiKey}`
-                        },
-                        body: JSON.stringify(requestBody)
                     });
 
                     if (window.SlackPolishDebug) {
-                        window.SlackPolishDebug.addLog('openai', 'Text improvement response', {
-                            status: response.status,
-                            ok: response.ok
-                        });
-                    }
-
-                    if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({}));
-                        throw new Error(errorData.error?.message || `HTTP ${response.status}`);
-                    }
-
-                    const data = await response.json();
-                    const result = data.choices?.[0]?.message?.content || '';
-
-                    if (window.SlackPolishDebug) {
                         window.SlackPolishDebug.addLog('openai', 'Text improvement successful', {
-                            resultLength: result.length,
-                            usage: data.usage
+                            model: result.servedBy,
+                            switchedFrom: result.switchedFrom || null,
+                            resultLength: result.text.length,
+                            usage: result.usage
                         });
                     }
 
-                    return result;
+                    return result.text;
                 } catch (error) {
                     if (window.SlackPolishDebug) {
                         window.SlackPolishDebug.addLog('openai', 'Text improvement error', {
-                            error: error.message
+                            error: error.message,
+                            status: error.status,
+                            code: error.code
                         });
                     }
                     throw error;
@@ -4957,6 +5029,7 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
             }
         };
     }
+    // === OPENAI CLIENT END ===
 
     // Initialize global debug system
     function initializeGlobalDebugSystem() {
@@ -5246,6 +5319,19 @@ IMPORTANT: Respond with ONLY the improved version of the MESSAGE TO IMPROVE abov
         initializeGlobalChannelMessagesSystem();
         initializeGlobalOpenAISystem();
         initializeGlobalDebugSystem();
+
+        // Say so once when OpenAI retired the configured model and a fallback model took over
+        if (window.SlackPolishOpenAI) {
+            window.SlackPolishOpenAI.onModelSwitch = function(info) {
+                const pair = `${info.from}->${info.to}`;
+                try {
+                    if (localStorage.getItem('slackpolish_model_switch_notified') === pair) return;
+                    localStorage.setItem('slackpolish_model_switch_notified', pair);
+                } catch (error) { /* notification only */ }
+                utils.log(`OpenAI retired ${info.from}; using ${info.to}`);
+                utils.showNotification(`OpenAI retired the model ${info.from}. JustPolish now uses ${info.to}.`, 'info');
+            };
+        }
 
         utils.log('JustPolish Text Improver initializing...');
 

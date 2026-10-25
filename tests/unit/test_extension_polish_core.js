@@ -130,7 +130,9 @@ runTest('Verification, polishable guard and line counting', () => {
 
 runTest('Wiring: content script polishes via the worker with settings, selection support, guards and verification', () => {
     ['improveHotkey', 'personalPolish', 'slackpolish-polish', 'SlackPolishCore', 'buildPrompt(', 'repairModelOutput', 'verifyEntities', 'extractFragment', 'nothing-to-polish', 'countContentLines', "keepSelection: !!range", 'JustPolish Needs API Key'].forEach(s => assert(contentSource.includes(s), `content script has: ${s}`));
-    ['/chat/completions', 'Authorization: `Bearer ${apiKey}`', 'settings.apiKey', "message.type === 'slackpolish-polish'", 'apiBase', "message.type === 'slackpolish-save-settings'", "message.type === 'slackpolish-sync-status'", 'DEFAULT_SYNC_URL'].forEach(s => assert(backgroundSource.includes(s), `worker has: ${s}`));
+    ['settings.apiKey', "message.type === 'slackpolish-polish'", 'apiBase', "message.type === 'slackpolish-save-settings'", "message.type === 'slackpolish-sync-status'", 'DEFAULT_SYNC_URL', "importScripts('shared/openai-request.js')", 'SlackPolishOpenAIRequest.chatCompletionWithFallback('].forEach(s => assert(backgroundSource.includes(s), `worker has: ${s}`));
+    const openaiRequestSource = fs.readFileSync(path.join(ext, 'shared/openai-request.js'), 'utf8');
+    ['/chat/completions', 'Authorization: `Bearer ${apiKey}`', 'max_completion_tokens', "code === 'model_not_found'"].forEach(s => assert(openaiRequestSource.includes(s), `shared OpenAI client has: ${s}`));
     ['AVAILABLE_STYLES', 'SUPPORTED_LANGUAGES', "getElementById('api-key-input')", "getElementById('sync-with-slack')", "type: 'slackpolish-save-settings'"].forEach(s => assert(popupSource.includes(s), `popup has: ${s}`));
     assert(popupHtml.indexOf('../vendor/slack-config.js') < popupHtml.indexOf('popup.js"'), 'popup loads the shared config before its script');
     assert(!/api\.openai\.com/.test(contentSource), 'the content script never calls OpenAI itself (worker does, host permission)');

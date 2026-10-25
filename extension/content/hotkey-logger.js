@@ -120,6 +120,7 @@
             type: 'slackpolish-polish',
             prompt,
             model: cfg.OPENAI_MODEL,
+            fallbacks: cfg.OPENAI_MODEL_FALLBACKS || [],
             temperature: cfg.OPENAI_TEMPERATURE,
             maxTokens: Math.max(cfg.OPENAI_MAX_TOKENS || 500, Math.ceil(state.text.length / 2) + 200)
         };
@@ -129,6 +130,8 @@
             return result;
         }
         result.response = reply.text;
+        result.model = reply.servedBy || reply.model;
+        if (reply.switchedFrom) result.modelSwitchedFrom = reply.switchedFrom;
 
         // Like Slack: when the model merged lines, ask once more with an explicit line count
         const wanted = Core.countContentLines(state.text);
@@ -189,7 +192,7 @@
                 event.polish = { ok: false, error: String(error && error.message || error) };
             }
             const p = event.polish;
-            console.log('🔧 SLACKPOLISH_POLISH', JSON.stringify({ ok: p.ok, mode: p.mode, style: p.style, language: p.language, skipped: p.skipped, error: p.error, repaired: p.repaired && { removed: p.repaired.removed, reanchored: p.repaired.reanchored, appended: p.repaired.appended, substituted: p.repaired.substituted } }));
+            console.log('🔧 SLACKPOLISH_POLISH', JSON.stringify({ ok: p.ok, mode: p.mode, model: p.model, modelSwitchedFrom: p.modelSwitchedFrom, style: p.style, language: p.language, skipped: p.skipped, error: p.error, repaired: p.repaired && { removed: p.repaired.removed, reanchored: p.repaired.reanchored, appended: p.repaired.appended, substituted: p.repaired.substituted } }));
             if (p.skipped === 'nothing-to-polish') {
                 SlackPolishStatusBadge.set('active', 'JustPolish: nothing to polish', { removeAfterMs: 5000 });
             } else if (p.ok) {
