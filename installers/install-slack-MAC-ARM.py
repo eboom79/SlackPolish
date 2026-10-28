@@ -337,8 +337,9 @@ def _report_remote_debugging(slack_app, port=DEFAULT_DEBUG_PORT):
         "The launcher starts Slack with --remote-debugging-port and verifies on first run."
     )
     print_info(
-        "If the launcher later reports it cannot attach, inspect the Electron fuses with:\n"
-        f"  python3 {SCRIPT_DIR / 'patch-electron-fuse-MAC-ARM.py'} --check --slack-app {slack_app}"
+        "Slack 4.53+ (Electron 45) only allows remote debugging with a dedicated profile, so the launcher runs "
+        "Slack with --user-data-dir under '~/Library/Application Support/SlackPolish Runtime/slack-profile', "
+        "seeded once from your existing Slack profile (you stay signed in)."
     )
 
 

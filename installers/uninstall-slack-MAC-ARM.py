@@ -52,6 +52,11 @@ def get_runtime_app_path():
     return get_runtime_root() / "JustPolish.app"
 
 
+def get_slack_profile_path():
+    # Slack 4.53+ only allows remote debugging with a dedicated profile; the launcher keeps one here
+    return Path.home() / "Library" / "Application Support" / "SlackPolish Runtime" / "slack-profile"
+
+
 def get_launcher_paths():
     desktop = Path.home() / "Desktop"
     return [
@@ -152,6 +157,10 @@ def main():
         print_info("Keeping Desktop launcher files as requested")
     else:
         removed_any = False
+        profile_dir = get_slack_profile_path()
+        if profile_dir.exists():
+            shutil.rmtree(profile_dir)
+            print_success(f"Removed the JustPolish Slack profile (your regular Slack profile is untouched): {profile_dir}")
         for launcher in get_launcher_paths():
             if remove_path(launcher):
                 removed_any = True

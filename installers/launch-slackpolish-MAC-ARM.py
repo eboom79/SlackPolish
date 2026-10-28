@@ -19,6 +19,7 @@ import json
 import os
 import random
 import re
+import shutil
 import socket
 import struct
 import subprocess
@@ -49,10 +50,86 @@ LOCK_PATH = Path("/tmp") / "slackpolish-mac-arm-launcher.lock"
 STATE_DIR = Path.home() / "Library" / "Application Support" / "SlackPolish Runtime" / "mac-arm-runtime" / "state"
 STATUS_PATH = STATE_DIR / "launcher-status.json"
 LOG_PATH = STATE_DIR / "launcher.log"
+SLACK_STDERR_LOG = STATE_DIR / "slack-stderr.log"
+# Slack 4.53+ ships Electron 45, which refuses --remote-debugging-port unless Slack runs with a profile directory
+# outside its default one ("Refusing to launch: --remote-debugging-port requires --user-data-dir pointing outside
+# the default profile"). JustPolish therefore launches Slack with its own profile, seeded once from the default
+# profile (without caches) so the user stays signed in and keeps the JustPolish settings and key.
+SLACK_DEFAULT_PROFILE_DIR = Path.home() / "Library" / "Application Support" / "Slack"
+SLACK_PROFILE_DIR = Path.home() / "Library" / "Application Support" / "SlackPolish Runtime" / "slack-profile"
+PROFILE_SEED_EXCLUDED_NAMES = frozenset({
+    "Cache", "Code Cache", "GPUCache", "DawnGraphiteCache", "DawnWebGPUCache", "GraphiteDawnCache",
+    "CacheStorage", "ScriptCache", "logs", "Crashpad", "blob_storage", "lockfile", "DevToolsActivePort",
+})
+PROFILE_SEED_EXCLUDED_PREFIXES = ("Singleton",)
+PROFILE_SEED_EXCLUDED_SUFFIXES = (".log",)
+DEVTOOLS_PROFILE_GUARD = b"requires --user-data-dir pointing outside the default profile"
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
 LAUNCHER_SCRIPT_NAME = "launch-slackpolish-MAC-ARM.py"
 _PYTHON_BASENAME_RE = re.compile(r"^[Pp]ython(\d+(\.\d+)*)?$")
 _WRAPPER_BASENAMES = {"env", "sudo"}
+
+
+def _plist_version(path):
+    try:
+        import plistlib
+        with open(path, "rb") as handle:
+            plist = plistlib.load(handle)
+        return plist.get("CFBundleShortVersionString") or plist.get("CFBundleVersion")
+    except Exception:
+        return None
+
+
+def _tail_lines(path, count):
+    try:
+        lines = [line.strip() for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines() if line.strip()]
+        return lines[-count:]
+    except Exception:
+        return []
+
+
+def _binary_contains(path, needle):
+    try:
+        with open(path, "rb") as handle:
+            return needle in handle.read()
+    except Exception:
+        return False
+
+
+def ensure_slack_profile(source=SLACK_DEFAULT_PROFILE_DIR, dest=SLACK_PROFILE_DIR):
+    """Make sure the JustPolish Slack profile exists; returns 'exists', 'seeded' or 'fresh'.
+
+    On first use the profile is seeded from Slack's default profile without caches, logs and lock files
+    (sign-in cookies, Local Storage with the JustPolish settings and key, IndexedDB are kept). Call this
+    only while Slack is not running, so the copied databases are consistent.
+    """
+    source = Path(source)
+    dest = Path(dest)
+    if (dest / "Local Storage").exists() or (dest / "Cookies").exists():
+        return "exists"
+    dest.mkdir(parents=True, exist_ok=True)
+    if not source.exists():
+        return "fresh"
+
+    def ignore(_directory, names):
+        return {
+            name for name in names
+            if name in PROFILE_SEED_EXCLUDED_NAMES
+            or name.startswith(PROFILE_SEED_EXCLUDED_PREFIXES)
+            or name.endswith(PROFILE_SEED_EXCLUDED_SUFFIXES)
+        }
+
+    shutil.copytree(source, dest, ignore=ignore, symlinks=True, dirs_exist_ok=True)
+    return "seeded"
+
+
+def slack_launch_args(debug_port, profile_dir=SLACK_PROFILE_DIR):
+    """Command-line switches Slack is launched with: a dedicated profile first, then remote debugging."""
+    return [
+        f"--user-data-dir={profile_dir}",
+        f"--remote-debugging-port={debug_port}",
+        "--remote-allow-origins=*",
+    ]
 
 
 def is_launcher_process_command(command_line):
@@ -1022,7 +1099,8 @@ class SlackPolishMacLauncher:
         initial_timeout = 2 if self.attach_or_relaunch else 20
 
         try:
-            self._wait_for_devtools(timeout=initial_timeout)
+            # The quick probe decides between attach and relaunch: a miss here is expected on a cold start, so no diagnosis
+            self._wait_for_devtools(timeout=initial_timeout, diagnose=not self.attach_or_relaunch)
             print_success(f"Connected to DevTools endpoint on port {self.debug_port}")
             return
         except TimeoutError:
@@ -1219,22 +1297,36 @@ class SlackPolishMacLauncher:
             time.sleep(0.5)
 
     def _launch_slack(self):
-        debug_args = [
-            f"--remote-debugging-port={self.debug_port}",
-            "--remote-allow-origins=*",
-        ]
+        try:
+            state = ensure_slack_profile()
+        except Exception as error:
+            raise RuntimeError(f"Could not prepare the JustPolish Slack profile at {SLACK_PROFILE_DIR}: {error}") from error
+        if state == "seeded":
+            print_success(f"Seeded the JustPolish Slack profile from your existing Slack profile: {SLACK_PROFILE_DIR}")
+        elif state == "fresh":
+            print_warning(f"No existing Slack profile to copy; Slack will ask you to sign in (profile: {SLACK_PROFILE_DIR})")
+        self._update_status(slack_profile_dir=str(SLACK_PROFILE_DIR))
+
+        debug_args = slack_launch_args(self.debug_port)
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            SLACK_STDERR_LOG.write_text("")  # Slack's own output for this launch (the "Refusing to launch" line lives here)
+        except OSError:
+            pass
 
         if self.launch_mode == "open":
             app_target = self.slack_app_path or "/Applications/Slack.app"
-            command = ["open", "-a", app_target, "--args", *debug_args]
+            command = ["open", "--stdout", str(SLACK_STDERR_LOG), "--stderr", str(SLACK_STDERR_LOG), "-a", app_target, "--args", *debug_args]
+            stdout = stderr = subprocess.DEVNULL
         else:
             command = [self.slack_executable, *debug_args]
+            stdout = stderr = open(SLACK_STDERR_LOG, "a", encoding="utf-8")
 
-        print_info("Launching Slack with remote debugging enabled...")
+        print_info("Launching Slack with its JustPolish profile and remote debugging enabled...")
         print_verbose("Launch command: " + " ".join(command))
-        subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(command, stdout=stdout, stderr=stderr, start_new_session=True)
 
-    def _wait_for_devtools(self, timeout=20):
+    def _wait_for_devtools(self, timeout=20, diagnose=True):
         deadline = time.time() + timeout
         while time.time() < deadline:
             try:
@@ -1242,52 +1334,33 @@ class SlackPolishMacLauncher:
                 return
             except Exception:
                 time.sleep(0.5)
-        self._diagnose_devtools_unavailable()
+        if diagnose:
+            self._diagnose_devtools_unavailable()
         raise TimeoutError("Slack DevTools endpoint did not become available")
 
     def _diagnose_devtools_unavailable(self):
-        """Print a helpful message when the DevTools endpoint does not open."""
+        """Print what is known when the DevTools endpoint does not open: Slack/Electron versions, Slack's own
+        output from this launch, and whether this Slack build enforces the dedicated-profile rule."""
         slack_exe = self.slack_executable or ""
-        slack_app = slack_exe.split("/Contents/MacOS/Slack")[0] if "/Contents/MacOS/Slack" in slack_exe else None
-        if not slack_app:
-            slack_app = "/Applications/Slack.app"
-
-        fw = os.path.join(
-            slack_app,
-            "Contents", "Frameworks",
-            "Electron Framework.framework",
-            "Electron Framework",
+        slack_app = slack_exe.split("/Contents/MacOS/Slack")[0] if "/Contents/MacOS/Slack" in slack_exe else "/Applications/Slack.app"
+        slack_version = _plist_version(os.path.join(slack_app, "Contents", "Info.plist"))
+        electron_version = _plist_version(os.path.join(slack_app, "Contents", "Frameworks", "Electron Framework.framework", "Resources", "Info.plist"))
+        print_error(
+            f"Slack {slack_version or '?'} (Electron {electron_version or '?'}) did not open the DevTools port {self.debug_port}."
         )
-        if not os.path.exists(fw):
-            return
-
-        try:
-            with open(fw, "rb") as handle:
-                data = handle.read()
-        except Exception:
-            return
-
-        sentinel = b"dL7pKGdnNz796PbbjQWNKmHXBZaB9tsX"
-        idx = data.find(sentinel)
-        if idx == -1:
-            return
-
-        fuse_start = idx + len(sentinel)
-        version = data[fuse_start]
-        count = data[fuse_start + 1]
-        # Fuse index 3 is EnableNodeCliInspectArguments
-        if count > 3:
-            cli_inspect_fuse = data[fuse_start + 2 + 3]
-            if cli_inspect_fuse != 0x31:
-                patcher = os.path.join(os.path.dirname(__file__), "patch-electron-fuse-MAC-ARM.py")
-                print_error(
-                    "Slack's Electron binary has the EnableNodeCliInspectArguments fuse "
-                    "disabled. This prevents --remote-debugging-port from working."
-                )
-                print_error(
-                    "Fix: run the JustPolish installer again, or patch manually:"
-                )
-                print_error(f"  python3 {patcher}")
+        said = _tail_lines(SLACK_STDERR_LOG, 4)
+        for line in said:
+            print_error(f"  Slack said: {line}")
+        if _binary_contains(os.path.join(slack_app, "Contents", "Frameworks", "Electron Framework.framework", "Electron Framework"), DEVTOOLS_PROFILE_GUARD) \
+                or _binary_contains(os.path.join(slack_app, "Contents", "Resources", "app.asar"), DEVTOOLS_PROFILE_GUARD):
+            print_error(
+                "  This Slack build only allows remote debugging with a dedicated profile; JustPolish launches it with "
+                f"--user-data-dir={SLACK_PROFILE_DIR}"
+            )
+        print_error(
+            "  Quit Slack fully (Cmd+Q) and click JustPolish.app again. If it keeps failing, run with -v and send "
+            f"{LOG_PATH} and {SLACK_STDERR_LOG}."
+        )
 
     def _poll_targets(self):
         targets = self._fetch_json("/json/list")

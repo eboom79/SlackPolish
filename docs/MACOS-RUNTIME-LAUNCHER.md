@@ -27,7 +27,11 @@ Launcher script:
 
 ## What it does
 
-1. Starts Slack with `--remote-debugging-port=<port>`
+1. Starts Slack with `--user-data-dir=~/Library/Application Support/SlackPolish Runtime/slack-profile`
+   and `--remote-debugging-port=<port>`. Slack 4.53+ (Electron 45) refuses the debugging port on its
+   default profile, so JustPolish runs Slack on a dedicated profile that is seeded once from the default
+   one (sign-in, settings and key are copied; caches are not). Slack's own output for each launch is kept
+   in `state/slack-stderr.log`
 2. Polls Slack's DevTools HTTP endpoint
 3. Attaches to Slack page targets over the DevTools WebSocket protocol
 4. Installs JustPolish into future documents with:
