@@ -1,8 +1,8 @@
 {
     "major": 1,
     "minor": 7,
-    "build": 1,
-    "version_string": "1.7.1",
-    "description": "OpenAI model retirement fix: new default model with a verified fallback chain",
-    "date": "2026-10-25"
+    "build": 2,
+    "version_string": "1.7.2",
+    "description": "Slack 4.53 (Electron 45) support: Slack runs on a dedicated JustPolish profile for remote debugging",
+    "date": "2026-10-28"
 }

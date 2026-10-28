@@ -6,10 +6,10 @@ window.SLACKPOLISH_CONFIG = {
     // ========================================
     // VERSION INFORMATION
     // ========================================
-    VERSION: "1.7.1",
-    BUILD: 1,
-    BUILD_DATE: "2026-10-25",
-    DESCRIPTION: "OpenAI model retirement fix: new default model with a verified fallback chain",
+    VERSION: "1.7.2",
+    BUILD: 2,
+    BUILD_DATE: "2026-10-28",
+    DESCRIPTION: "Slack 4.53 (Electron 45) support: Slack runs on a dedicated JustPolish profile for remote debugging",
 
     // ========================================
     // EMERGENCY RESET FLAGS (ONE-TIME OPERATION)
